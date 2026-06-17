@@ -62,6 +62,27 @@ Hive ships its own skills. The author also runs several third-party Claude Code
 skills/plugins that pair well — see [SKILLS.md](SKILLS.md) for what they are and
 where to get them (they are not bundled).
 
+## ⚠️ Security & threat model — read before running
+
+**Hiveforge runs AI-generated code on your machine, as you. Treat it like
+that.** Specifically:
+
+- The crew board's build loop and the optional Claude runner **execute commands
+  and write files on the host** to do their work. **Anyone who can create a
+  board task can cause code to run as your user.** Don't expose the gateway
+  beyond your own machine, and don't feed it tasks from untrusted sources.
+- It is designed for a **single operator on loopback**. By default the gateway
+  binds `127.0.0.1` (and refuses `0.0.0.0`), the terminal endpoint is
+  loopback-only + token-gated, and board mutations need a token — keep it that
+  way. Putting it on a shared/public network removes those assumptions.
+- The PowerShell/PTY terminal and the agent's `run_cmd` tool are **full shells**
+  on your box. That's the point of the product, not a bug — but it means you are
+  trusting the local model (and yourself) the way you'd trust any script you run.
+- Run it in a VM or container if you want isolation. Use a dedicated, scoped
+  account for any cloud API keys.
+
+If that model isn't acceptable for your environment, don't run it exposed.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Covers Hive's own code; bundled-by-reference models
