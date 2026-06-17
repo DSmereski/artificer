@@ -411,22 +411,44 @@ def _run_cmd(project_root: Path, args: dict, *, timeout_s: float = 120.0) -> dic
     allowed, why = _cmd_allowed(cmd)
     if not allowed:
         return {"ok": False, "error": why}
+    # SECURITY (audit M-1): run as resolved ARGV with shell=False — the model's
+    # string is never handed to a shell, so metacharacter / `$(...)` injection is
+    # impossible regardless of the whitelist. `&&`/`;` chains run sequentially,
+    # stopping on the first failure (the && semantics the model expects). Heads
+    # are resolved via shutil.which so Windows .bat/.cmd shims (flutter, npm) work.
+    import shutil as _shutil
+    segments = [s.strip() for s in _re.split(r"&&|;", cmd) if s.strip()]
+    out_parts: list[str] = []
+    err_parts: list[str] = []
+    rc = 0
     try:
-        proc = subprocess.run(
-            cmd, shell=True, cwd=str(project_root),
-            capture_output=True, text=True,
-            timeout=timeout_s,
-        )
+        for seg in segments:
+            # posix=True so quotes are stripped like a shell would (e.g.
+            # python -c "print(1)" → ['python','-c','print(1)']). Build commands
+            # use forward-slash paths, so the posix backslash-escaping is moot.
+            argv = shlex.split(seg, posix=True)
+            if not argv:
+                continue
+            exe = _shutil.which(argv[0]) or argv[0]
+            p = subprocess.run(
+                [exe, *argv[1:]], shell=False, cwd=str(project_root),
+                capture_output=True, text=True, timeout=timeout_s,
+            )
+            out_parts.append(p.stdout or "")
+            err_parts.append(p.stderr or "")
+            rc = p.returncode
+            if rc != 0:
+                break
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"timeout after {timeout_s}s",
                 "exit_code": None}
     except (OSError, ValueError) as e:
         return {"ok": False, "error": f"spawn failed: {e}"}
     result = {
-        "ok": proc.returncode == 0,
-        "exit_code": proc.returncode,
-        "stdout_tail": (proc.stdout or "")[-2000:],
-        "stderr_tail": (proc.stderr or "")[-1000:],
+        "ok": rc == 0,
+        "exit_code": rc,
+        "stdout_tail": "".join(out_parts)[-2000:],
+        "stderr_tail": "".join(err_parts)[-1000:],
     }
     if "pytest" in cmd:
         full_out = result["stdout_tail"] + "\n" + result["stderr_tail"]
