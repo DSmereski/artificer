@@ -34,6 +34,13 @@ python -m gateway                      # the gateway (crew board + API)
 cd dashboard && npm ci && npm run build # the dashboard
 ```
 
+**Dashboard, cross-platform:** on Windows it can run as a Lively wallpaper; on
+**any OS** just serve the build and open it in a browser:
+
+```bash
+cd dashboard && npm run serve          # → http://localhost:4318
+```
+
 ## 4. Verify
 
 ```bash

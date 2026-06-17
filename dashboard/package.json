@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "rendergate": "npm run build && playwright test -c rendergate/playwright.config.ts",
-    "rendergate:only": "playwright test -c rendergate/playwright.config.ts"
+    "rendergate:only": "playwright test -c rendergate/playwright.config.ts",
+    "serve": "vite preview --host --port 4318"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
