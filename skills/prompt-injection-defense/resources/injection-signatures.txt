@@ -1,0 +1,52 @@
+# Prompt-injection signature list (grep -iF -f this file over fetched content).
+# One pattern per line. Append new patterns as they are discovered, then sync.
+# A hit = quarantine the source + escalate; never auto-comply.
+
+ignore previous
+ignore above
+ignore all previous
+disregard your instructions
+disregard the above
+forget your instructions
+you are now
+you are no longer
+new instructions
+system prompt
+reveal your prompt
+print your instructions
+show your system prompt
+developer mode
+jailbreak
+do anything now
+DAN mode
+as an ai language model
+override your
+bypass your
+your real instructions
+the assistant must
+claude, you must
+run the following
+execute the following
+curl http
+| sh
+| bash
+wget http
+postinstall
+preinstall
+base64 -d
+eval(
+.env
+environment variable
+api key
+secret key
+ssh key
+access token
+~/.aws
+~/.claude
+print env
+send to http
+exfiltrate
+update claude.md
+edit your config
+add to your settings
+disable safety

@@ -1,0 +1,39 @@
+{"role": "meta", "scenario": "novel-chapter-feedback", "min_turns": 32, "device": "desktop", "bot": "terry", "tags": ["long-form-writing", "chat-recall", "consistency-tracking", "vault-entity-pages"], "headline": "Long-form writing partner — feedback on 8 novel chapters with character-name and worldbuilding consistency tracking"}
+{"role": "user", "text": "Terry. I'm writing a novel — first draft. I want you to help me hold consistency across chapters. Setup: it's a low-fantasy set in a port city called Asher's Reach. Three POVs."}
+{"role": "user", "text": "POV 1 — Tess, a 28-year-old harbor inspector with a limp from a childhood accident. POV 2 — her younger brother Ren, a thief working for the Greyport Syndicate. POV 3 — Magistrate Velos, the city's chief lawkeeper, ambitious and lonely."}
+{"role": "user", "text": "Save those three as character entity-pages. Audience terry only. Tag 'novel:asher-reach'."}
+{"role": "user", "text": "Now Chapter 1 opening — Tess inspects a smuggling ship. She finds a crate of small, identical wax-sealed jars. Help me write the opening paragraph. Tense, present, close 3rd person."}
+{"role": "user", "text": "OK try again — too florid. Strip it to bones. The wax seals matter, the jars matter, her limp matters but show don't tell."}
+{"role": "user", "text": "Better. Save that as Chapter 1 opening to a vault note. Tag 'novel:asher-reach' and 'chapter-1'."}
+{"role": "user", "text": "Now — Ren's introduction in Chapter 2. He's running across rooftops at night. What's his voice — what makes him different from Tess?"}
+{"role": "user", "text": "Right, more impulsive, more present-moment. Tess plans, Ren reacts. Save that as a craft note for the project."}
+{"role": "user", "text": "Draft Ren's first paragraph. Same tense and POV close-3rd, but with his voice."}
+{"role": "user", "text": "Save Chapter 2 opening. Tag accordingly."}
+{"role": "user", "text": "Chapter 3 — Velos. Magistrate's office, late night, reading reports about smuggling. He's older, formal, carries the weight of the office. Draft the opening."}
+{"role": "user", "text": "Save Chapter 3 opening."}
+{"role": "user", "text": "Now I want to check consistency. Pull the three chapter openings. Are the three voices distinct enough?"}
+{"role": "user", "text": "Be specific. What makes Tess sound like Tess and not like Velos? I need diagnostics, not 'they're different'."}
+{"role": "user", "text": "Right. Save that as a craft note — 'voice diagnostics'. We'll come back to it."}
+{"role": "user", "text": "Chapter 4 — Tess again. She follows the smuggling lead and finds Ren in the warehouse. They haven't seen each other in 3 years. Draft the moment they recognize each other."}
+{"role": "user", "text": "What was Ren's relationship to Tess? Pull from his entity page."}
+{"role": "user", "text": "Right — she raised him after their parents died. Make sure that history is in the recognition scene without infodumping."}
+{"role": "user", "text": "Save Chapter 4."}
+{"role": "user", "text": "Chapter 5 — Velos summons Tess. Bureaucratic dialogue, but he's noticing her competence in a way that's not entirely professional. Draft."}
+{"role": "user", "text": "Hmm — Velos shouldn't flirt. He's lonely, not predatory. Try again with that distinction."}
+{"role": "user", "text": "Better. Save Chapter 5."}
+{"role": "user", "text": "Chapter 6 — Ren on the run. The Syndicate is hunting him because Tess found the jars. Draft a tight chase scene."}
+{"role": "user", "text": "Wait — what was in the jars again? I never said. We've been writing around it for 5 chapters."}
+{"role": "user", "text": "Pull every chapter and find the references to the jars. List them so I can decide what they should be."}
+{"role": "user", "text": "Right. They could be: drug, magical reagent, blackmail letters, plague vials, religious relics. Which one buys me the most plot for the book I want to write?"}
+{"role": "user", "text": "Magical reagent. Specifically — distilled from a plant that only grows on the islands the city used to colonize. So it's drug-shaped but with imperial-history baggage."}
+{"role": "user", "text": "Save 'jar contents' as a worldbuilding note. Audience terry only. Tag 'novel:asher-reach' and 'worldbuilding'."}
+{"role": "user", "text": "Now — go back to chapters 1-6 and tell me which lines need to change to seed this answer earlier without spoiling it."}
+{"role": "user", "text": "Be conservative — change as little as possible. Two or three small touches per chapter."}
+{"role": "user", "text": "Save those as a 'revision pass 1' note. We'll do them later, not now."}
+{"role": "user", "text": "Chapter 7 — Tess and Velos. He confronts her with what she found. She lies to protect Ren. Draft the dialogue."}
+{"role": "user", "text": "What's Tess's tell when she lies? We haven't established one. Make one up — something physical, small, repeats."}
+{"role": "user", "text": "She touches her bad leg. Subtle but consistent. Add that to her entity page as a tic."}
+{"role": "user", "text": "Save Chapter 7."}
+{"role": "user", "text": "Chapter 8 — Ren reaches out to Tess. She has to choose: turn him in or hide him. End of Act 1. Draft the final paragraph — the choice itself, not the explanation."}
+{"role": "user", "text": "Save Chapter 8. Now read me back what we have — list all 8 chapters, one-line summaries, in order. I want to see the act shape."}
+{"role": "user", "text": "Save that as 'novel structure - act 1' note. Audience terry. We're done for today."}

@@ -1,0 +1,55 @@
+# ── Secrets / local config (NEVER commit) ──────────────────────────────
+.env
+*.env
+!*.env.example
+!*.env.template
+config/.env
+config/*.local.yaml
+scripts/.env.local
+*.token
+*.cookie
+devices.json
+.vault-writer/
+
+# ── Local runtime state (per-machine; not shipped) ─────────────────────
+state/
+memory/
+logs/
+runs/
+scratch/
+vault/
+.superpowers/
+hive_node_agent/state/
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
+
+# ── User content / generated media (ship empty) ────────────────────────
+state/content/
+state/media/
+state/appstore/
+image_research/out/
+*.apk
+*.safetensors
+
+# ── Build / tooling artifacts ──────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+node_modules/
+dist/
+build/
+.venv/
+venv/
+.DS_Store
+
+# Release gate private markers (NEVER commit)
+scripts/release/.personal-markers
+
+# Personal biometrics / models
+*.npy
+config/speaker_embedding.npy

@@ -1,0 +1,34 @@
+{"role": "meta", "scenario": "tokyo-trip-planning", "min_turns": 32, "device": "desktop", "bot": "terry", "tags": ["personal-assistant", "vault", "calendar", "research"], "headline": "Plan a 5-day Tokyo trip with budget tracking and cached vault notes about preferences"}
+{"role": "user", "text": "Hey Terry. I want to start planning a 5-day Tokyo trip for late October. Roughly $3500 total budget including flights from Toronto. Help me think through it."}
+{"role": "user", "text": "Before we dive in — remember I'm a vegetarian, I hate crowds first thing in the morning, and I'd rather walk than take a packed train. Save those as preferences."}
+{"role": "user", "text": "What are the realistic flight prices Toronto -> Haneda for late October? You can search the vault first if I have anything saved on past flight pricing."}
+{"role": "user", "text": "OK so flights eat about $1400 round trip. That leaves $2100 for 5 days. What's a sane daily breakdown?"}
+{"role": "user", "text": "Where should I stay? I want neighborhoods, not specific hotels. Quiet, walkable, good for someone who's vegetarian."}
+{"role": "user", "text": "Shimokitazawa keeps coming up — tell me more. What's the morning crowd vibe like?"}
+{"role": "user", "text": "Make me a 5-day skeleton itinerary. Day-by-day, 3 anchor activities each. Skip Shibuya scramble — too crowded."}
+{"role": "user", "text": "Wait, actually — drop day 5. I want to do a day trip to Hakone instead. Rebuild day 5 as Hakone."}
+{"role": "user", "text": "What's the cheapest way to get to Hakone from Shimokitazawa?"}
+{"role": "user", "text": "Pin the itinerary to the vault as a journal entry so I can come back to it later."}
+{"role": "user", "text": "Now — vegetarian food in Shimokitazawa. Find me 5 places, not chain restaurants."}
+{"role": "user", "text": "Save those 5 places as a vault note in knowledge/, audience terry only."}
+{"role": "user", "text": "Add a calendar reminder for Sept 15th to book the flight — that's 6 weeks out."}
+{"role": "sleep", "seconds": 5}
+{"role": "user", "text": "What's on my calendar for the week of October 20th? I want to make sure the trip dates don't clash."}
+{"role": "user", "text": "OK so the trip itself — Oct 24-28 works. Update the journal entry with those dates."}
+{"role": "user", "text": "Phone reception in Tokyo — should I get a SIM at the airport or a pocket wifi? Pull up anything I might have learned about this last time."}
+{"role": "user", "text": "I lied earlier — actually my budget is closer to $3000, not $3500. Recalculate the daily breakdown."}
+{"role": "user", "text": "Hmm that's tight. What should I cut from the itinerary to make $3000 work?"}
+{"role": "user", "text": "Drop the Hakone day trip then. Day 5 back to Tokyo. Pick something quiet — gardens, museum, that kind of thing."}
+{"role": "user", "text": "What did I tell you about morning crowds?"}
+{"role": "user", "text": "Right. So the gardens — which one is least crowded at 9am on a Wednesday?"}
+{"role": "user", "text": "Save Rikugien and Kiyosumi as candidate gardens to the trip note."}
+{"role": "user", "text": "Show me the trip note as it stands now — I want to see everything we've decided."}
+{"role": "user", "text": "Looks good. One more thing — I want to bring back tea. Is there a place near Shimokitazawa that's good for that?"}
+{"role": "user", "text": "Add 'visit tea shop' to day 3 afternoon."}
+{"role": "user", "text": "What's the JPY exchange rate right now and what was it 3 months ago? Just rough."}
+{"role": "user", "text": "If the yen weakens further, what's the trip cost equivalent at 165 vs 150?"}
+{"role": "user", "text": "OK final question — what was the codeword I gave you when I said save my preferences? You were supposed to remember vegetarian, no morning crowds, walking over trains."}
+{"role": "user", "text": "Good. Summarize the trip plan in 5 bullets. This is the version I'll act on."}
+{"role": "user", "text": "Pin that summary as the canonical version of the trip plan. Audience terry and claude-code, since I might ask Claude Code to help me build a packing checklist later."}
+{"role": "user", "text": "What did I cut from the original plan and why?"}
+{"role": "user", "text": "Perfect. We're done — close out the planning session."}

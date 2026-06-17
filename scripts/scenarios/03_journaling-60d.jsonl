@@ -1,0 +1,35 @@
+{"role": "meta", "scenario": "journaling-60d", "min_turns": 32, "device": "phone", "bot": "terry", "tags": ["personal-assistant", "long-recall", "sentiment", "vault"], "headline": "Daily journaling assistant with sentiment trend across simulated 60 days of history"}
+{"role": "user", "text": "Hey Terry. I want to start a journaling habit. Tonight I had dinner with my brother — first time in 3 months. It went OK but I'm tired."}
+{"role": "user", "text": "Save that as today's journal entry. Audience terry only. Don't be precious about it — I want it short, just the bones."}
+{"role": "user", "text": "Tomorrow's a long day. Three meetings and a 5pm call with my boss about the quarterly review. I'm dreading it."}
+{"role": "user", "text": "Why do these things stress me out so much? I've been doing this job for 6 years."}
+{"role": "user", "text": "Save tonight's entry. Tag it 'work-anxiety'."}
+{"role": "user", "text": "OK pretend it's the next day. Quarterly review went better than expected. Boss thinks I should pitch for the lead role on the Q3 project. I'm... flattered? But scared."}
+{"role": "user", "text": "Tag this 'work-anxiety' and 'opportunity'. Save it."}
+{"role": "user", "text": "Day 3 — slept badly, ran 5k anyway, felt better after. Stuck on a code problem all afternoon. My partner is out of town until Sunday and the apartment is too quiet."}
+{"role": "user", "text": "Save. Tag 'mood' and 'solo'."}
+{"role": "user", "text": "Day 7 now. The lead-role thing — I said yes. I'm going to do it. Pitch is next Tuesday."}
+{"role": "user", "text": "What did I write about my anxiety around this earlier in the week? Pull it up so I can read it back to myself."}
+{"role": "user", "text": "Yeah. OK. Tonight's entry: 'said yes, scared, doing it anyway.' Save and tag 'opportunity' and 'commitment'."}
+{"role": "sleep", "seconds": 3}
+{"role": "user", "text": "Day 14 — pitch went well. Got the role. Two weeks of stress melted in 40 minutes. Why do I do this to myself."}
+{"role": "user", "text": "What's the running theme across the last 14 days of entries? Don't pull a generic 'self-improvement journey' answer — be specific. What recurs?"}
+{"role": "user", "text": "Right. Anxiety-then-relief loop on work commitments. Save tonight's entry with that framing as the takeaway."}
+{"role": "user", "text": "Day 21 — first 1:1 as project lead. One of my new reports is going to be hard. He's older than me and was up for the same role."}
+{"role": "user", "text": "How do I handle that without being either a pushover or a jerk?"}
+{"role": "user", "text": "Save the entry. Tag 'leadership' and 'people'."}
+{"role": "user", "text": "Day 30 — partner's been back for two weeks. Things are off. We're not fighting but we're not connecting either. I think I've been too consumed by work."}
+{"role": "user", "text": "Save. Tag 'partner' and 'balance'."}
+{"role": "user", "text": "Day 35 — date night. We talked about it. She's been worried I'd become unrecognizable in this new role. We're going to do Sunday no-laptop days."}
+{"role": "user", "text": "Save and tag 'partner'. Flag the Sunday no-laptop commitment as a standing decision in core memory."}
+{"role": "user", "text": "Day 45 — the hard report from day 21? He came around. Helped me dig out of a code review jam yesterday. Bought him a coffee today."}
+{"role": "user", "text": "What was I worried about with him originally? Pull the day-21 entry."}
+{"role": "user", "text": "Save tonight's entry. Tag 'leadership' and 'wins'."}
+{"role": "user", "text": "Day 55 — exhausted. Q3 project is at the wire. Two no-laptop Sundays got broken in a row. Partner hasn't said anything but I can tell."}
+{"role": "user", "text": "I feel like I'm in the same anxiety-then-relief loop you flagged at day 14. Am I?"}
+{"role": "user", "text": "Right. Save tonight's entry. Tag 'work-anxiety' and 'relapse'."}
+{"role": "user", "text": "Day 60 — project shipped. I made dinner instead of working. We watched a movie. I think I'm OK."}
+{"role": "user", "text": "Across the full 60 days, what am I better at than I was on day 1? Be specific. Not vibes."}
+{"role": "user", "text": "Save that as a 'growth note' in the vault. Audience terry only."}
+{"role": "user", "text": "What's the one thing I should commit to for the next 60 days, based on the patterns? You pick."}
+{"role": "user", "text": "OK. Save that as a goal note. We're done for tonight."}

@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "deviceToken",
+    "DisplayText": "Gateway Device Bearer Token",
+    "Description": "Bearer token for /v1/* endpoints (scout, graph, calendar, escalations). Enter via right-click > Customise. Token is stored in localStorage on this machine. Only sent to 127.0.0.1. Leave blank to run board-only mode (read-only /board/* still works).",
+    "Type": "textbox",
+    "Value": ""
+  },
+  {
+    "Name": "pollInterval",
+    "DisplayText": "Poll Interval (ms)",
+    "Description": "How often to refresh board stats and state. Minimum 500ms. Default 10000 (10s). The server caches /board/stats for 15s anyway.",
+    "Type": "slider",
+    "Value": 10000,
+    "Min": 500,
+    "Max": 60000,
+    "Step": 500
+  },
+  {
+    "Name": "motionEnabled",
+    "DisplayText": "Enable Animations",
+    "Description": "Enable CSS animations (glow, sweep, pulse). Disable to reduce GPU load when animations are not desired.",
+    "Type": "checkbox",
+    "Value": true
+  }
+]

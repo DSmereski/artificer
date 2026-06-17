@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hive Nodes</title>
+<style>
+ body { font-family: -apple-system, sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; }
+ table { border-collapse: collapse; width: 100%; }
+ th, td { text-align: left; padding: .5em; border-bottom: 1px solid #ddd; font-size: 14px; }
+ .online { color: #2a9d2a; font-weight: 600; }
+ .offline { color: #b03030; font-weight: 600; }
+ .actions { margin-bottom: 1em; }
+ button { padding: .4em .8em; cursor: pointer; }
+ #invite { background: #f6f6f6; padding: 1em; margin-top: 1em; font-family: monospace; font-size: 18px; display: none; }
+</style>
+<h1>Hive Nodes</h1>
+<div class="actions">
+  <button id="addNodeBtn">Add node</button>
+  <button id="refreshBtn">Refresh</button>
+</div>
+<div id="invite"></div>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Status</th><th>Version</th><th>Labels</th><th>Last seen</th><th></th></tr>
+  </thead>
+  <tbody id="nodes-tbody"></tbody>
+</table>
+<script src="/admin/nodes.js"></script>

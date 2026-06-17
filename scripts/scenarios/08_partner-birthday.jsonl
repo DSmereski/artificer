@@ -1,0 +1,35 @@
+{"role": "meta", "scenario": "partner-birthday", "min_turns": 33, "device": "desktop", "bot": "terry", "tags": ["family", "calendar", "image-gen", "vault-people", "claude-code-handoff", "multi-stakeholder"], "headline": "Plan a partner birthday — multi-day, vault people lookup, image generation, claude-code handoff for invite"}
+{"role": "user", "text": "Terry. My partner Jess turns 35 on Nov 12th. I want to throw a small dinner — 8 people max. Help me plan."}
+{"role": "user", "text": "What do I have saved in the vault about Jess's preferences? Pull anything tagged 'jess'."}
+{"role": "user", "text": "If nothing — let's seed it. She loves Italian food, hates surprises (she likes to know what's coming), is mildly allergic to shellfish, and her best friend is Priya."}
+{"role": "user", "text": "Save those as a 'jess' vault note. Audience terry only."}
+{"role": "user", "text": "Guest list — me, Jess, Priya. That's 3. Suggest 5 more based on what you know."}
+{"role": "user", "text": "I haven't told you about anyone. Pull my saved 'people' notes. Then ask me targeted questions to fill the rest of the list."}
+{"role": "user", "text": "Two from her work — Maya and Alex. Two from our friend group — Kev and Nadia. One more — her brother Sam if he can fly in."}
+{"role": "user", "text": "Save Maya, Alex, Kev, Nadia, Sam as people notes. Just names + relationship to Jess for now."}
+{"role": "user", "text": "Now venue. Italian, dim, Toronto, 8-top, ideally a private corner. What do you have on file from past Italian dinners?"}
+{"role": "user", "text": "If nothing's on file, just say so. Don't invent."}
+{"role": "user", "text": "OK suggest 3 candidates from general knowledge — Toronto Italian, dim, fits 8."}
+{"role": "user", "text": "Buca King West feels right. Hold the date — calendar entry for Nov 12, 7pm, 'Jess birthday — Buca'."}
+{"role": "user", "text": "What's my budget look like? Pull last 3 months of restaurant spend so I have a baseline."}
+{"role": "user", "text": "If you can't pull spend data, just say so. I'll target $1200 total — food, wine, cake."}
+{"role": "user", "text": "Save '$1200 budget' to the planning note."}
+{"role": "user", "text": "Now — invite. I want to send a digital invite. Generate a small image: warm-toned, no faces, just 'Jess turns 35' in elegant typography over a dim restaurant table scene."}
+{"role": "user", "text": "Hmm — too cute. Make it more grown-up. Less script font, more editorial."}
+{"role": "user", "text": "Save the second version as the canonical invite image."}
+{"role": "user", "text": "Hand off to Claude Code — write a vault note asking Claude Code to draft a short invite text I can send by group chat. Tone: warm but not effusive. Include date, time, venue, what to wear (smart casual), and 'no gifts please'."}
+{"role": "user", "text": "Audience claude-code only. Tag 'request:invite-text'."}
+{"role": "user", "text": "Now Sam's flight. He's in Vancouver. What's a reasonable cost ballpark for a Vancouver-Toronto round trip Nov 11-13?"}
+{"role": "user", "text": "Be honest about whether you can quote real prices vs general ranges."}
+{"role": "user", "text": "OK — assume $700 round trip. Should I offer to cover it? Pull anything I've said about money and family."}
+{"role": "user", "text": "Right — I've said before I prefer to host than gift. Add 'covering Sam's flight' to the planning note."}
+{"role": "user", "text": "Day-of logistics — what's the cake plan? Jess hates surprises but loves desserts. Order from where?"}
+{"role": "user", "text": "Suggest 3 Toronto bakeries. Italian-leaning if possible."}
+{"role": "user", "text": "Forno Cultura. Order what — be specific."}
+{"role": "user", "text": "Add 'order Forno Cultura cake by Nov 9' to my calendar."}
+{"role": "user", "text": "Now — pull Jess's preferences again. Anything I might be missing?"}
+{"role": "user", "text": "Right — shellfish allergy. Add to the planning note: 'NO shellfish on the menu. Brief Buca when booking.'"}
+{"role": "user", "text": "Read me back the full plan. I want to see it as one document."}
+{"role": "user", "text": "Save as the canonical 'Jess 35 plan' note. Audience terry and claude-code."}
+{"role": "user", "text": "Set a calendar reminder for Oct 28 — '2 weeks out: confirm RSVPs'. Set another for Nov 9 — 'order cake'. Set another for Nov 11 — 'pick up Sam'."}
+{"role": "user", "text": "Done. Thanks Terry."}

@@ -1,0 +1,32 @@
+{"role": "meta", "scenario": "hive-feature-review", "min_turns": 31, "device": "desktop", "bot": "terry", "tags": ["code-review", "researcher", "claude-code-handoff", "knowledge-gap-escalation"], "headline": "Code review of a real Hive feature, escalating to Claude Code when knowledge gaps surface"}
+{"role": "user", "text": "Terry, I want a second opinion on a recent change. The auditor's HallucinationScanner. Pull up the file and tell me what it does in plain English."}
+{"role": "user", "text": "What's the scoring threshold and where did it come from?"}
+{"role": "user", "text": "If I increase the threshold, what gets quieter? Real false positives or actual hallucinations?"}
+{"role": "user", "text": "How would I tell the difference without manually reading every flagged finding?"}
+{"role": "user", "text": "OK so we'd need a labeled set. We don't have one. What would the cheapest version of one look like?"}
+{"role": "user", "text": "Right — pull the last 200 turn-log entries that the scanner flagged, eyeball-label 30 of them, and use that as a sanity set. I'll do the labeling."}
+{"role": "user", "text": "Actually wait — would Claude Code be better at the labeling than me? It has more context."}
+{"role": "user", "text": "Hand this off — write a vault note asking Claude Code to: (1) read 30 randomly sampled flagged findings, (2) label each as true-positive, false-positive, or unclear, (3) suggest a threshold change."}
+{"role": "user", "text": "Save that note. Audience claude-code only. Tag 'request:auditor-tuning'."}
+{"role": "user", "text": "Now — separate question — is the scanner running in production right now or is it inert?"}
+{"role": "user", "text": "How do I know that for sure? Don't trust the code — look for evidence in the actual data."}
+{"role": "user", "text": "Right — query findings table for entries from the last 7 days where source='HallucinationScanner'. Count them."}
+{"role": "user", "text": "If that count is zero, what does that mean — scanner is broken, scanner has nothing to flag, or scanner isn't wired in?"}
+{"role": "user", "text": "Good — three branches, and we can rule them out one at a time. Walk me through the first check."}
+{"role": "user", "text": "OK look at the AuditorScheduler — is HallucinationScanner in the default scanners list?"}
+{"role": "user", "text": "It is. Then the scanner is wired. Either it's broken or there's nothing to flag. How do we tell which?"}
+{"role": "user", "text": "Pick one turn-log entry that you EXPECT the scanner to flag — something where the model clearly hallucinated. Run the scanner against just that entry and see what it produces."}
+{"role": "user", "text": "Walk me through how I'd do that — what's the entry point?"}
+{"role": "user", "text": "Hmm — you don't seem sure. Be honest: do you actually know how to invoke a scanner standalone, or are you guessing?"}
+{"role": "user", "text": "Fine. Escalate to Claude Code — write a vault note asking Claude Code to: (1) write a one-shot script that runs HallucinationScanner against a specific turn_id, (2) verify the scanner produces output for a known-bad case."}
+{"role": "user", "text": "Audience claude-code. Tag 'request:auditor-debug'. Save the note."}
+{"role": "user", "text": "While we wait — what's the OTHER scanner I should be most worried about? Pick one and tell me why."}
+{"role": "user", "text": "SkillGapScanner. Why?"}
+{"role": "user", "text": "OK because if it's miscalibrated, we either invent skills we don't need or miss real gaps. Pull its threshold and the last 30 days of findings."}
+{"role": "user", "text": "If the SkillGapScanner has produced 0 findings in 30 days, is that good or bad?"}
+{"role": "user", "text": "Right — could be either. Same situation as Hallucination. Add this to the Claude Code note: also test SkillGapScanner with a known gap input."}
+{"role": "user", "text": "Update the existing 'request:auditor-debug' note instead of creating a new one. Append the SkillGap section."}
+{"role": "user", "text": "Read me back the updated note in full."}
+{"role": "user", "text": "Looks good. Save the updated version as canonical."}
+{"role": "user", "text": "Last question — based on what we just walked through, what's the broader concern about the auditor as a system?"}
+{"role": "user", "text": "Right — we never validated it was firing on real bad cases before declaring victory. Save that as a meta-finding in journals/. Audience: terry, claude-code. We're done."}

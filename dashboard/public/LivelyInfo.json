@@ -1,0 +1,13 @@
+{
+  "AppVersion": "2.1.0.8",
+  "Title": "Hive Command Center",
+  "Thumbnail": "",
+  "Preview": "",
+  "Desc": "Live wallpaper dashboard for the Hive gateway. Crew board, stats, and input probe at 5120x1440.",
+  "Author": "Hive Team",
+  "License": "MIT",
+  "Contact": "",
+  "Type": 1,
+  "Arguments": "--system-information --pause-event true",
+  "FileName": "index.html"
+}

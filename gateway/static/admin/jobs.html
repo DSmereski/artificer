@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hive Jobs</title>
+<style>
+ body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 2em auto; padding: 0 1em; }
+ table { border-collapse: collapse; width: 100%; }
+ th, td { text-align: left; padding: .4em; border-bottom: 1px solid #ddd; font-size: 13px; }
+ td.kind, td.id { font-family: monospace; }
+ .queued    { color: #555; }
+ .dispatched{ color: #1860a8; font-weight: 600; }
+ .done      { color: #2a9d2a; font-weight: 600; }
+ .error     { color: #b03030; font-weight: 600; }
+ .failed    { color: #b03030; font-weight: 700; text-decoration: underline; }
+ .filters { margin-bottom: 1em; }
+ .filters label { margin-right: 1em; font-size: 13px; }
+ .filters input, .filters select { padding: .3em; }
+</style>
+<h1>Hive Jobs</h1>
+<p><a href="/admin/">&larr; Back to admin</a> &middot; <a href="/admin/nodes">Nodes</a></p>
+<div class="filters">
+  <label>Status:
+    <select id="f-status">
+      <option value="">all</option>
+      <option value="queued">queued</option>
+      <option value="dispatched">dispatched</option>
+      <option value="done">done</option>
+      <option value="error">error</option>
+      <option value="failed">failed</option>
+    </select>
+  </label>
+  <label>Kind: <input id="f-kind" placeholder="ollama.generate"></label>
+  <label>Node: <input id="f-node" placeholder="n_..."></label>
+  <button id="refreshBtn">Refresh</button>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th><th>Kind</th><th>Status</th><th>Attempts</th>
+      <th>Node</th><th>Duration</th><th>Created</th><th>Error</th>
+    </tr>
+  </thead>
+  <tbody id="jobs-tbody"></tbody>
+</table>
+<script src="/admin/jobs.js"></script>

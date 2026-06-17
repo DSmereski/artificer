@@ -1,0 +1,42 @@
+name: gates
+
+# Publish guardrail — secrets / personal-data / NSFW gates + gateway tests.
+# All jobs must pass before merge. A PR that reintroduces a secret or personal
+# data fails here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history — check-secrets scans it
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks || echo "gitleaks install best-effort; fallback scan will run"
+      - name: Publish gates (secrets / personal / nsfw)
+        run: bash scripts/release/check-all.sh .
+
+  gateway-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install deps
+        run: pip install -q -r requirements.txt || true
+      - name: Gateway tests (unit)
+        # Integration tests that need a live gateway/scout/Ollama + timing are
+        # excluded from the serviceless CI runner — run them locally with the
+        # stack up. Everything else (the unit suite) is the required gate.
+        run: >
+          PYTHONPATH=. python -m pytest gateway/tests -q
+          --ignore=gateway/tests/test_scout_alerts.py
+          --ignore=gateway/tests/test_proactive_hive.py
+          --deselect gateway/tests/test_hive_coordinator.py::test_coordinator_routes_to_cpu_when_vram_full

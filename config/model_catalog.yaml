@@ -1,0 +1,235 @@
+# Model Catalog — single source of truth for which Ollama models the
+# hive is allowed to use and what each helper role maps to.
+#
+# 2026-04-26: per the user, every helper now uses `planner-qwen` — one
+# voice across the whole hive instead of mixing qwen-coder + qwen3:8b.
+# Embeddings stay on `nomic-embed-text` because they require it.
+#
+# Each model lists BOTH GPU cost (gpu_vram_mb) AND CPU-fallback cost
+# (cpu_ram_mb). The HiveCoordinator picks GPU when VRAM is available;
+# when contested it transparently spawns the next helper on CPU+RAM
+# via OLLAMA_NUM_GPU=0. NEVER downgrades to a smaller model — quality
+# is preserved at the cost of latency.
+#
+# Models flagged `cpu_fallback: false` (e.g., embeddings) are GPU-only
+# and serialise on the GPU.
+#
+# Refreshed against `ollama list` on gateway startup. Missing models
+# fail loudly with a clear error event — no silent fallback.
+
+models:
+  - id: planner-qwen
+    ollama_name: qwen2.5-coder:7b
+    family: qwen2.5
+    gpu_vram_mb: 5200
+    cpu_ram_mb: 6500
+    cpu_fallback: true
+    speciality: planning, coding, research, synthesis — the default local helper
+    use_for:
+      - coordinator
+      - synthesizer
+      - image_director
+      - planner
+      - coder
+      - researcher
+      - critic
+      - librarian
+      - summarizer
+      - sysmon
+      - skill_runner
+      - chat_recall
+      - fact_extractor
+    params:
+      # 0.3 — deterministic enough to emit valid JSON for structured
+      # helper outputs while still natural for the synthesizer's voice.
+      temperature: 0.3
+      num_predict: 1024
+
+  - id: qwen3-8b
+    ollama_name: qwen3:8b
+    family: qwen3
+    gpu_vram_mb: 5200
+    cpu_ram_mb: 6500
+    cpu_fallback: true
+    # Smaller/faster Qwen for the planner role only. planner-qwen's
+    # ~30B-class inference is too slow for the planner under
+    # long-conversation load (scenario 10, 2026-05-01: planner
+    # consistently exceeded 180s helper timeout). Planner output is
+    # consumed by code (not user-facing), so swapping it for qwen3:8b
+    # doesn't mix voices in user replies — synthesizer stays on
+    # planner-qwen.
+    speciality: fast structured-JSON planning
+    use_for: [planner]
+    params:
+      temperature: 0.2
+      num_predict: 2048
+
+  - id: gemma3-4b
+    ollama_name: gemma3:4b
+    family: gemma3
+    # Small CPU-capable model: runs in parallel with planner-qwen (a
+    # different model = a separate Ollama slot even at NUM_PARALLEL=1),
+    # which avoids the researcher serialisation bottleneck.
+    gpu_vram_mb: 0
+    cpu_ram_mb: 6000
+    cpu_fallback: true
+    speciality: fast CPU researcher — Gemma3 4B
+    use_for: [researcher]
+    params:
+      temperature: 0.3
+      num_predict: 1024
+
+  - id: nomic-embed
+    ollama_name: nomic-embed-text
+    family: embedding
+    gpu_vram_mb: 0             # pinned to CPU via num_gpu=0 in the
+                               # embedder client; never competes with
+                               # planner-qwen for GPU VRAM
+    cpu_ram_mb: 600
+    cpu_fallback: true         # always CPU — see vault_writer/embedder.py
+    speciality: 768-dim text embeddings (CPU-only — 137M F16, ~0.22s warm)
+    use_for: [vault_search]
+    params: {}
+
+  - id: claude-haiku-4-5-20251001
+    cloud_provider: anthropic
+    cloud_model_name: claude-haiku-4-5-20251001
+    cost_per_1k_tokens_input: 0.0008
+    cost_per_1k_tokens_output: 0.004
+    speciality: fast cloud reasoning
+    use_for: [chat_recall, summarizer, fact_extractor]
+    params: {}
+
+  - id: claude-opus-4-7
+    cloud_provider: anthropic
+    cloud_model_name: claude-opus-4-7
+    cost_per_1k_tokens_input: 0.015
+    cost_per_1k_tokens_output: 0.075
+    speciality: deep cloud reasoning
+    use_for: [planner, coder, researcher, synthesizer]
+    params: {}
+
+helpers:
+  - role: planner
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/planner.md
+    output_schema: HelperPlan
+    # 180s — qwen3:8b was tried (2026-05-02) but caused GPU contention:
+    # planner-qwen (9.5GB) + qwen3:8b (5.2GB) > 16GB VRAM (GPU2 is busy
+    # with Terry voice bot), so planner-qwen got CPU-fallbacked and EVERY
+    # other helper (synth, summarizer, librarian, critic) timed out.
+    # Single model on GPU is the only viable config until we either
+    # free GPU2 or run a smaller-than-planner-qwen planner that fits
+    # alongside it (<6GB combined).
+    timeout_s: 180
+    # Bigger token budget — planner JSON was truncating for open-ended
+    # prompts ("research everything about X") because qwen's `<think>`
+    # block ate the 1024-token default.
+    params:
+      num_predict: 2048
+      temperature: 0.2
+
+  - role: coder
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/coder.md
+    output_schema: CodePlan
+    timeout_s: 90
+
+  - role: researcher
+    model: planner-qwen
+    # #476 Phase A: gemma3-4b is CPU-only (gpu_vram_mb=0). Different
+    # model = different Ollama slot, so it runs in parallel with planner-qwen
+    # even at NUM_PARALLEL=1. Router should prefer it for researcher when
+    # planner has already eaten the GPU's solo slot — eliminates the
+    # serialisation that produced the `latency_ms: 0 / "turn budget timeout"`
+    # researcher aborts in scenario 06.
+    candidates: [planner-qwen, gemma3-4b]
+    system_prompt_file: prompts/researcher.md
+    output_schema: ResearchPlan
+    timeout_s: 90
+
+  - role: image_director
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/image_director.md
+    output_schema: ImagePlan
+    timeout_s: 45
+
+  - role: sysmon
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/sysmon.md
+    output_schema: SysmonPlan
+    # 120s — when this fires in parallel with another planner-qwen
+    # helper, Ollama batches them and each takes roughly 2x solo time.
+    timeout_s: 120
+
+  - role: summarizer
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/summarizer.md
+    output_schema: Summary
+    timeout_s: 45
+
+  - role: critic
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/critic.md
+    output_schema: CriticReport
+    timeout_s: 60
+
+  - role: librarian
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/librarian.md
+    output_schema: VaultPlan
+    # 150s — librarian queries vault then summarises with qwen.
+    # Raised from 75s after observing librarian timeouts on every
+    # long-conversation turn (scenario 10, 2026-05-01); when this
+    # times out, planner is missing its vault context and itself
+    # times out shortly after.
+    timeout_s: 150
+
+  - role: synthesizer
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/synthesizer.md
+    output_schema: SynthesisPlan
+    # 120s — under long-conversation load (scenario 10, 2026-05-02)
+    # synth on planner-qwen consistently exceeded 45s. Synth must stay
+    # on planner-qwen for voice (it's the user-facing reply), so the fix
+    # is to give it more wall-clock instead of swapping models.
+    timeout_s: 120
+
+  - role: skill_runner
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/skill_runner.md
+    output_schema: SkillResult
+    timeout_s: 60
+
+  - role: chat_recall
+    model: planner-qwen
+    candidates: [planner-qwen]
+    # ChatRecallHelper bypasses the LLM entirely (direct FTS5 lookup
+    # against the chat_log table), so the prompt + schema entries are
+    # nominal — the helper never reads them. Catalog entry is required
+    # because `build_helpers` walks `catalog.helper_roles`.
+    system_prompt_file: prompts/librarian.md
+    output_schema: VaultPlan
+    timeout_s: 5
+
+  - role: fact_extractor
+    model: planner-qwen
+    candidates: [planner-qwen]
+    system_prompt_file: prompts/fact_extractor.md
+    output_schema: FactDelta
+    # 30s — runs after the synthesizer reply is already in flight, so
+    # latency only delays the *next* turn's planner context, not the
+    # current user-facing response.
+    timeout_s: 30
+    params:
+      num_predict: 1024
+      temperature: 0.1

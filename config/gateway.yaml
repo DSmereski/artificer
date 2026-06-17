@@ -1,0 +1,85 @@
+# ai-team-gateway config.
+# Listens on the loopback interface and the Tailscale interface only.
+# Never bind 0.0.0.0. The loopback-only validation is enforced by config.py.
+
+bind_host: 127.0.0.1
+bind_port: 8766
+
+# Tailscale hostname or IP to also listen on (in addition to 127.0.0.1).
+# Leave null for loopback-only (PC-only) development.
+# Typical value on a Windows machine with Tailscale up: "100.x.y.z" or your tailnet name.
+tailscale_bind: null  # set to your Tailscale IP, e.g. "100.x.y.z"
+
+# Per-user data lives under here.
+state_dir: ./.ai-team-gateway
+
+# Vault-writer daemon to proxy vault writes through.
+vault_writer:
+  host: 127.0.0.1
+  port: 8765
+  # vault-writer's own auth token; keep as-is.
+  token_path: ./.vault-writer/token
+
+# Vault filesystem root (for direct reads).
+vault_path: ./vault  # or set env HIVE_VAULT_PATH
+
+# Where the three Discord bots keep their per-user chat history. Reused so
+# conversations begun on Discord continue in the app and vice versa.
+history_roots:
+  maggy: ./memory/chat-history-maggy
+  terry: ./memory/chat-history
+  scout: ./memory/chat-history-scout
+
+# Per-bot Ollama model overrides (falls back to LLMClient.MODEL if null).
+models:
+  maggy: qwen3-coder:30b-a3b-fp16
+  terry: planner-qwen
+  scout: qwen3-8b
+
+# Pairing.
+pairing:
+  code_ttl_seconds: 300    # pairing code expires after 5 minutes
+  code_length: 8           # user-visible code length
+  token_bytes: 32          # 256-bit device tokens
+
+# ntfy (self-hosted, for Android push).
+ntfy:
+  base_url: http://127.0.0.1:8080
+  enabled: true            # ntfy container running on :8080
+
+# Rate limits (token bucket per device).
+rate_limits:
+  writes_per_minute: 60
+  images_per_hour: 30
+
+# Image generation tuning. auto_lora makes Terry pick relevant LoRAs from the
+# imageToVideo registry using keyword matching + Qwen ranking when her request
+# doesn't specify any. Set max_auto_loras low — stacking too many LoRAs
+# degrades image quality.
+images:
+  auto_lora: true
+  max_auto_loras: 3
+  # Path to imageToVideo so we can import its select_loras + registry.
+  image_app_root: ./imageToVideo
+
+nodes:
+  db_filename: hive_nodes.db
+  invite_ttl_seconds: 600
+  heartbeat_offline_seconds: 60
+  token_bytes: 32
+
+jobs:
+  db_filename: hive_jobs.db
+  long_poll_timeout_s: 30
+  requeue_after_misses: 3
+  dispatch_timeout_default_s: 300
+  offline_sweep_interval_s: 15
+  poll_rate_per_minute: 240
+  poll_rate_burst: 60
+
+# Watchdog probes /api/ps every interval. SIGTERMs gateway on bad verdict.
+# Disabled because /api/ps reports vram=0 for models that are merely IDLE
+# (unloaded from GPU after a turn) but will reload onto GPU on next request.
+# Keeping probe enabled but not aborting lets scenarios complete even when
+# the watchdog catches the model in a transient idle state.
+ollama_probe_abort_on_bad_verdict: false

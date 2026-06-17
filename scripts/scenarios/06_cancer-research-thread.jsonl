@@ -1,0 +1,36 @@
+{"role": "meta", "scenario": "cancer-research-thread", "min_turns": 35, "device": "phone-then-desktop", "bot": "terry", "tags": ["long-research", "librarian", "chat-recall", "vault-learn", "phone-desktop-handoff"], "headline": "Long-running personal research thread on a cancer literature topic, week-by-week catch-up across devices"}
+{"role": "user", "text": "Terry — my aunt was just diagnosed with stage 2 lobular breast cancer. I want to learn what's known and what's still in trials. Start at the basics."}
+{"role": "user", "text": "Save this conversation thread as 'aunt-research'. I'll come back to it across many sessions."}
+{"role": "user", "text": "What's specific about lobular vs. ductal? Don't be vague."}
+{"role": "user", "text": "I read that lobular is harder to detect on imaging. Why?"}
+{"role": "user", "text": "Save that explanation as a vault note. Audience terry only. Tag 'aunt-research'."}
+{"role": "user", "text": "What are the standard-of-care treatments for stage 2 lobular? Surgery, radiation, hormone therapy, chemo — walk me through the decision tree."}
+{"role": "user", "text": "When is chemo NOT recommended for stage 2? My aunt is 67."}
+{"role": "user", "text": "OK Oncotype DX score — what's that and when is it run?"}
+{"role": "user", "text": "Save the decision-tree summary as a vault note. Same audience and tag."}
+{"role": "user", "text": "Now — what's in trials right now for lobular specifically? I've heard CDK4/6 inhibitors get used in metastatic but I don't know about earlier stages."}
+{"role": "user", "text": "Be honest about the line between 'in approved use' and 'in active trial'. Don't blur them."}
+{"role": "sleep", "seconds": 5}
+{"role": "user", "text": "Day 5. I switched to my desktop. Pick up the aunt-research thread."}
+{"role": "user", "text": "What did we cover so far? Don't make me re-read everything — give me 5 bullets."}
+{"role": "user", "text": "My aunt's oncologist suggested an aromatase inhibitor + radiation, no chemo. Score was 14. Does that match what we read?"}
+{"role": "user", "text": "Aromatase inhibitor side effects — what are the common ones and the rare-but-serious ones?"}
+{"role": "user", "text": "Save that as a 'side effects' subsection in the aunt-research notes. Don't overwrite the existing notes — append."}
+{"role": "user", "text": "Bone density loss is a known issue. Is bisphosphonate co-prescription standard or controversial?"}
+{"role": "user", "text": "Pull the citations. I want to see actual papers, not paraphrased claims."}
+{"role": "user", "text": "Save the bisphosphonate citation list as a vault note. Tag 'aunt-research' and 'citations'."}
+{"role": "user", "text": "Day 10. Back on phone. Aunt-research thread."}
+{"role": "user", "text": "Where did we leave off?"}
+{"role": "user", "text": "She's got her first AI dose tomorrow. What should she watch for in the first 2 weeks?"}
+{"role": "user", "text": "Add a checklist for her to a vault note titled 'aunt - first 2 weeks watch list'. Make it short and actionable."}
+{"role": "user", "text": "Day 22. Desktop. Aunt-research."}
+{"role": "user", "text": "She's having joint pain. Is that the AI?"}
+{"role": "user", "text": "What can she do about it short of stopping the medication? Don't give me 'consult your doctor' — give me what's actually known."}
+{"role": "user", "text": "Save the joint-pain mitigation tactics. Tag 'aunt-research' and 'side-effects'."}
+{"role": "user", "text": "What's the long-game? If AI works for her, how long does she stay on it?"}
+{"role": "user", "text": "Why 5 vs 10 years and what's the trade?"}
+{"role": "user", "text": "Save the duration discussion. Same tags."}
+{"role": "user", "text": "Day 45. Phone. Quick check — what was her Oncotype score again? I forget."}
+{"role": "user", "text": "Right, 14. And her current regimen?"}
+{"role": "user", "text": "OK. Final ask for tonight — give me the full aunt-research dossier as one document. Everything we've collected, organized."}
+{"role": "user", "text": "Save it as the canonical 'aunt-research-dossier' note. Audience terry only. We're done for tonight."}

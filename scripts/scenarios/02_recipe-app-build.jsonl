@@ -1,0 +1,36 @@
+{"role": "meta", "scenario": "recipe-app-build", "min_turns": 34, "device": "desktop", "bot": "terry", "tags": ["make-me-an-app", "orchestrator", "tier-escalation", "claude-code-handoff"], "headline": "Multi-turn product spec → architecture → first scaffold review for a recipe-tracking app"}
+{"role": "user", "text": "I want you to help me build a recipe-tracking app. Personal use — me, my partner, eventually my mom. Start with what kind of app you'd build and why."}
+{"role": "user", "text": "Mobile-first because I'm always cooking from my phone. Web is fine as a secondary view."}
+{"role": "user", "text": "What's the minimum feature set for v1? I don't want a Pinterest clone — I want something that actually saves time when I'm cooking."}
+{"role": "user", "text": "OK 'recipe import from URL' is the key one. The rest is nice-to-have. Drop everything except: import, search, scale-by-servings, and shopping list."}
+{"role": "user", "text": "Tech stack — what would you pick? I'm OK with whatever, but I lean toward things I already use. I know Python and TypeScript, I've shipped Flutter apps."}
+{"role": "user", "text": "Flutter mobile + Python backend. Database — Postgres or SQLite? It's just me and my family, so single-machine is fine, but I want it backed up."}
+{"role": "user", "text": "Sketch the data model. Recipe, Ingredient, ShoppingList. What are the fields and the relationships?"}
+{"role": "user", "text": "Why is amount stored as a string instead of a number? That seems wrong."}
+{"role": "user", "text": "OK fractional amounts — 1/2, 1/4 — fair point. Keep it as string but add a parsed_amount float column for calculations."}
+{"role": "user", "text": "Recipe import from URL — how would that actually work? Walk me through what happens when I paste a URL."}
+{"role": "user", "text": "What sites would you target first? I cook a lot from NYT Cooking, Serious Eats, and Bon Appetit."}
+{"role": "user", "text": "Schema.org/Recipe — does NYT Cooking actually publish that? Don't guess. Check or say you don't know."}
+{"role": "user", "text": "OK so for sites that don't publish schema.org, what's the fallback? An LLM extractor?"}
+{"role": "user", "text": "What model would you call for that? Cost matters — I'd be importing maybe 100 recipes total."}
+{"role": "user", "text": "Sketch the API. List the endpoints with their request/response shapes."}
+{"role": "user", "text": "Auth — single owner, just me and my family. What's the simplest thing that works?"}
+{"role": "user", "text": "Device pairing with bearer tokens, like the Hive system. Good. Reuse that pattern."}
+{"role": "user", "text": "Now scaffold the project. What's the folder layout you'd start with?"}
+{"role": "user", "text": "Hand this off to Claude Code — write a vault note describing the project so Claude Code can scaffold it. Include: feature set, data model, API shape, auth approach, folder layout."}
+{"role": "user", "text": "Show me the vault note before you save it."}
+{"role": "user", "text": "Add a section called 'open questions' at the bottom — things you're not sure about. Be specific, not 'figure out testing'."}
+{"role": "user", "text": "Save the note. Audience: claude-code only. Tag it 'project:recipe-app'."}
+{"role": "user", "text": "What's the FIRST thing Claude Code should build? Not what's most fun — what unblocks the most other work."}
+{"role": "user", "text": "Schema migrations and the Recipe model with FTS. Why those two?"}
+{"role": "user", "text": "Right — without the model nothing else has a shape, and without FTS search is fake. Walk me through how you'd implement schema migrations."}
+{"role": "user", "text": "Alembic if Python+Postgres, or just a numbered SQL files approach if SQLite — which would you pick here and why?"}
+{"role": "user", "text": "Fair. SQLite + numbered SQL files. Now — testing strategy. What's the minimum I should commit to?"}
+{"role": "user", "text": "Wait — I just realized — if my mom uses this and her phone is offline, does the app still work?"}
+{"role": "user", "text": "Offline-first changes a lot. Is SQLite-on-device with sync to a server still the right call, or does this become CouchDB territory?"}
+{"role": "user", "text": "Stay with SQLite-on-device + a dumb server endpoint for sync. Add 'offline-first' to the project note."}
+{"role": "user", "text": "Update the open-questions section: how do we handle conflict resolution when my mom edits a recipe offline and I edit the same one?"}
+{"role": "user", "text": "OK three answers — last-write-wins, three-way merge, or CRDT. Which would you pick for a recipe app?"}
+{"role": "user", "text": "Last-write-wins is fine. Document the choice in the project note."}
+{"role": "user", "text": "Final review — read me back the project note in full. I want to make sure Claude Code has everything it needs to start."}
+{"role": "user", "text": "Save it as the canonical version. We're done with planning."}

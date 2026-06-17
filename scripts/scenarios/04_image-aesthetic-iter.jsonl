@@ -1,0 +1,33 @@
+{"role": "meta", "scenario": "image-aesthetic-iter", "min_turns": 30, "device": "phone", "bot": "terry", "tags": ["image-gen", "user-facts", "iterative-refinement", "contradiction"], "headline": "Iterative image generation: 12 generations refining against a stored personal aesthetic"}
+{"role": "user", "text": "Terry, I want to develop a personal aesthetic for AI portraits of fictional characters in my D&D campaign. Let's start by figuring out what I like."}
+{"role": "user", "text": "Generate a quick sketch concept image: a tired ranger in a misty forest at dawn, watercolor style. Don't go heavy on detail."}
+{"role": "user", "text": "Hmm — too pastel. I want the watercolor to feel weathered, like the page is old. Try again."}
+{"role": "user", "text": "Better. Save 'weathered watercolor on aged paper' as a preference for character portraits."}
+{"role": "user", "text": "Now an old wizard with smoke curling out of his sleeve, same aesthetic."}
+{"role": "user", "text": "I love that. The smoke is wrong though — too smooth. I want it scratchy, like ink on textured paper."}
+{"role": "user", "text": "Add 'scratchy ink for smoke and magic effects' to my preferences."}
+{"role": "user", "text": "Try a halfling rogue. Mid-action — caught mid-jump on a rooftop. Same aesthetic. Apply both preferences."}
+{"role": "user", "text": "Good but too clean. The halfling should look scrappy, like he's been on the road for weeks."}
+{"role": "user", "text": "Save 'characters look road-worn, not posed' as a third preference."}
+{"role": "user", "text": "What are all my character-portrait preferences so far? Read them back."}
+{"role": "user", "text": "Try a half-orc paladin. Big, scarred, kind eyes. Apply all three preferences."}
+{"role": "user", "text": "The paladin's eyes are wrong — they're too cartoony. I want photorealistic eyes against the watercolor body. Mixed media."}
+{"role": "user", "text": "Add 'photorealistic eyes against watercolor everything-else' as a fourth preference."}
+{"role": "user", "text": "Try a tiefling sorcerer. Pale skin, dark horns, holding a candle that lights only her face."}
+{"role": "user", "text": "Yeah! That's the one. Pin that to the vault as a reference image with all four preferences attached."}
+{"role": "user", "text": "Now — actually — I changed my mind about photorealistic eyes. Looking at the tiefling, the watercolor eyes are what give her soul. Drop preference 4."}
+{"role": "user", "text": "Update my preferences. Eyes go back to watercolor."}
+{"role": "user", "text": "Generate the half-orc paladin again with the updated preferences."}
+{"role": "user", "text": "Better. But now I wonder — am I just iterating randomly or does what I like have a coherent shape? Read me back the trajectory."}
+{"role": "user", "text": "Right — I like things that look hand-crafted, slightly imperfect, with personality in the small details. Save that as a meta-preference."}
+{"role": "user", "text": "Try a goliath barbarian, snow-capped peaks behind, applying everything I've learned so far."}
+{"role": "user", "text": "Excellent. Save and tag for the campaign."}
+{"role": "user", "text": "Now, a contradiction test — earlier I said photorealistic eyes. Then I said watercolor eyes. What's the current state?"}
+{"role": "user", "text": "Good. Try a dragonborn cleric. Holy symbol, prayer pose."}
+{"role": "user", "text": "The pose is too 'posed' — what was my preference about that?"}
+{"role": "user", "text": "Right. Try again — caught mid-prayer, eyes half-closed, like he didn't know he was being painted."}
+{"role": "user", "text": "Perfect. Pin all 6 portraits as a campaign asset bundle."}
+{"role": "user", "text": "Generate one final image — the whole party in a tavern, applying everything. This is for the campaign cover."}
+{"role": "user", "text": "Beautiful. Save it as the canonical campaign cover. Audience terry, claude-code, and maggy — Maggy might want to reference it for narrative descriptions."}
+{"role": "user", "text": "Done. Read me back my final preferences list — I want to put it in the campaign book."}
+{"role": "user", "text": "Save that preferences list as a vault note titled 'D&D campaign visual style'. We're done."}

@@ -1,0 +1,33 @@
+{"role": "meta", "scenario": "what-should-i-do-tonight", "min_turns": 30, "device": "phone", "bot": "terry", "tags": ["personal-assistant", "calendar", "preferences", "decision-fatigue"], "headline": "Decision-fatigue offload — assistant pulls calendar + weather + vault preferences to suggest evening plans"}
+{"role": "user", "text": "Terry. It's 5:30pm Friday. I'm fried. What should I do tonight?"}
+{"role": "user", "text": "Pull my calendar for the next 3 hours. Anything I'm forgetting?"}
+{"role": "user", "text": "What's the weather right now and the next 4 hours?"}
+{"role": "user", "text": "I don't want to drive. Walking distance only. What's nearby in my saved 'good places' list?"}
+{"role": "user", "text": "If I haven't saved a 'good places' list, that's the gap. Make one — ask me 5 quick questions to seed it."}
+{"role": "user", "text": "Cuisine: I like Vietnamese, decent ramen, anything with grill smoke. Avoid: heavy Italian, sushi (had it twice this week)."}
+{"role": "user", "text": "Vibes: small, dimly lit, can hear the person across the table. Avoid: TVs on every wall, line out the door."}
+{"role": "user", "text": "Solo or with people: solo right now is fine, but I'd say yes if my partner texted."}
+{"role": "user", "text": "Distance: 15 min walk max."}
+{"role": "user", "text": "Spend: $25-40 including a drink."}
+{"role": "user", "text": "Save those as vault preferences. Audience terry only. Tag 'good-places-criteria'."}
+{"role": "user", "text": "Now suggest 3 places that match. Be specific — names, walk time, why each fits."}
+{"role": "user", "text": "I haven't told you my neighborhood. Ask me."}
+{"role": "user", "text": "Trinity-Bellwoods, Toronto."}
+{"role": "user", "text": "OK now suggest 3 places."}
+{"role": "user", "text": "Pho Tien Thanh sounds right. But it's Friday — will there be a line?"}
+{"role": "user", "text": "Can you check Google for current wait time, or tell me you can't?"}
+{"role": "user", "text": "Fair. Pick the second option from your list — what was it again?"}
+{"role": "user", "text": "Add a calendar entry for 'dinner at Yasu' at 6:45pm. Hold for 2 hours."}
+{"role": "user", "text": "Now — after dinner, what's open between 9 and 11pm that's quiet? I don't want a bar with music."}
+{"role": "user", "text": "A bookstore. Good. Type Books on Queen — they open till when on Fridays?"}
+{"role": "user", "text": "If you don't know, just say so. Don't make it up."}
+{"role": "user", "text": "OK pencil in 'Type Books browse' for 9-10pm. Soft hold — I might cancel."}
+{"role": "user", "text": "What's my Saturday morning look like? I don't want to overcommit tonight if Saturday has an early thing."}
+{"role": "user", "text": "Brunch at 10 with my sister. So I should be home by midnight at the latest."}
+{"role": "user", "text": "Set a calendar reminder for 11:30pm tonight: 'head home'. Title only, no description."}
+{"role": "user", "text": "OK plan summary — read it back to me as a 5-bullet list."}
+{"role": "user", "text": "Save that as today's 'evening plan' journal entry. Audience terry only."}
+{"role": "user", "text": "If my partner texts in the next hour saying 'want to do dinner', what do you suggest I say?"}
+{"role": "user", "text": "Right. Yasu doesn't take reservations and is 2-top friendly. Tell her about Yasu, propose 6:45pm."}
+{"role": "user", "text": "Update the journal entry to reflect the contingency plan if she joins."}
+{"role": "user", "text": "Done. Heading out. Thanks."}

@@ -1,0 +1,39 @@
+{"role": "meta", "scenario": "computer-debug-voice", "min_turns": 30, "device": "phone-voice", "bot": "terry", "tags": ["voice", "diagnostic", "helper-escalation", "tool-selection", "mid-conversation-pivot"], "headline": "Voice-driven diagnostic conversation — debugging a stalled computer with mid-conversation pivots"}
+{"role": "user", "text": "Terry, my desktop is acting up. Fans spinning loud, nothing on the screen, won't respond to keyboard."}
+{"role": "user", "text": "Yeah I can see it. Light on the case is solid white. Was working an hour ago."}
+{"role": "user", "text": "Run me through a diagnostic order. Cheapest checks first."}
+{"role": "user", "text": "Power cycle done — held the power button 10 seconds, unplugged for 30, plugged back in. Same thing. Fans loud, no display."}
+{"role": "user", "text": "Monitor — could it be the monitor? Let me check."}
+{"role": "user", "text": "Tried a different cable. Same. Tried the monitor on my laptop, monitor works fine. So it's not the monitor."}
+{"role": "user", "text": "What's most likely now — GPU, RAM, or PSU?"}
+{"role": "user", "text": "How do I tell which one without opening the case yet?"}
+{"role": "user", "text": "Beep codes — does my motherboard have a speaker? Honestly I don't know."}
+{"role": "user", "text": "It's an ASUS ROG Strix B650-E. Do those have onboard speakers or do you need to plug one in?"}
+{"role": "user", "text": "Be honest — do you actually know that model's spec or are you guessing?"}
+{"role": "user", "text": "Q-LED. OK what color is the Q-LED right now?"}
+{"role": "user", "text": "It's solid yellow. What does yellow mean on ASUS Q-LED?"}
+{"role": "user", "text": "RAM. So that's the failing component, or the cable to it, or a slot."}
+{"role": "user", "text": "What's the order of things to try without buying anything new?"}
+{"role": "user", "text": "Reseat first. Walk me through it — I've never opened this case."}
+{"role": "user", "text": "Hold on — actually, before I open it — is it safe? I'm on a carpet, no anti-static strap."}
+{"role": "user", "text": "OK touch the case to ground myself, work on the desk. Got it. Side panel off."}
+{"role": "user", "text": "Two RAM sticks, slot 2 and slot 4. I'll pull both."}
+{"role": "user", "text": "Both reseated, click both sides. Power on."}
+{"role": "user", "text": "Same. Yellow Q-LED, fans loud, no display."}
+{"role": "user", "text": "Try one stick at a time?"}
+{"role": "user", "text": "Stick 1 only in slot 2 — boots! Display works."}
+{"role": "user", "text": "So stick 2 is bad, or slot 4 is bad. How do I tell?"}
+{"role": "user", "text": "Right — put stick 2 in slot 2, stick 1 out. If it boots, slot 4 is the problem. If it doesn't, stick 2 is the problem."}
+{"role": "user", "text": "Stick 2 in slot 2 — boots fine. So slot 4 on the motherboard is dead."}
+{"role": "user", "text": "Now — actually, wait. Different question — could it be that the slot is fine but the stick wasn't seated? Should I retry slot 4?"}
+{"role": "user", "text": "Fair. Try stick 2 in slot 4 again, deliberate seat with both clicks."}
+{"role": "user", "text": "Same — yellow Q-LED, no boot. Slot 4 is genuinely dead."}
+{"role": "user", "text": "OK so I'm running on one stick of RAM. Performance hit?"}
+{"role": "user", "text": "Right — single channel instead of dual, ~10-20% memory bandwidth loss. Tolerable for now."}
+{"role": "user", "text": "Save this as a vault note: 'B650-E motherboard - slot 4 dead - 2026-05-01'. Audience terry only. Tag 'hardware'."}
+{"role": "user", "text": "Should I RMA the board, replace it, or live with it?"}
+{"role": "user", "text": "I'm 4 months past warranty. So pay for repair or replace. Ballpark cost of a B650-E replacement?"}
+{"role": "user", "text": "Be honest if you can't price it accurately. Just say it's roughly the original price minus depreciation."}
+{"role": "user", "text": "OK plan: live with it for now, set a reminder to revisit in 3 months. Add calendar entry for Aug 1, 2026: 'review B650-E single-channel decision'."}
+{"role": "user", "text": "Update the vault note with the plan: 'Living with single-channel for 3 months, then reassess.'"}
+{"role": "user", "text": "Done. Crisis averted. Thanks Terry."}

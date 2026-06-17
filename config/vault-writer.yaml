@@ -1,0 +1,27 @@
+vault_path: ./vault  # or set env HIVE_VAULT_PATH
+daemon_bind_host: 127.0.0.1
+daemon_bind_port: 8765
+ollama_url: http://localhost:11434
+embedding_model: nomic-embed-text
+embedding_dimension: 768
+
+# Phase 2a: learn RPC + batched commit/push loop is active.
+gitea:
+  remote: http://localhost:3000/<you>/ai-team-vault.git
+  token_env: GITEA_TOKEN
+  push_on_write: true    # batched commit + push every batch_window_seconds if dirty
+  batch_window_seconds: 5
+
+search:
+  default_k: 5
+  min_score: 0.4
+
+scan:
+  initial_full_scan: true     # on startup, walk the vault and embed anything new
+  periodic_seconds: 300       # reserved for a future periodic-scan task
+
+# Shared-secret gate on write RPCs. Token is a per-user file with 0600-style
+# ACL (see scripts/start-vault-writer.ps1). Clients resolve the token from
+# the same path via shared.vault_client._default_auth_token().
+auth:
+  token_path: ./.vault-writer/token
