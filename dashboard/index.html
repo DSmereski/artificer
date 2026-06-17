@@ -1,6 +1,34 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      /* P3 theme picker — apply the persisted theme before paint (no flash),
+         and wire the ◑ cycle button. warm-black (default) / light / neutral-dark. */
+      (function () {
+        var THEMES = ['warm-black', 'light', 'neutral-dark'];
+        function apply(t) {
+          if (t === 'warm-black') delete document.documentElement.dataset.theme;
+          else document.documentElement.dataset.theme = t;
+        }
+        var cur;
+        try { cur = localStorage.getItem('hive.theme') || 'warm-black'; } catch (e) { cur = 'warm-black'; }
+        if (THEMES.indexOf(cur) < 0) cur = 'warm-black';
+        apply(cur);
+        document.addEventListener('DOMContentLoaded', function () {
+          var btn = document.getElementById('act-theme');
+          if (!btn) return;
+          function label() { btn.textContent = '◑ ' + cur.replace('-', ' '); }
+          label();
+          btn.addEventListener('click', function () {
+            cur = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+            apply(cur);
+            try { localStorage.setItem('hive.theme', cur); } catch (e) {}
+            label();
+            window.dispatchEvent(new Event('hive-theme-change'));
+          });
+        });
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=5120, initial-scale=1.0" />
     <title>Hive Command Center</title>
@@ -58,6 +86,30 @@
         --topbar-h: 56px;
         --font-ui:  'Inter', system-ui, sans-serif;
         --font-mono:'JetBrains Mono', ui-monospace, monospace;
+      }
+
+      /* ── Themes (P3) — override the color tokens; layout/fonts inherit. ──── */
+      /* Light — bright, high-contrast for daytime desks. */
+      html[data-theme="light"] {
+        --bg:    oklch(0.97 0.006 80); --bg2: oklch(0.94 0.008 80);
+        --card:  oklch(0.99 0.004 80); --line: oklch(0.83 0.02 70);
+        --ink:   oklch(0.25 0.02 60);  --dim: oklch(0.42 0.02 64); --faint: oklch(0.55 0.015 66);
+        --copper:oklch(0.55 0.13 55);  --amber: oklch(0.62 0.16 70); --amber-glow: oklch(0.66 0.17 72);
+        --green: oklch(0.55 0.16 150); --red: oklch(0.55 0.19 25);  --cyan: oklch(0.55 0.12 220);
+        --hex-bg:#f5f3ee; --hex-bg2:#eeebe2; --hex-card:#ffffff; --hex-line:#d2ccbe;
+        --hex-ink:#2c2a26; --hex-dim:#6a665c; --hex-faint:#8a867c;
+        --hex-copper:#9a5a28; --hex-amber:#b07810; --hex-green:#3c9850; --hex-red:#c03030; --hex-cyan:#3088a8;
+      }
+      /* Neutral-dark — desaturated, cool-accent for mixed environments. */
+      html[data-theme="neutral-dark"] {
+        --bg:    oklch(0.15 0.004 250); --bg2: oklch(0.18 0.005 250);
+        --card:  oklch(0.21 0.006 250); --line: oklch(0.32 0.008 250);
+        --ink:   oklch(0.94 0.004 250); --dim: oklch(0.72 0.006 250); --faint: oklch(0.60 0.008 250);
+        --copper:oklch(0.70 0.06 220);  --amber: oklch(0.78 0.12 220); --amber-glow: oklch(0.82 0.13 220);
+        --green: oklch(0.78 0.14 160);  --red: oklch(0.66 0.16 25);   --cyan: oklch(0.80 0.10 200);
+        --hex-bg:#14161a; --hex-bg2:#191c21; --hex-card:#1e2127; --hex-line:#353a42;
+        --hex-ink:#eef0f2; --hex-dim:#b4b8be; --hex-faint:#969aa0;
+        --hex-copper:#5a90c0; --hex-amber:#48a0e0; --hex-green:#5cc888; --hex-red:#c44040; --hex-cyan:#60c8c8;
       }
 
       html, body {
@@ -1592,6 +1644,7 @@
         <!-- ── Mode toggle (P4): ambient ⇄ focus. Always visible (click target;
              Lively keyboard is unreliable). ───────────────────────────────── -->
         <button id="act-mode" class="act-btn act-mode" title="Toggle ambient / focus (Esc exits focus)">◐ Ambient</button>
+        <button id="act-theme" class="act-btn" title="Cycle theme (warm-black / light / neutral-dark)">◑ Theme</button>
 
         <!-- ── Command surface (CC1) ──────────────────────────────────── -->
         <div id="topbar-actions" class="topbar-actions">
