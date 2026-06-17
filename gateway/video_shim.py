@@ -1,4 +1,4 @@
-"""Discord-free wrapper around imageToVideo's wan_video.generate_wan_video.
+"""Discord-free wrapper around the video backend's wan_video.generate_wan_video.
 
 Parallel structure to image_shim.ImageShim. Jobs run on a daemon
 worker thread with a global lock so video gen serialises against
@@ -24,12 +24,13 @@ from typing import Any, Callable
 
 log = logging.getLogger("gateway.video_shim")
 
-# GPU 0 = RTX 4080 — gaming only. AI workloads must use cuda:1 or cuda:2.
+# Reserve a GPU for other workloads if you want — point AI at cuda:1/cuda:2.
 _DEFAULT_VIDEO_DEVICE = os.environ.get("VIDEO_DEVICE", "cuda:1")
 
-_IMAGETOVIDEO = Path(r"C:\Projects\imageToVideo")
-if _IMAGETOVIDEO.is_dir() and str(_IMAGETOVIDEO) not in sys.path:
-    sys.path.insert(0, str(_IMAGETOVIDEO))
+# Video backend checkout (exposes wan_video.generate_wan_video); unset → disabled.
+_VIDEO_BACKEND = Path(os.environ.get("HIVE_VIDEO_BACKEND_PATH", os.environ.get("HIVE_IMAGE_BACKEND_PATH", "")))
+if str(_VIDEO_BACKEND) not in ("", ".") and _VIDEO_BACKEND.is_dir() and str(_VIDEO_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_VIDEO_BACKEND))
 
 
 @dataclass

@@ -1,13 +1,17 @@
-"""Discord-free wrapper around imageToVideo's core.ai_generate.
+"""Discord-free wrapper around the image-generation backend's core.ai_generate.
 
 Jobs run on a dedicated daemon thread so the request's asyncio loop can
-return immediately. The same file lock from discord_generate.py is
-re-used so Discord + gateway serialise against each other.
+return immediately. The backend's own file lock is re-used so any other caller
++ the gateway serialise against each other.
+
+The backend lives wherever ``HIVE_IMAGE_BACKEND_PATH`` points (a checkout that
+exposes ``core.ai_generate``); if unset, the image routes stay disabled.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import sys
 import threading
@@ -18,9 +22,9 @@ from typing import Any, Callable
 
 log = logging.getLogger("gateway.image_shim")
 
-_IMAGETOVIDEO = Path(r"C:\Projects\imageToVideo")
-if _IMAGETOVIDEO.is_dir() and str(_IMAGETOVIDEO) not in sys.path:
-    sys.path.insert(0, str(_IMAGETOVIDEO))
+_IMAGE_BACKEND = Path(os.environ.get("HIVE_IMAGE_BACKEND_PATH", ""))
+if str(_IMAGE_BACKEND) not in ("", ".") and _IMAGE_BACKEND.is_dir() and str(_IMAGE_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_IMAGE_BACKEND))
 
 
 @dataclass

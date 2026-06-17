@@ -1305,17 +1305,17 @@ class ActionExecutor:
         # Attempt to enqueue via the imageToVideo trainer if available.
         # Falls back gracefully if the training module is missing.
         try:
-            from gateway.image_shim import _IMAGETOVIDEO  # type: ignore
+            from gateway.image_shim import _IMAGE_BACKEND  # type: ignore
             import sys as _sys
-            if not _IMAGETOVIDEO.is_dir():
+            if not (str(_IMAGE_BACKEND) not in ("", ".") and _IMAGE_BACKEND.is_dir()):
                 return ActionReceipt(
                     verb="lora_train", ok=False,
-                    detail="imageToVideo project not found; LoRA training unavailable",
+                    detail="image backend not configured (set HIVE_IMAGE_BACKEND_PATH); LoRA training unavailable",
                 )
         except Exception:
             return ActionReceipt(
                 verb="lora_train", ok=False,
-                detail="could not verify imageToVideo installation",
+                detail="could not verify the image backend installation",
             )
 
         import uuid as _uuid
@@ -1329,11 +1329,11 @@ class ActionExecutor:
         def _sync_enqueue() -> dict:
             try:
                 import importlib.util as _util
-                trainer_path = _IMAGETOVIDEO / "media" / "lora_train.py"
+                trainer_path = _IMAGE_BACKEND / "media" / "lora_train.py"
                 if not trainer_path.exists():
                     return {
                         "ok": False,
-                        "detail": "lora_train.py not found in imageToVideo/media/",
+                        "detail": "lora_train.py not found under the image backend's media/",
                     }
                 spec = _util.spec_from_file_location("lora_train_module", trainer_path)
                 if spec is None or spec.loader is None:
