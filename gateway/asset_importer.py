@@ -178,6 +178,11 @@ def _is_blocked_ip(addr: str) -> bool:
         return True
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    # CGNAT 100.64.0.0/10 (e.g. Tailscale) and IPv6 ULA fd00::/8 are NOT flagged
+    # by ip.is_private in CPython, so a paired caller could SSRF a tailnet peer.
+    # Block them explicitly (audit H-5).
+    if ip in ipaddress.ip_network("100.64.0.0/10") or ip in ipaddress.ip_network("fc00::/7"):
+        return True
     return (
         ip.is_loopback or ip.is_private or ip.is_reserved
         or ip.is_link_local or ip.is_multicast or ip.is_unspecified
