@@ -41,7 +41,7 @@ The wallpaper renders in CefSharp by default, which enforces CORS and blocks
 
 After switching to WebView2, live board data will populate automatically.
 
-## DAVID: Verify These 3 Things (Phase A gate)
+## Verify the install (Phase A gate)
 
 ### Check 1 — Renders (wallpaper visible full-bleed on the 5120x1440 panel)
 

@@ -5,11 +5,13 @@ ollama_url: http://localhost:11434
 embedding_model: nomic-embed-text
 embedding_dimension: 768
 
-# Phase 2a: learn RPC + batched commit/push loop is active.
+# Optional: Gitea / Git backup for the vault.
+# Uncomment and fill in `remote` to enable batched commit + push on write.
+# GITEA_TOKEN must be set in config/.env (see .env.template).
 gitea:
-  remote: http://localhost:3000/<you>/ai-team-vault.git
+  # remote: http://localhost:3000/<you>/ai-team-vault.git   # your Gitea repo URL
   token_env: GITEA_TOKEN
-  push_on_write: true    # batched commit + push every batch_window_seconds if dirty
+  push_on_write: false   # set true once remote is configured
   batch_window_seconds: 5
 
 search:

@@ -22,7 +22,7 @@ writer** sidecar that owns SQLite + FTS5 + sqlite-vec for the user's vault.
 | Worker pool | `gateway/worker_pool/` | Node pairing (invite codes, registry, heartbeat) |
 | Hive node agent | `hive_node_agent/` | CLI client that pairs a worker box with the gateway |
 | Flutter app | `lib/` | iOS/Android client over WS + REST |
-| Top-level scripts | `scripts/` | `start-all.cmd`, `e2e_chat_driver.py`, smokes |
+| Top-level scripts | `scripts/` | `start-all.ps1`, `e2e_chat_driver.py`, smokes |
 
 ## Architecture map
 
@@ -79,9 +79,9 @@ Phase 3 of the self-improvement loop (idle-time vault groomer).
 
 | Goal | Command |
 |---|---|
-| Start the bot stack | `scripts/start-all.cmd` (Terry + Scout + gateway) |
-| Stop it | `scripts/stop-all.cmd` |
-| Restart just the gateway | the user has a `relaunch-app` agent / muscle memory; `scripts/start-gateway.cmd` |
+| Start the bot stack | `scripts/start-all.ps1` (vault-writer + gateway + Terry + Scout) |
+| Stop it | `scripts/stop-all.ps1` |
+| Restart just the gateway | `scripts/start-gateway.ps1` (idempotent) |
 | Run gateway in foreground | `python -m gateway` |
 | Run vault writer | `python -m vault_writer` (started by gateway lifespan in normal use) |
 | Run a node agent | `python -m hive_node_agent --invite <CODE>` |

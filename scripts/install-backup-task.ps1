@@ -26,8 +26,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Project      = 'C:\Projects\Ai-Team'
-$BackupScript = Join-Path $Project 'scripts\backup-state.ps1'
+$Project      = if ($env:HIVE_PROJECT_ROOT) { $env:HIVE_PROJECT_ROOT } else { Split-Path $PSScriptRoot -Parent }
+$BackupScript = Join-Path $PSScriptRoot 'backup-state.ps1'
 
 if ($Uninstall) {
     schtasks /Query /TN $TaskName 2>$null | Out-Null

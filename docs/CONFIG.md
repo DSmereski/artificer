@@ -32,3 +32,22 @@ card; the installer recommends a tier from your detected VRAM.
 
 Discord bots, the image-generation pipeline, and the Suno integration are
 opt-in via their env vars / keys. Leave them unset to run a lean local setup.
+
+### Image / video generation backend
+
+The image-gen routes (`/v1/images/*`) and video routes require an external
+backend — a local checkout of **imageToVideo** that exposes `core.ai_generate`
+and `wan_video`. This is **not** bundled with Hiveforge.
+
+To enable:
+
+1. Clone/place the imageToVideo backend somewhere on your machine.
+2. Set the env var in `config/.env`:
+   ```
+   HIVE_IMAGE_BACKEND_PATH=/path/to/imageToVideo
+   ```
+3. Alternatively, set `image_app_root` in `config/gateway.yaml` (the env var
+   takes precedence).
+
+Leave both unset (the default) to run Hiveforge without image generation.
+The `images.image_app_root` key in `gateway.yaml` defaults to `null`.

@@ -22,6 +22,15 @@ model=$(ask "Local model to pull (or 'cloud')" "$rec")
 if [ "$model" != "cloud" ]; then
   if ! have ollama; then info "Install Ollama: https://ollama.com/download — then re-run."; exit 1; fi
   info "Pulling $model..."; ollama pull "$model"
+
+  # Always pull the baseline helper + embedding models regardless of which
+  # primary model was chosen. Required for vault search and helper roles.
+  for bm in qwen2.5-coder:7b qwen3:8b gemma3:4b nomic-embed-text; do
+    if [ "$bm" != "$model" ]; then
+      info "Pulling baseline model $bm (skipped if already present)..."
+      ollama pull "$bm"
+    fi
+  done
 fi
 
 # 3. Python deps

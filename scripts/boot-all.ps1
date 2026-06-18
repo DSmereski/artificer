@@ -12,8 +12,8 @@
 
 $ErrorActionPreference = 'Continue'
 
-$Project = 'C:\Projects\Ai-Team'
-$LogDir  = 'C:\tmp\ai-team'
+$Project = if ($env:HIVE_PROJECT_ROOT) { $env:HIVE_PROJECT_ROOT } else { Split-Path $PSScriptRoot -Parent }
+$LogDir  = if ($env:HIVE_LOG_DIR) { $env:HIVE_LOG_DIR } else { Join-Path $env:TEMP 'ai-team' }
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
 Write-Host "===== Ai-Team Boot (PowerShell) ====="
@@ -25,7 +25,7 @@ if ($oll) {
 } else {
     Write-Host "[1] Starting Ollama (tuned)..."
     Start-Process -FilePath 'cmd.exe' `
-        -ArgumentList '/c', "`"$Project\scripts\start-ollama-tuned.cmd`"" `
+        -ArgumentList '/c', "`"$PSScriptRoot\start-ollama-tuned.cmd`"" `
         -WorkingDirectory $Project -WindowStyle Hidden
     $deadline = (Get-Date).AddSeconds(20)
     while ((Get-Date) -lt $deadline) {
@@ -40,6 +40,6 @@ if ($oll) {
 
 # 2-5. vault-writer, gateway, Terry, scout-daemon (idempotent).
 Write-Host "[2] Delegating to start-all.ps1..."
-& "$Project\scripts\start-all.ps1"
+& "$PSScriptRoot\start-all.ps1"
 
 Write-Host "===== Ai-Team Boot complete ====="

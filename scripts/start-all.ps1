@@ -129,11 +129,12 @@ if ($gwExisting) {
 }
 
 Write-Host "[1/2] Checking Terry..."
+$cudaDevices = if ($env:CUDA_VISIBLE_DEVICES) { $env:CUDA_VISIBLE_DEVICES } else { '0' }
 Start-Bot -Name 'Terry' `
     -Script 'bots\terry\bot.py' `
     -Needle 'bots\terry\bot.py' `
     -LogFile (Join-Path $LogDir 'terry.log') `
-    -Env @{ CUDA_VISIBLE_DEVICES = '1,2' }
+    -Env @{ CUDA_VISIBLE_DEVICES = $cudaDevices }
 
 Write-Host "[2/2] Checking scout-daemon..."
 $scoutExisting = Test-BotRunning -Needle 'services.scout_daemon'

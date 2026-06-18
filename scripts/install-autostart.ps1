@@ -21,8 +21,8 @@ param (
 
 $ErrorActionPreference = 'Stop'
 
-$Project = 'C:\Projects\Ai-Team'
-$BootScript = Join-Path $Project 'scripts\boot-all.ps1'
+$Project    = if ($env:HIVE_PROJECT_ROOT) { $env:HIVE_PROJECT_ROOT } else { Split-Path $PSScriptRoot -Parent }
+$BootScript = Join-Path $PSScriptRoot 'boot-all.ps1'
 
 if ($Uninstall) {
     if (schtasks /Query /TN $TaskName 2>$null) {
@@ -35,7 +35,7 @@ if ($Uninstall) {
 }
 
 if (-not (Test-Path -LiteralPath $BootScript)) {
-    throw "boot-all.cmd not found at $BootScript"
+    throw "boot-all.ps1 not found at $BootScript"
 }
 
 # Build an XML definition for full control over conditions/restart-on-fail.

@@ -57,6 +57,18 @@ if ($model -ne 'cloud') {
   Info "Pulling $model (skipped if already present)..."
   & ollama pull $model
   Ok "model ready: $model"
+
+  # Always pull the baseline helper + embedding models regardless of which
+  # primary model was chosen. They are required for vault search and the
+  # assistant/coder helper roles.
+  $baselineModels = @('qwen2.5-coder:7b', 'qwen3:8b', 'gemma3:4b', 'nomic-embed-text')
+  foreach ($bm in $baselineModels) {
+    if ($bm -ne $model) {
+      Info "Pulling baseline model $bm (skipped if already present)..."
+      & ollama pull $bm
+      Ok "baseline model ready: $bm"
+    }
+  }
 }
 
 # ── 3. Python deps ─────────────────────────────────────────────────────────

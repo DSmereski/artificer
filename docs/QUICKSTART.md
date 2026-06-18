@@ -2,6 +2,20 @@
 
 From zero to a running Hiveforge in a few minutes.
 
+## Prerequisites
+
+Install these before running the installer:
+
+| Tool | Minimum | Recommended | Get it |
+|------|---------|-------------|--------|
+| **Python** | 3.10 | 3.11+ | https://python.org |
+| **Node.js** | 18 | 20 LTS | https://nodejs.org |
+| **Flutter** | 3.11 | latest stable | https://flutter.dev (only needed for app builds) |
+| **Ollama** | latest | latest | https://ollama.com/download |
+
+> The installer checks for Ollama and Python and prints a download link if they
+> are missing. Flutter is only required if you want to build the companion app.
+
 ## 1. Clone
 
 ```bash
@@ -29,9 +43,20 @@ Prerequisites the installer checks for (and points you to if missing):
 
 ## 3. Start
 
+**Start vault-writer first** — the gateway waits up to 15 s for it before
+accepting requests, so starting vault-writer first avoids that wait.
+
 ```bash
-python -m gateway                      # the gateway (crew board + API)
-cd dashboard && npm ci && npm run build # the dashboard
+# Recommended: start everything at once (waits for vault-writer before gateway)
+powershell -ExecutionPolicy Bypass -File scripts/start-all.ps1   # Windows
+```
+
+Or start services individually in this order:
+
+```bash
+python -m vault_writer                 # 1. vault sidecar (MUST start first)
+python -m gateway                      # 2. the gateway (crew board + API)
+cd dashboard && npm ci && npm run build # 3. the dashboard
 ```
 
 **Dashboard, cross-platform:** on Windows it can run as a Lively wallpaper; on

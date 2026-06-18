@@ -4,9 +4,9 @@
 
 $ErrorActionPreference = 'Continue'
 
-$Project = 'C:\Projects\Ai-Team'
-$Python  = 'C:\Program Files\Python314\python.exe'
-$LogDir  = 'C:\tmp\ai-team'
+$Project = if ($env:HIVE_PROJECT_ROOT) { $env:HIVE_PROJECT_ROOT } else { Split-Path $PSScriptRoot -Parent }
+$Python  = if ($env:HIVE_PYTHON) { $env:HIVE_PYTHON } else { (Get-Command python -ErrorAction SilentlyContinue)?.Source ?? 'python' }
+$LogDir  = if ($env:HIVE_LOG_DIR) { $env:HIVE_LOG_DIR } else { Join-Path $env:TEMP 'ai-team' }
 $Needle  = '-m gateway'
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
@@ -41,7 +41,7 @@ Write-Host "Starting ai-team-gateway..."
 
 # Optional secrets file - gitignored - overrides env vars on launch.
 # Format: KEY=value, one per line, # comments OK.
-$SecretsFile = Join-Path $Project 'scripts\.env.local'
+$SecretsFile = Join-Path $PSScriptRoot '.env.local'
 if (Test-Path $SecretsFile) {
     Get-Content $SecretsFile | ForEach-Object {
         if ($_ -match '^\s*#') { return }

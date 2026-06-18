@@ -23,16 +23,14 @@ vault_writer:
 # Vault filesystem root (for direct reads).
 vault_path: ./vault  # or set env HIVE_VAULT_PATH
 
-# Where the three Discord bots keep their per-user chat history. Reused so
+# Where the Discord bots keep their per-user chat history. Reused so
 # conversations begun on Discord continue in the app and vice versa.
 history_roots:
-  maggy: ./memory/chat-history-maggy
   terry: ./memory/chat-history
   scout: ./memory/chat-history-scout
 
 # Per-bot Ollama model overrides (falls back to LLMClient.MODEL if null).
 models:
-  maggy: qwen3-coder:30b-a3b-fp16
   terry: planner-qwen
   scout: qwen3-8b
 
@@ -59,8 +57,11 @@ rate_limits:
 images:
   auto_lora: true
   max_auto_loras: 3
-  # Path to imageToVideo so we can import its select_loras + registry.
-  image_app_root: ./imageToVideo
+  # Optional external image-generation backend (a checkout of imageToVideo that
+  # exposes core.ai_generate / wan_video). Leave null to disable image+video
+  # routes entirely. Set via env HIVE_IMAGE_BACKEND_PATH or override here.
+  # See docs/CONFIG.md for details.
+  image_app_root: null
 
 nodes:
   db_filename: hive_nodes.db
