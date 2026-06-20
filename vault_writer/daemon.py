@@ -160,6 +160,13 @@ class Daemon:
         except Exception as e:  # noqa: BLE001
             log.warning("FTS backfill failed (continuing): %s", e)
 
+        # Ensure wiki_reviews table exists (idempotent).
+        try:
+            from vault_writer.review_queue import ensure_schema as _rq_ensure
+            _rq_ensure(self.index._conn)
+        except Exception as e:  # noqa: BLE001
+            log.warning("review_queue: schema ensure failed (continuing): %s", e)
+
         self._worker_task = asyncio.create_task(self._worker(), name="vault-worker")
         self._server = await asyncio.start_server(
             self._handle_client,
@@ -714,6 +721,66 @@ class Daemon:
             prior_existed=bool(result.get("prior_existed")),
         )
 
+    def _run_wiki_synth(self, req: "LearnRequest", note_rel_path: str) -> None:  # type: ignore[name-defined]
+        """Build the LLM + search callables and invoke wiki_synth.synthesize().
+
+        Runs synchronously in the daemon's asyncio thread via run_in_executor —
+        synthesis calls Ollama via the blocking ``ollama.Client`` so it must
+        not block the event loop directly.  A slow synthesis cannot block live
+        RPC responses because it runs in the executor thread pool.
+        A synthesis failure MUST NOT propagate — the note write is the primary
+        outcome; synthesis is fail-soft.
+        """
+        from vault_writer.wiki_synth import make_ollama_llm_fn, synthesize
+
+        cfg = self._config.wiki_synth
+
+        # Search function: wraps VaultIndex.search using FTS only (no
+        # embedder needed here — we pass query_text and a zero-vec for the
+        # vector half; the FTS half drives recall for wiki pages).
+        idx = self.index
+        if idx is None:
+            return
+
+        def _search_fn(query: str, k: int) -> list:
+            dummy_vec = [0.0] * self._config.embedding_dimension
+            return idx.search(
+                dummy_vec, k=k, audience="all", query_text=query
+            )
+
+        llm_fn = make_ollama_llm_fn(
+            ollama_url=self._config.ollama_url,
+            model=cfg.model,
+            timeout=cfg.timeout_seconds,
+        )
+
+        # Pass the VaultIndex connection so contradictions/gaps are queued
+        # into wiki_reviews for the dashboard "needs human review" rail.
+        review_conn = idx._conn if idx is not None else None
+        result = synthesize(
+            req.body,
+            note_id=note_rel_path,
+            search_fn=_search_fn,
+            llm_fn=llm_fn,
+            vault_root=self._config.vault_path,
+            top_k=cfg.top_k,
+            review_conn=review_conn,
+        )
+        if result.ok:
+            log.info(
+                "wiki_synth: article written %s (contradictions=%d, gaps=%d, reviews_queued=%d)",
+                result.wiki_path, len(result.contradictions),
+                len(result.gaps), result.reviews_queued,
+            )
+            if result.contradictions:
+                for c in result.contradictions:
+                    log.warning("wiki_synth: contradiction detected: %s", c)
+            if result.gaps:
+                for g in result.gaps:
+                    log.info("wiki_synth: knowledge gap queued: %s", g)
+        else:
+            log.warning("wiki_synth: synthesis failed: %s", result.error)
+
     # =========================================================== git loop
 
     async def _commit_loop(self) -> None:
@@ -818,6 +885,18 @@ class Daemon:
                     return
                 writer.write(encode_response(resp))
                 await writer.drain()
+                # Persistent-wiki synthesis (#175): synthesize a wiki article
+                # for this note after the RPC has returned. Runs in a thread
+                # so the blocking Ollama call never stalls the event loop.
+                if (
+                    getattr(self._config, "wiki_synth", None) is not None
+                    and self._config.wiki_synth.enabled
+                    and getattr(resp, "ok", True)
+                    and self._loop is not None
+                ):
+                    self._loop.run_in_executor(
+                        None, self._run_wiki_synth, req, getattr(resp, "path", ""),
+                    )
             elif isinstance(req, ChatLogAppendRequest):
                 try:
                     resp = self._do_chat_log_append(req)

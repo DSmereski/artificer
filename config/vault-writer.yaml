@@ -27,3 +27,14 @@ scan:
 # the same path via shared.vault_client._default_auth_token().
 auth:
   token_path: ./.vault-writer/token
+
+# Persistent-wiki synthesis (C3): after each note is written, an LLM
+# synthesizes it against existing wiki pages into wiki/<slug>.md. Fail-soft +
+# runs in a worker thread so it never blocks the note write.
+# Set enabled: true and configure `model` to match a model available in your
+# Ollama instance (see MODELS.md for options).
+wiki_synth:
+  enabled: false
+  model: qwen3:7b
+  top_k: 5
+  timeout_seconds: 120

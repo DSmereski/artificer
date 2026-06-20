@@ -167,6 +167,66 @@ def _check_criteria(task: Task) -> dict:
     }
 
 
+def _check_commit(task: Task, project: Project) -> dict:
+    """False-done gate: a real 'done' must show actual work — either uncommitted
+    changes in the tree (the loop commits after verify) OR a commit that
+    references the task. A clean tree with no task commit means nothing was
+    produced (the task was marked done with zero diff). Permissive when the
+    project isn't a git checkout."""
+    pdir = Path(project.path) if getattr(project, "path", None) else None
+    if pdir is None or not (pdir / ".git").exists():
+        return {"checked": False, "reason": "not a git checkout"}
+    def _git(*args: str) -> str:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(pdir), *args],
+                capture_output=True, text=True, timeout=30,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    dirty = _git("status", "--porcelain")
+    has_commit = bool(_git("log", "--oneline", "-100", "--grep", task.slug))
+    if not dirty and not has_commit:
+        return {
+            "checked": True, "ok": False,
+            "reason": (
+                f"false-done: working tree is clean AND no commit references "
+                f"{task.slug} — no work was produced for this task"
+            ),
+        }
+    return {"checked": True, "ok": True}
+
+
+def _check_entrypoint(task: Task, project: Project) -> dict:
+    """Boot gate: an app must be launchable, not merely test-green. Catches the
+    'tests pass but the app has no entry point' class where tests all pass but
+    the app cannot start on any platform.
+    Flutter: require a top-level main() in lib/main.dart."""
+    import re
+    pdir = Path(project.path) if getattr(project, "path", None) else None
+    if pdir is None:
+        return {"checked": False}
+    if (pdir / "pubspec.yaml").exists():
+        main_dart = pdir / "lib" / "main.dart"
+        if not main_dart.exists():
+            return {"checked": True, "ok": False,
+                    "reason": "Flutter app has no lib/main.dart — it cannot launch"}
+        try:
+            text = main_dart.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return {"checked": False}
+        if not re.search(r"^\s*(?:void\s+|Future\s*<\s*void\s*>\s+|[\w<>]+\s+)?main\s*\(", text, re.M):
+            return {
+                "checked": True, "ok": False,
+                "reason": (
+                    "Flutter app's lib/main.dart has no main() entry point — "
+                    "the app cannot launch (tests pass with their own mains)"
+                ),
+            }
+        return {"checked": True, "ok": True}
+    return {"checked": False}
+
+
 def verify(
     store: CrewBoardStore,
     task: Task,
@@ -193,6 +253,13 @@ def verify(
     # unit test mocked the state and the cross-module integration was
     # never exercised.
     smoke = _run_smoke(task, project) if run_tests else {"ran": False}
+    # #177 gates: a task can't be "done" on green tests alone.
+    #   - false-done gate: clean tree AND no commit referencing the task = no
+    #     work was produced (task was marked done with zero diff).
+    #   - boot gate: an app must be launchable, not merely test-green (tests
+    #     pass with their own mains; the app entry point may still be absent).
+    commit = _check_commit(task, project) if run_tests else {"checked": False}
+    entry = _check_entrypoint(task, project)
     # Auto-Ok rules (gates the move-to-review):
     #   - tests didn't fail (exit code 0 OR not configured)
     #   - all files-of-interest globs matched
@@ -220,7 +287,12 @@ def verify(
         not smoke.get("ran")  # no smoke_cmd configured is permissive
         or smoke.get("exit_code") == 0
     )
-    ok = tests_ok and files.get("all_present", True) and smoke_ok
+    commit_ok = (not commit.get("checked")) or commit.get("ok", True)
+    entry_ok = (not entry.get("checked")) or entry.get("ok", True)
+    ok = (
+        tests_ok and files.get("all_present", True) and smoke_ok
+        and commit_ok and entry_ok
+    )
     reasons: list[str] = []
     if not tests_ok:
         if _spawn_failed:
@@ -237,6 +309,10 @@ def verify(
             f"smoke failed (exit={smoke.get('exit_code')}): "
             f"{smoke.get('stderr_tail', '')[:200]}"
         )
+    if not commit_ok:
+        reasons.append(commit.get("reason", "no committed work"))
+    if not entry_ok:
+        reasons.append(entry.get("reason", "app has no entry point"))
     # criteria_unchecked is informational only — it does NOT make ok=False.
     if not criteria.get("all_checked", False):
         reasons.append(
@@ -256,6 +332,8 @@ def verify(
         "files": result.files,
         "criteria": result.criteria,
         "smoke": smoke,
+        "commit": commit,
+        "entrypoint": entry,
         "reason": result.reason,
     })
     return result

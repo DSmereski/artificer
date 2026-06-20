@@ -47,6 +47,15 @@ class AuthConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WikiSynthConfig:
+    """Configuration for the persistent-wiki synthesis step (C3)."""
+    enabled: bool
+    model: str
+    top_k: int
+    timeout_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     vault_path: Path
     daemon_bind_host: str
@@ -59,6 +68,12 @@ class Config:
     search: SearchConfig
     scan: ScanConfig
     auth: AuthConfig
+    wiki_synth: WikiSynthConfig = WikiSynthConfig(
+        enabled=False,
+        model="qwen3:7b",
+        top_k=5,
+        timeout_seconds=120,
+    )
 
 
 def load_config(path: Path) -> Config:
@@ -91,6 +106,7 @@ def load_config(path: Path) -> Config:
     search_raw = raw.get("search") or {}
     scan_raw = raw.get("scan") or {}
     auth_raw = raw.get("auth") or {}
+    wiki_synth_raw = raw.get("wiki_synth") or {}
 
     token_path_raw = auth_raw.get("token_path")
     token_path: Path | None = Path(str(token_path_raw)) if token_path_raw else None
@@ -125,4 +141,10 @@ def load_config(path: Path) -> Config:
             reconcile_orphans=bool(scan_raw.get("reconcile_orphans", True)),
         ),
         auth=AuthConfig(token_path=token_path),
+        wiki_synth=WikiSynthConfig(
+            enabled=bool(wiki_synth_raw.get("enabled", False)),
+            model=str(wiki_synth_raw.get("model", "qwen3:7b")),
+            top_k=int(wiki_synth_raw.get("top_k", 5)),
+            timeout_seconds=int(wiki_synth_raw.get("timeout_seconds", 120)),
+        ),
     )
