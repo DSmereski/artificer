@@ -74,6 +74,7 @@ from gateway.routes import stt as stt_route
 from gateway.routes import suno as suno_route
 from gateway.routes import appstore as appstore_route
 from gateway.routes import terminal as terminal_route
+from gateway.routes import wiki as wiki_route
 from gateway.rate_limit import RateLimiter
 from gateway import scout_alerts as scout_alerts_task
 from gateway.scout_history import ScoutHistory
@@ -1030,6 +1031,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(suno_route.router)
     app.include_router(appstore_route.router)
     app.include_router(terminal_route.router)
+    app.include_router(wiki_route.router)
     # Crew Board: kanban for cross-project tasks. Wires after every
     # other router so its lifespan init can rely on the rest of the
     # stack being set up.
