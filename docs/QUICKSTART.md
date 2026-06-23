@@ -1,6 +1,6 @@
 # Quickstart
 
-From zero to a running Hiveforge in a few minutes.
+From zero to a running Artificer in a few minutes.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Install these before running the installer:
 ## 1. Clone
 
 ```bash
-git clone https://github.com/<you>/hiveforge && cd hiveforge
+git clone https://github.com/<you>/artificer && cd artificer
 ```
 
 ## 2. Run the installer

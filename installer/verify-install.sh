@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hiveforge install verifier — the P4 acceptance gate.
+# Artificer install verifier — the P4 acceptance gate.
 # Asserts a fresh setup actually works: config present, vault scaffolded,
 # Ollama reachable + the model responds, and (if running) the gateway is up.
 # Exit 0 = healthy.
@@ -34,5 +34,5 @@ else
   echo "  --  gateway not running yet — start with: python -m gateway"
 fi
 
-if [ "$fail" -eq 0 ]; then echo "✅ Hiveforge install verified."; else echo "❌ issues above — see hints."; fi
+if [ "$fail" -eq 0 ]; then echo "✅ Artificer install verified."; else echo "❌ issues above — see hints."; fi
 exit "$fail"

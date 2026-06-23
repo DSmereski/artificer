@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐝 Hiveforge
+# 🐝 Artificer
 
 ### The hive that forges software.
 
@@ -23,9 +23,9 @@ actually boots — all on a live command-center you watch in real time.
 > with open-weight models — no API key, no data leaving your box. A cloud key
 > (Anthropic / OpenAI) is optional, only for a stronger top tier.
 
-## Why Hiveforge
+## Why Artificer
 
-Most "AI coding agents" are a chat box that hands you a diff. Hiveforge is the
+Most "AI coding agents" are a chat box that hands you a diff. Artificer is the
 opposite: a **standing team** with a **board**. You file a goal, it self-decomposes
 into dependency-ordered tickets, and a build loop grinds each one to green —
 writing files, running the test suite, reading its own failures, and retrying —
@@ -87,7 +87,7 @@ while you watch the board move from a dashboard on your wall.
 
 ```bash
 # 1. clone
-git clone https://github.com/<you>/hiveforge && cd hiveforge
+git clone https://github.com/<you>/artificer && cd artificer
 
 # 2. run the installer — detects your GPU/VRAM, installs Ollama + a model,
 #    scaffolds the vault, writes config from templates, picks a theme.
@@ -139,7 +139,7 @@ and where to get them (they are **not** bundled).
 
 ## ⚠️ Security & threat model — read before running
 
-**Hiveforge runs AI-generated code on your machine, as you. Treat it like that.**
+**Artificer runs AI-generated code on your machine, as you. Treat it like that.**
 
 - The build loop and the optional cloud runner **execute commands and write
   files on the host**. **Anyone who can create a board task can cause code to run
@@ -159,7 +159,7 @@ If that model isn't acceptable for your environment, don't run it exposed.
 
 ## Project status
 
-Hiveforge is the public mirror of a private, actively-developed system. Releases
+Artificer is the public mirror of a private, actively-developed system. Releases
 are cut behind three automated gates ([`scripts/release/`](scripts/release/)) that
 block any secret, personal marker, or unsafe model from reaching a public commit
 — enforced in CI on every push ([`.github/workflows/gates.yml`](.github/workflows/gates.yml)).

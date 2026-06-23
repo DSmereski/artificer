@@ -1,6 +1,6 @@
 # Hive Companion App
 
-Flutter mobile app for the Hiveforge gateway — voice/text chat, crew-board view,
+Flutter mobile app for the Artificer gateway — voice/text chat, crew-board view,
 and push notifications from the hive.
 
 ## Platform support
@@ -15,7 +15,7 @@ and push notifications from the hive.
 
 - Flutter SDK 3.11+ (`flutter --version`)
 - Android SDK / Xcode (for device builds)
-- A running Hiveforge gateway (see [../docs/QUICKSTART.md](../docs/QUICKSTART.md))
+- A running Artificer gateway (see [../docs/QUICKSTART.md](../docs/QUICKSTART.md))
 
 ## Build
 
@@ -33,7 +33,7 @@ flutter install
 
 ## Pairing (QR code flow)
 
-1. Start the Hiveforge gateway (`python -m gateway` or `scripts/start-all.ps1`).
+1. Start the Artificer gateway (`python -m gateway` or `scripts/start-all.ps1`).
 2. Open the admin UI at `http://127.0.0.1:8766/admin/` and generate a pairing code.
 3. Launch the app on your phone — tap **Pair** and scan the QR code shown in admin.
 4. The app now has a device Bearer token and connects over Tailscale or LAN.
