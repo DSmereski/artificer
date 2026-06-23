@@ -37,7 +37,7 @@ opt-in via their env vars / keys. Leave them unset to run a lean local setup.
 
 The image-gen routes (`/v1/images/*`) and video routes require an external
 backend — a local checkout of **imageToVideo** that exposes `core.ai_generate`
-and `wan_video`. This is **not** bundled with Hiveforge.
+and `wan_video`. This is **not** bundled with Artificer.
 
 To enable:
 
@@ -49,5 +49,5 @@ To enable:
 3. Alternatively, set `image_app_root` in `config/gateway.yaml` (the env var
    takes precedence).
 
-Leave both unset (the default) to run Hiveforge without image generation.
+Leave both unset (the default) to run Artificer without image generation.
 The `images.image_app_root` key in `gateway.yaml` defaults to `null`.

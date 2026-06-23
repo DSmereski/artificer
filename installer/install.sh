@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Hiveforge installer (Linux / macOS). Windows users: installer\install.ps1.
+# Artificer installer (Linux / macOS). Windows users: installer\install.ps1.
 # Idempotent — re-run any time. Press Enter through for a working local setup.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 NI="${1:-}"
-info(){ echo "[hiveforge] $1"; }
+info(){ echo "[artificer] $1"; }
 ask(){ if [ "$NI" = "--non-interactive" ]; then echo "$2"; else read -rp "$1 [$2]: " a; echo "${a:-$2}"; fi; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
@@ -40,7 +40,7 @@ have python3 || { echo "Python 3 required"; exit 1; }
 # 4. Vault
 vault=$(ask "Vault path" "./vault")
 mkdir -p "$vault"/{canon,notes,plans}
-[ -f "$vault/README.md" ] || echo "# Hiveforge vault" > "$vault/README.md"
+[ -f "$vault/README.md" ] || echo "# Artificer vault" > "$vault/README.md"
 
 # 5. Config
 if [ ! -f config/.env ]; then

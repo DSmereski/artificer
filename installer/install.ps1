@@ -1,5 +1,5 @@
 <#
-  Hiveforge installer (Windows-first).
+  Artificer installer (Windows-first).
 
   One guided setup: detects your GPU/VRAM, recommends a model tier, installs +
   verifies Ollama and the model, installs Python deps, scaffolds the vault,
@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-function Info($m){ Write-Host "[hiveforge] $m" -ForegroundColor Cyan }
+function Info($m){ Write-Host "[artificer] $m" -ForegroundColor Cyan }
 function Ok($m){   Write-Host "  ok  $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "  !!  $m" -ForegroundColor Yellow }
 function Ask($q,$def){
@@ -29,7 +29,7 @@ function Ask($q,$def){
 }
 function Have($exe){ [bool](Get-Command $exe -ErrorAction SilentlyContinue) }
 
-Info "Hiveforge setup — press Enter to accept each [default]."
+Info "Artificer setup — press Enter to accept each [default]."
 
 # ── 1. Detect GPU / VRAM → recommend a model tier ──────────────────────────
 $vram = 0; $gpu = "none"
@@ -84,7 +84,7 @@ $vault = Ask "Vault path (Obsidian-compatible notes dir)" ".\vault"
 if (-not (Test-Path $vault)) { New-Item -ItemType Directory -Force -Path $vault | Out-Null }
 foreach ($d in 'canon','notes','plans') { New-Item -ItemType Directory -Force -Path (Join-Path $vault $d) | Out-Null }
 if (-not (Test-Path (Join-Path $vault 'README.md'))) {
-  "# Hiveforge vault`n`nOpen this folder in Obsidian (optional)." | Set-Content -Encoding utf8 (Join-Path $vault 'README.md')
+  "# Artificer vault`n`nOpen this folder in Obsidian (optional)." | Set-Content -Encoding utf8 (Join-Path $vault 'README.md')
 }
 Ok "vault: $vault"
 
@@ -109,4 +109,4 @@ Write-Host "  Start the gateway:   python -m gateway" -ForegroundColor White
 Write-Host "  Build the dashboard: cd dashboard && npm ci && npm run build" -ForegroundColor White
 Write-Host "  Verify:              bash installer/verify-install.sh" -ForegroundColor White
 Write-Host ""
-Ok "Hiveforge is ready. Re-run this installer any time — it's idempotent."
+Ok "Artificer is ready. Re-run this installer any time — it's idempotent."
