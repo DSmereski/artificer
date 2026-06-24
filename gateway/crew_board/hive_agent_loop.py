@@ -38,7 +38,11 @@ log = logging.getLogger("gateway.crew_board.hive_loop")
 # Hardcoded whitelist — keeps the model out of trouble even with
 # bypass perms. Anything not on this list is rejected before exec.
 _CMD_WHITELIST = frozenset({
-    "python", "py", "pip", "pytest",
+    # SECURITY (audit C1): `pip` removed — `pip install` runs arbitrary
+    # setup.py code + reaches the network. Deps are pre-installed; the loop
+    # has no business installing packages mid-run. `python`/`py` stay but are
+    # restricted to `-m pytest` / `-m py_compile` by _validate_cmd_args.
+    "python", "py", "pytest",
     "git", "ls", "dir", "cat", "type",
     "mkdir", "rm", "mv", "cp",
     "echo",
@@ -382,6 +386,52 @@ def _cmd_allowed(cmd: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _validate_cmd_args(project_root: Path, cmd: str) -> tuple[bool, str]:
+    """SECURITY (audit C1): `_cmd_allowed` only validates argv[0]. Two extra gates:
+
+    1. **Interpreter restriction** — `python`/`py` are allowed ONLY as
+       `python -m pytest …` / `python -m py_compile …`. `python -c "<code>"` and
+       `python <script>.py` are refused, because either lets the model run
+       arbitrary code that reads anywhere on disk via `open()`.
+    2. **Argument sandbox** — every non-flag argument must resolve INSIDE the
+       project via `_safe_path`; `cat ../secret`, `python ../../x.py`, and
+       absolute/drive paths are rejected.
+
+    Shell metacharacters (redirect/pipe/substitution) are already blocked by
+    `_cmd_allowed`. NOTE: this is defense-in-depth, NOT OS containment — `pytest`
+    still executes the project's own conftest/test code as real Python, so a
+    fully malicious in-sandbox test could still read outside. True isolation needs
+    an OS sandbox (container / Windows job object); tracked as a follow-up.
+    """
+    import re as _re
+    for seg in (s for s in _re.split(r"&&|;", cmd) if s.strip()):
+        try:
+            parts = shlex.split(seg, posix=False)
+        except ValueError as e:
+            return False, f"could not parse command: {e}"
+        if not parts:
+            continue
+        head = Path(parts[0]).stem.lower()
+        args_list = parts[1:]
+        if head in ("python", "py"):
+            if not (len(args_list) >= 2 and args_list[0] == "-m"
+                    and args_list[1] in ("pytest", "py_compile")):
+                return False, (
+                    "python is restricted to `python -m pytest` or "
+                    "`python -m py_compile`. Write a test file and run pytest "
+                    "rather than `-c` or executing a script directly."
+                )
+        for a in args_list:
+            if a.startswith("-"):
+                continue
+            if _safe_path(project_root, a) is None:
+                return False, (
+                    f"argument {a!r} escapes the project sandbox — commands may "
+                    "only reference files inside the project directory."
+                )
+    return True, ""
+
+
 def _run_cmd(project_root: Path, args: dict, *, timeout_s: float = 120.0) -> dict:
     cmd = str(args.get("cmd", "")).strip()
     if not cmd:
@@ -411,6 +461,11 @@ def _run_cmd(project_root: Path, args: dict, *, timeout_s: float = 120.0) -> dic
     allowed, why = _cmd_allowed(cmd)
     if not allowed:
         return {"ok": False, "error": why}
+    # SECURITY (audit C1): argv[0] is whitelisted; now gate the ARGUMENTS —
+    # interpreter restriction + every non-flag arg must stay inside the sandbox.
+    arg_ok, arg_why = _validate_cmd_args(project_root, cmd)
+    if not arg_ok:
+        return {"ok": False, "error": arg_why}
     # SECURITY (audit M-1): run as resolved ARGV with shell=False — the model's
     # string is never handed to a shell, so metacharacter / `$(...)` injection is
     # impossible regardless of the whitelist. `&&`/`;` chains run sequentially,

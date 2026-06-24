@@ -16,9 +16,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import time
 from pathlib import Path
+
+# SECURITY (audit M1): project_slug is rendered into the board DOM; constrain it
+# to a clean slug shape on the way in so an HTML/script payload can't be planted.
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 _PROJECTS_ROOT = Path(os.environ.get("HIVE_PROJECTS_ROOT", str(Path.home() / "projects")))
 
@@ -33,6 +38,11 @@ from pydantic import BaseModel, Field
 
 from gateway.crew_board import schema
 from gateway.crew_board.store import CrewBoardStore, Project, Task
+# SECURITY (audit H2): board read routes that expose task bodies, verify_results
+# (test stderr tails), source diffs, and absolute project paths must not be open
+# to the tailnet. This dep allows loopback (the dashboard) + valid device Bearer,
+# and 401s anonymous tailnet callers.
+from gateway.deps import require_device_or_loopback
 
 router = APIRouter(prefix="/board")
 
@@ -284,7 +294,10 @@ async def board_session_token(request: Request) -> JSONResponse:
 
 
 @router.get("/state")
-async def get_state(request: Request) -> JSONResponse:
+async def get_state(
+    request: Request,
+    _auth: object = Depends(require_device_or_loopback),
+) -> JSONResponse:
     store = _store(request)
     tasks = store.list_tasks()
     projects = store.list_projects()
@@ -298,7 +311,10 @@ async def get_state(request: Request) -> JSONResponse:
 
 
 @router.get("/stats")
-async def get_stats(request: Request) -> JSONResponse:
+async def get_stats(
+    request: Request,
+    _auth: object = Depends(require_device_or_loopback),
+) -> JSONResponse:
     """Aggregate board metrics for the Stats tab. Tokens are reported
     SEPARATELY for hive vs claude — never summed into one number."""
     cached = getattr(request.app.state, "crew_stats_cache", None)
@@ -403,7 +419,10 @@ async def get_tokens_by_day(
 
 
 @router.get("/tasks/{slug}/diff")
-async def get_task_diff(request: Request, slug: str) -> JSONResponse:
+async def get_task_diff(
+    request: Request, slug: str,
+    _auth: object = Depends(require_device_or_loopback),
+) -> JSONResponse:
     """Git diff of the commit the hive made for this task (matched by
     slug in the commit message), so the owner can review the actual
     changes before approving in REVIEW."""
@@ -491,7 +510,10 @@ async def self_improve(
 
 
 @router.get("/lessons")
-async def get_lessons(request: Request, limit: int = 50) -> JSONResponse:
+async def get_lessons(
+    request: Request, limit: int = 50,
+    _auth: object = Depends(require_device_or_loopback),
+) -> JSONResponse:
     """All distilled hive lessons (the knowledge it learned from claude
     rescues) for the Stats lessons reader."""
     store = _store(request)
@@ -883,6 +905,11 @@ async def create_task(
     project_slug = str(payload.get("project_slug", "")).strip()
     if not title or not project_slug:
         raise HTTPException(400, "title and project_slug required")
+    # SECURITY (audit M1): reject slugs that don't match a safe identifier
+    # pattern — an invalid slug containing HTML/script payloads would be
+    # stored and later rendered into the board DOM.
+    if not _SLUG_RE.match(project_slug):
+        raise HTTPException(400, "project_slug must match ^[a-z0-9][a-z0-9._-]{0,63}$")
     try:
         t = store.create_task(
             title=title,
@@ -1273,11 +1300,18 @@ async def board_page(request: Request) -> HTMLResponse:
     and X-Board-Token meta are identical in both modes — the iframe mutates with
     its own token, so the dashboard needs no auth wiring.
     """
+    # SECURITY (audit C2): embed the real mutation token ONLY for loopback
+    # callers (the local dashboard). Tailnet/remote callers get an empty token
+    # so the board HTML they receive cannot perform mutations. They must use
+    # a device Bearer token on the mutation endpoints instead.
+    from gateway.deps import _is_loopback
+    client = request.client
+    token = _BOARD_TOKEN if (client is not None and _is_loopback(client.host)) else ""
     embed = request.query_params.get("embed") in ("1", "true", "yes")
     body_class = "embed" if embed else ""
     html = (
         _BOARD_HTML
-        .replace("{{BOARD_TOKEN}}", _BOARD_TOKEN)
+        .replace("{{BOARD_TOKEN}}", token)
         .replace("{{BODY_CLASS}}", body_class)
     )
     csp = _BOARD_CSP_EMBED if embed else _BOARD_CSP
@@ -1498,7 +1532,7 @@ async function loadStats() {
     </div>`;
   const proj = (s.top_projects||[]).map(p => `
     <tr style="border-top:1px solid var(--line)">
-      <td class="py-1 pr-3 num text-xs">${p.slug}</td>
+      <td class="py-1 pr-3 num text-xs">${escapeHtml(p.slug)}</td>
       <td class="py-1 px-2 text-right num">${p.done}</td>
       <td class="py-1 px-2 text-right num" style="color:var(--txt-dim)">${p.active}</td>
       <td class="py-1 px-2 text-right num tok-hive">${fmtTokens(p.hive_tokens)}</td>
@@ -1650,7 +1684,7 @@ function _nowBuilding() {
       <span class="livedot" style="background:var(--copper);box-shadow:0 0 6px var(--copper)"></span>
       <span style="color:var(--copper);font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:11px">building</span>
       <span style="color:var(--txt)">${escapeHtml(t.title)}</span>
-      <span style="color:var(--txt-dim)" class="text-xs num">${t.project_slug} · ${t.agent_turns||0} turns · ${since}</span>
+      <span style="color:var(--txt-dim)" class="text-xs num">${escapeHtml(t.project_slug)} · ${t.agent_turns||0} turns · ${since}</span>
       <span class="liveact" id="nblive-${t.slug}" style="margin:0">${t.last_action?'<span class="livedot"></span>'+escapeHtml(t.last_action):''}</span>
     </div>`;
   }).join('');
@@ -1699,7 +1733,7 @@ function taskCard(t) {
     low:'background:var(--card-hi);color:var(--faint)'
   }[t.priority] || '';
   const assignee = t.assignee !== 'none' ? `<span class="chip" style="background:oklch(0.74 0.13 56 / 0.16);color:var(--copper)">${t.assignee}</span>` : '';
-  const proj = `<span class="text-xs num" style="color:var(--txt-dim)">${t.project_slug}</span>`;
+  const proj = `<span class="text-xs num" style="color:var(--txt-dim)">${escapeHtml(t.project_slug)}</span>`;
   const checked = (t.acceptance_criteria || []).filter(c=>c.checked).length;
   const total = (t.acceptance_criteria || []).length;
   const progress = total ? `<span class="text-xs num" style="color:var(--txt-dim)">${checked}/${total}</span>` : '';
@@ -1753,7 +1787,7 @@ function openDetail(slug) {
           <button onclick="document.getElementById('dlg').close()" style="color:var(--txt-dim)">✕</button>
         </div>
       </div>
-      <div class="text-sm mb-2" style="color:var(--txt-dim)">${t.project_slug} · status ${t.status} · assignee ${t.assignee}${t.attempt_count?` · attempt ${t.attempt_count}`:''}</div>
+      <div class="text-sm mb-2" style="color:var(--txt-dim)">${escapeHtml(t.project_slug)} · status ${t.status} · assignee ${t.assignee}${t.attempt_count?` · attempt ${t.attempt_count}`:''}</div>
       ${live}
       <div class="flex flex-wrap gap-1 mb-2">
         ${t.review_by?`<span class="chip" style="background:oklch(0.83 0.15 78 / 0.12);color:var(--accent)">review: ${escapeHtml(t.review_by)}</span>`:''}

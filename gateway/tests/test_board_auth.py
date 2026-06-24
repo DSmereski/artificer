@@ -1,7 +1,7 @@
 """Tests for board mutation auth (X-Board-Token / Bearer).
 
 Verifies the design agreed in the security audit:
-  - GET /board/state (read) is open — no auth required.
+  - GET /board/state (read) requires loopback or device Bearer (H2 fix).
   - POST /board/tasks (mutation) without any token → 403.
   - POST /board/tasks with correct X-Board-Token → 200/4xx (not 403).
   - POST /board/tasks with valid device Bearer → 200/4xx (not 403).
@@ -48,10 +48,21 @@ def _install_crew_store(client: TestClient, tmp_path: Path) -> CrewBoardStore:
 def test_get_board_state_open_no_auth(
     client: TestClient, tmp_path: Path
 ) -> None:
-    """GET /board/state is a read endpoint — must return 200 without any token."""
+    """GET /board/state requires loopback or device Bearer (H2 security fix).
+
+    Non-loopback anonymous callers → 401; loopback callers → 200.
+    This test was updated after the H2 audit fix gated the read routes.
+    """
     _install_crew_store(client, tmp_path)
+    # Non-loopback (default TestClient host 'testclient') → 401.
     r = client.get("/board/state")
-    assert r.status_code == 200, r.text
+    assert r.status_code == 401, r.text
+
+    # Loopback → 200 (no token needed).
+    loopback = TestClient(client.app, client=("127.0.0.1", 51001))
+    loopback.app.state.crew_store = client.app.state.crew_store
+    r2 = loopback.get("/board/state")
+    assert r2.status_code == 200, r2.text
 
 
 def test_mutation_without_token_returns_403(
@@ -189,12 +200,27 @@ def test_session_token_loopback_only(client: TestClient, tmp_path: Path) -> None
 def test_board_html_contains_token_meta(
     client: TestClient, tmp_path: Path
 ) -> None:
-    """GET /board HTML must embed the board token in a <meta> tag."""
+    """GET /board HTML embeds the board token ONLY for loopback callers (C2 fix).
+
+    Non-loopback callers get content="" so they cannot perform mutations.
+    Loopback callers get the real token embedded.
+    """
     _install_crew_store(client, tmp_path)
+    # Non-loopback → empty token (vuln closed: the real token is never leaked).
     r = client.get("/board")
     assert r.status_code == 200, r.text
-    assert f'content="{_BOARD_TOKEN}"' in r.text, (
-        "board HTML should embed _BOARD_TOKEN in a meta[name=board-token] tag"
+    assert 'content=""' in r.text, "non-loopback should get empty board token"
+    assert f'content="{_BOARD_TOKEN}"' not in r.text, (
+        "real token must NOT appear in HTML served to non-loopback callers"
+    )
+
+    # Loopback → real token embedded.
+    loopback = TestClient(client.app, client=("127.0.0.1", 51002))
+    loopback.app.state.crew_store = client.app.state.crew_store
+    r2 = loopback.get("/board")
+    assert r2.status_code == 200, r2.text
+    assert f'content="{_BOARD_TOKEN}"' in r2.text, (
+        "loopback caller should get the real board token in meta[name=board-token]"
     )
 
 
@@ -231,6 +257,8 @@ def test_embed_mode_relaxes_csp_and_sets_body_class(
     The embed CSP omits frame-ancestors entirely so a file:// (opaque-origin)
     wallpaper parent can frame it — `*` does not match a file:// ancestor. The
     standalone /board keeps 'none'. /board is loopback-only + token-gated.
+
+    C2 fix: the real board token is ONLY embedded for loopback callers.
     """
     _install_crew_store(client, tmp_path)
     r = client.get("/board?embed=1")
@@ -238,5 +266,14 @@ def test_embed_mode_relaxes_csp_and_sets_body_class(
     csp = r.headers.get("content-security-policy", "")
     assert "frame-ancestors" not in csp
     assert '<body class="embed">' in r.text
-    # Token meta still present — the iframe carries its own mutation auth.
-    assert f'content="{_BOARD_TOKEN}"' in r.text
+    # Non-loopback: real token must NOT appear (C2 fix).
+    assert 'content=""' in r.text, "non-loopback embed must get empty board token"
+
+    # Loopback embed: real token must be present so the iframe can mutate.
+    loopback = TestClient(client.app, client=("127.0.0.1", 51003))
+    loopback.app.state.crew_store = client.app.state.crew_store
+    r2 = loopback.get("/board?embed=1")
+    assert r2.status_code == 200, r2.text
+    assert f'content="{_BOARD_TOKEN}"' in r2.text, (
+        "loopback embed caller must receive real board token"
+    )

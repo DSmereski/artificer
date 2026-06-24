@@ -306,15 +306,34 @@ async def test_loop_aborts_on_no_progress(store_and_task) -> None:
 
 @pytest.mark.asyncio
 async def test_loop_run_cmd_executes(store_and_task) -> None:
+    """run_cmd: python -c is BLOCKED by _validate_cmd_args (C1 fix);
+    a whitelisted command (echo) still executes normally."""
     store, task = store_and_task
-    invoker = FakeInvoker(replies=[
+
+    # C1 fix: `python -c "..."` is now BLOCKED — only `python -m pytest` /
+    # `python -m py_compile` are allowed. Verify the refusal.
+    invoker_blocked = FakeInvoker(replies=[
         json.dumps({"tool": "run_cmd", "args": {
             "cmd": "python -c \"print(1+1)\""}}),
+        json.dumps({"tool": "done", "args": {"summary": "done"}}),
+    ])
+    result_blocked = await run_hive_agent_loop(
+        store, task, invoker=invoker_blocked, max_iters=5,
+    )
+    first_result = result_blocked.transcript[0]["result"]
+    assert not first_result["ok"], (
+        "python -c should be refused by _validate_cmd_args"
+    )
+    assert "restricted" in first_result["error"].lower() or "py_compile" in first_result["error"]
+
+    # A whitelisted command with no path args passes through fine.
+    # Use `git --version` — always on PATH, whitelisted, flag-only args.
+    invoker_ok = FakeInvoker(replies=[
+        json.dumps({"tool": "run_cmd", "args": {"cmd": "git --version"}}),
         json.dumps({"tool": "done", "args": {"summary": "ran"}}),
     ])
-    result = await run_hive_agent_loop(
-        store, task, invoker=invoker, max_iters=5,
+    result_ok = await run_hive_agent_loop(
+        store, task, invoker=invoker_ok, max_iters=5,
     )
-    assert result.ok
-    assert result.transcript[0]["result"]["ok"]
-    assert "2" in result.transcript[0]["result"]["stdout_tail"]
+    assert result_ok.ok
+    assert result_ok.transcript[0]["result"]["ok"]
