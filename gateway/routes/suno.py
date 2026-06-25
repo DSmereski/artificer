@@ -35,18 +35,28 @@ def _get_config(request: Request) -> Config:
     return request.app.state.ai_team.config
 
 
+def _suno_root() -> Path:
+    """Optional Suno integration root. Defaults under the projects root
+    (HIVE_PROJECTS_ROOT); set suno_library_db / suno_downloads_dir in config to
+    point at a real suno-music-downloader install. Missing → routes return empty."""
+    base = Path(
+        os.environ.get("HIVE_PROJECTS_ROOT", str(Path.home() / "projects"))
+    ).expanduser()
+    return base / "suno-music-downloader"
+
+
 def _db_path(config: Config) -> Path:
     raw = getattr(config, "suno_library_db", None)
     if raw:
         return Path(raw)
-    return Path(r"C:\Projects\suno-music-downloader\library.db")
+    return _suno_root() / "library.db"
 
 
 def _downloads_dir(config: Config) -> Path:
     raw = getattr(config, "suno_downloads_dir", None)
     if raw:
         return Path(raw)
-    return Path(r"C:\Projects\suno-music-downloader\downloads")
+    return _suno_root() / "downloads"
 
 
 def _open_db(db_path: Path) -> sqlite3.Connection | None:

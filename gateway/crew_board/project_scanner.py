@@ -1,6 +1,6 @@
-"""Auto-detect git repos under C:/Projects/ and upsert into the
-crew_projects table. Owner toggles `enabled` to allow agents to
-work the project.
+"""Auto-detect git repos under the projects root (HIVE_PROJECTS_ROOT,
+default ~/projects) and upsert into the crew_projects table. Owner toggles
+`enabled` to allow agents to work the project.
 
 Run once on gateway startup and every N minutes via the lifespan
 background loop. Idempotent — re-detecting a known project just
@@ -10,12 +10,20 @@ refreshes path / name / test_cmd.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from gateway.crew_board.store import CrewBoardStore, Project
 
 log = logging.getLogger("gateway.crew_board.scanner")
+
+# Where to auto-detect projects. Honours HIVE_PROJECTS_ROOT (see
+# config/.env.example); defaults to ~/projects so the release works without a
+# Windows C:\Projects layout.
+_DEFAULT_PROJECTS_ROOT = Path(
+    os.environ.get("HIVE_PROJECTS_ROOT", str(Path.home() / "projects"))
+).expanduser()
 
 # Stem -> test command heuristic. Order matters: first match wins.
 _TEST_CMD_BY_FILE = (
@@ -61,7 +69,7 @@ def _detect_test_cmd(repo: Path) -> str | None:
 
 def scan(
     store: CrewBoardStore,
-    root: Path = Path(r"C:/Projects"),
+    root: Path = _DEFAULT_PROJECTS_ROOT,
 ) -> ScanResult:
     """Walk `root`, register every directory that is a git repo."""
     added = 0
