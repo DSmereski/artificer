@@ -10,7 +10,7 @@ the human approves first. The plan follows the Karpathy method:
   - steps       : 3-7 checkpoints, biggest-value/lowest-risk first, each with a
                   MEASURABLE `verify` (a runnable check) + concrete check-offs
 
-A single hive-qwen call drafts it; the human approves (breakout into tickets),
+A single planner-qwen call drafts it; the human approves (breakout into tickets),
 rejects (archive), or requests changes (re-draft with feedback). Pure-ish:
 no DB writes here — callers persist the returned dict via store.set_plan_spec.
 """
@@ -100,7 +100,7 @@ async def draft_plan(
     try:
         from gateway.helpers.base import extract_json
         text, _, _ = await invoker.chat(
-            model="hive-qwen", system=_PLAN_SYSTEM, user=user,
+            model="planner-qwen", system=_PLAN_SYSTEM, user=user,
             params={"temperature": 0.4, "num_ctx": 8192, "num_predict": 2048},
             fmt=_PLAN_SCHEMA,
         )

@@ -1206,7 +1206,7 @@ async def _auto_resolve_project(store, goal: str) -> str:
     }
     try:
         text, _, _ = await OllamaInvoker().chat(
-            model="hive-qwen", system=_AUTO_MATCH_SYSTEM,
+            model="planner-qwen", system=_AUTO_MATCH_SYSTEM,
             user=(f"Existing projects:\n{catalog}\n\nGoal: {goal}\n\n"
                   'Reply JSON: {"match": "<slug>"|"NEW", "reason": "..."}'),
             params={"temperature": 0.1, "num_ctx": 8192, "num_predict": 256},
@@ -1314,11 +1314,11 @@ async def decompose_goal(
     else:
         stack_directive = gf["directive"]
 
-    # Generate the plan (hive-qwen — fast, doesn't compete with the hive
-    # coder lane on qwen3.6:27b).
+    # Generate the plan (planner-qwen — fast, doesn't compete with the hive
+    # coder lane on qwen2.5-coder:7b).
     async def _plan(extra: str = "") -> dict:
         text, _, _ = await OllamaInvoker().chat(
-            model="hive-qwen", system=_PLAN_SYSTEM,
+            model="planner-qwen", system=_PLAN_SYSTEM,
             user=f"{stack_directive}{extra}Goal: {goal}",
             params={"temperature": 0.3, "num_ctx": 8192, "num_predict": 4096},
             fmt=_PLAN_SCHEMA,

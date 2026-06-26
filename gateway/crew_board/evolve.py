@@ -5,7 +5,7 @@ Weighs cheap signals into a ranked list of candidate next-goals:
   2. pending / vaulted    — the project's Pending.md + unchecked vault-plan items.
   3. product-critic       — an LLM "what would make this genuinely better" pass.
 
-A single hive-qwen synthesis call blends them into ranked Candidates, each tagged
+A single planner-qwen synthesis call blends them into ranked Candidates, each tagged
 with the source signal(s) so the UI can show WHY it was picked. The heavier
 competitive-research signal is added in EV4. Pure + injector-injectable so the
 synthesis is unit-testable offline.
@@ -285,7 +285,7 @@ async def analyze_next(store, slug: str, *, invoker=None, max_candidates: int = 
     try:
         from gateway.helpers.base import extract_json
         text, _, _ = await invoker.chat(
-            model="hive-qwen", system=_ANALYZE_SYSTEM, user=user,
+            model="planner-qwen", system=_ANALYZE_SYSTEM, user=user,
             params={"temperature": 0.4, "num_ctx": 8192, "num_predict": 2048},
             fmt=_CANDIDATES_SCHEMA,
         )

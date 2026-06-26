@@ -229,7 +229,7 @@ async def run_goal_verify(
     """Run the goal-verification step.
 
     Strategy:
-    1. Ask hive-qwen to evaluate each checklist item against a bounded
+    1. Ask planner-qwen to evaluate each checklist item against a bounded
        repo-map (file list + goal text as the lens). Returns per-item
        MET/UNMET/UNCERTAIN.
     2. If any UNMET or UNCERTAIN items remain, escalate to Claude for a
@@ -599,7 +599,7 @@ async def regoal_decompose(
     project_slug: str,
     checklist_items: list[str],
 ) -> None:
-    """Create ready subtasks for a re-goal using hive-qwen to plan them.
+    """Create ready subtasks for a re-goal using planner-qwen to plan them.
 
     Each new subtask gets tagged with the re-goal's goal_id so the
     completion trigger can group them correctly on the next cycle.
@@ -627,7 +627,7 @@ async def regoal_decompose(
     )
     try:
         raw, _, _ = await OllamaInvoker().chat(
-            model="hive-qwen", system=system, user=user,
+            model="planner-qwen", system=system, user=user,
             params={"temperature": 0.3, "num_ctx": 4096, "num_predict": 1024},
         )
         tickets = extract_json(raw)

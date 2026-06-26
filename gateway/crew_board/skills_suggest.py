@@ -5,7 +5,7 @@ either a NEW skill or an UPDATE to an existing one. Each suggestion lands in the
 Proposed lane (tagged 'skill') for David's approval — feeding the
 self-improvement loop (skills self-improve + sync_skills.py).
 
-A single hive-qwen call, given the finished task + the list of existing skills,
+A single planner-qwen call, given the finished task + the list of existing skills,
 returns suggestions. Pure-ish: no DB writes here — callers persist the result
 by creating proposed tickets. Best-effort: returns [] on any failure so it can
 never break the build pipeline.
@@ -84,7 +84,7 @@ async def suggest_skills(store, task, *, invoker=None) -> list[dict]:
     try:
         from gateway.helpers.base import extract_json
         text, _, _ = await invoker.chat(
-            model="hive-qwen", system=_SYSTEM, user=user,
+            model="planner-qwen", system=_SYSTEM, user=user,
             params={"temperature": 0.3, "num_ctx": 8192, "num_predict": 1024},
             fmt=_SCHEMA,
         )

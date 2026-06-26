@@ -108,7 +108,7 @@ STALE_INPROGRESS_S = 600  # 10 min
 DONE_SWEEP_INTERVAL_S = 1800
 # Max concurrent hive tasks per assignee on a `parallel=True` project.
 # Each runs in its own git worktree, so there is no checkout collision.
-# Default 1: the bench-proven model (qwen3.6:27b-Q4) needs BOTH GPUs, so
+# Default 1: the bench-proven model (qwen2.5-coder:7b-Q4) needs BOTH GPUs, so
 # loading it twice would thrash. Parallel projects still benefit at 1
 # lane via branch-per-task isolation (clean main checkout, per-tree
 # rollback). Raise this ONLY after wiring a one-card model (Q3/IQ4) so
