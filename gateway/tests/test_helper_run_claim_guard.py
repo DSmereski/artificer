@@ -8,7 +8,7 @@ synth-output failure that the existing guards missed:
    this info, it's wrong".
 
 2. **Meta-preamble leakage.** Synth wraps the reply in scaffolding:
-   "Here is Terry's reply, explaining the provenance..." or
+   "Here is Hive's reply, explaining the provenance..." or
    "Based on the conversation history, here is the reply:". The
    user sees the LLM's internal narration.
 
@@ -82,14 +82,14 @@ def test_drops_will_trigger_search_when_no_researcher() -> None:
 # ---------------------------------------------------------------- meta-preamble
 
 
-def test_strips_here_is_terrys_reply_preamble() -> None:
+def test_strips_here_is_hives_reply_preamble() -> None:
     reply = (
-        "Here is Terry's reply, explaining the provenance.\n\n"
+        "Here is Hive's reply, explaining the provenance.\n\n"
         "---\n\n"
         "The actual answer body goes here."
     )
     out = strip_hallucinated_sentences(reply, helper_results=[], actions=[])
-    assert "here is terry" not in out.lower()
+    assert "here is hive" not in out.lower()
     assert "actual answer body" in out.lower()
 
 
@@ -103,10 +103,10 @@ def test_strips_based_on_history_here_is_preamble() -> None:
     assert "real content" in out.lower()
 
 
-def test_strips_terry_markdown_header() -> None:
-    reply = "### **Terry:**\n\nMy real reply."
+def test_strips_hive_markdown_header() -> None:
+    reply = "### **Hive:**\n\nMy real reply."
     out = strip_hallucinated_sentences(reply, helper_results=[], actions=[])
-    assert "**Terry:**" not in out
+    assert "**Hive:**" not in out
     assert "my real reply" in out.lower()
 
 

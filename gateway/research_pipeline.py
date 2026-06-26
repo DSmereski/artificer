@@ -255,7 +255,7 @@ async def research(
     # them as low-confidence facts. The synthesizer was treating
     # `facts: []` as "nothing found" and dropping the whole research
     # round on the floor — promoting the best single-source claims
-    # gives Terry something to say while still tagging confidence.
+    # gives Hive something to say while still tagging confidence.
     if not out.facts and out.notes:
         # Prefer notes from the most-trusted hosts; ties broken by
         # claim length (longer claims tend to carry more signal).

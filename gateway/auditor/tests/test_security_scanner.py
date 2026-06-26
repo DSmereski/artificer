@@ -10,7 +10,7 @@ def _turn(turn_id: str, user_msg: str) -> dict:
     return {
         "ts": 0,
         "turn_id": turn_id,
-        "bot": "terry",
+        "bot": "hive",
         "user_msg": user_msg,
         "user_id": 1,
     }

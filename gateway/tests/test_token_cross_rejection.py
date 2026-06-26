@@ -53,7 +53,7 @@ def _inject_token_into_both_registries(client: TestClient, token: str) -> None:
         id="d_cross_test",
         name="cross-reject-test",
         token_hash=token_hash,
-        audience=("terry", "claude-code"),
+        audience=("hive", "claude-code"),
         created=now,
         last_seen=now,
         revoked=False,

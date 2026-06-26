@@ -196,6 +196,7 @@ def _project_to_dict(p: Project) -> dict:
         "enabled": p.enabled, "push_allowed": p.push_allowed,
         "test_cmd": p.test_cmd, "parallel": getattr(p, "parallel", False),
         "created_at": p.created_at, "updated_at": p.updated_at,
+        "modified_at": getattr(p, "modified_at", None),
     }
 
 
@@ -3288,19 +3289,55 @@ async function toggleCriterion(slug, idx, checked) {
   });
   await loadState();
 }
+// Project list sort: 'modified' (last worked on, newest first) | 'name'.
+// Lives outside openProjects so the choice survives a re-render.
+let PROJ_SORT = 'modified';
+function _projAgo(iso) {
+  if (!iso) return '—';
+  const t = Date.parse(iso); if (isNaN(t)) return '—';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  const m = s / 60; if (m < 60) return Math.floor(m) + 'm ago';
+  const h = m / 60; if (h < 24) return Math.floor(h) + 'h ago';
+  const d = h / 24; if (d < 30) return Math.floor(d) + 'd ago';
+  const mo = d / 30; if (mo < 12) return Math.floor(mo) + 'mo ago';
+  return Math.floor(d / 365) + 'y ago';
+}
+function _sortedProjects() {
+  const arr = [...(STATE.projects || [])];
+  if (PROJ_SORT === 'name') {
+    arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  } else {
+    // Newest modified first; missing dates (-Infinity) sink to the bottom.
+    arr.sort((a, b) =>
+      (Date.parse(b.modified_at || '') || -Infinity) -
+      (Date.parse(a.modified_at || '') || -Infinity));
+  }
+  return arr;
+}
+function setProjSort(v) { PROJ_SORT = v; openProjects(); }
 function openProjects() {
   const dlg = document.getElementById('dlg');
+  const sel = (v, label) =>
+    `<option value="${v}"${PROJ_SORT === v ? ' selected' : ''}>${label}</option>`;
   dlg.innerHTML = `
     <div class="p-5" style="background:var(--panel);color:var(--txt)">
-      <div class="flex items-start justify-between gap-2 mb-3">
+      <div class="flex items-center justify-between gap-2 mb-3">
         <h2 class="text-lg font-semibold" style="color:var(--txt)">Projects</h2>
-        <button onclick="document.getElementById('dlg').close()" style="color:var(--txt-dim)">✕</button>
+        <div class="flex items-center gap-2">
+          <label class="text-xs" style="color:var(--txt-dim)">Sort</label>
+          <select onchange="setProjSort(this.value)" class="text-xs rounded px-1 py-0.5" style="border:1px solid var(--line);background:var(--card-hi);color:var(--txt)">
+            ${sel('modified', 'Last modified')}${sel('name', 'Name')}
+          </select>
+          <button onclick="document.getElementById('dlg').close()" style="color:var(--txt-dim)">✕</button>
+        </div>
       </div>
       <ul class="space-y-1 text-sm">
-        ${STATE.projects.map(p => `
+        ${_sortedProjects().map(p => `
           <li class="rounded p-2 flex items-center justify-between" style="border:1px solid var(--line);background:var(--card)">
             <div><div class="font-medium" style="color:var(--txt)">${escapeHtml(p.name)}${p.enabled?' <span class="chip" style="background:color-mix(in oklch,var(--green) 14%,transparent);color:var(--green)">on</span>':''}</div><div class="text-xs" style="color:var(--txt-dim)">${escapeHtml(p.path)}</div></div>
-            <div class="flex gap-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs" style="color:var(--txt-dim)" title="${escapeHtml(p.modified_at||'')}">${_projAgo(p.modified_at)}</span>
               <button class="text-xs rounded px-2 py-0.5" style="border:1px solid var(--line);background:var(--card-hi);color:var(--txt)" onclick="toggleProject('${p.slug}',${!p.enabled})">${p.enabled?'disable':'enable'}</button>
             </div>
           </li>
@@ -3308,7 +3345,7 @@ function openProjects() {
       </ul>
     </div>
   `;
-  dlg.showModal();
+  if (!dlg.open) dlg.showModal();
 }
 async function toggleProject(slug, enabled) {
   await fetch(`/board/projects/${slug}/${enabled?'enable':'disable'}`, {method:'POST',headers:_mutHeaders()});

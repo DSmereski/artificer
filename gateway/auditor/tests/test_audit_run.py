@@ -21,7 +21,7 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 async def test_run_audit_loads_inputs_and_writes_summary(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     log_dir = state_dir / "turn-logs"
-    mem_dir = state_dir / "memory" / "terry" / "1"
+    mem_dir = state_dir / "memory" / "hive" / "1"
     mem_dir.mkdir(parents=True)
     (mem_dir / "default.memory.json").write_text(
         json.dumps({"user_facts": [], "decisions": [], "mid_summary": ""}),
@@ -30,10 +30,10 @@ async def test_run_audit_loads_inputs_and_writes_summary(tmp_path: Path) -> None
     now = time.time()
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     _write_jsonl(log_dir / f"{day}.jsonl", [
-        {"ts": now - 1800, "turn_id": "t1", "bot": "terry", "user_id": 1,
+        {"ts": now - 1800, "turn_id": "t1", "bot": "hive", "user_id": 1,
          "user_msg": "what's the weather?", "synthesis": {"actions": []},
          "delegations": ["chat_recall"]},
-        {"ts": now - 1500, "turn_id": "t2", "bot": "terry", "user_id": 1,
+        {"ts": now - 1500, "turn_id": "t2", "bot": "hive", "user_id": 1,
          "user_msg": "what's the weather?", "synthesis": {"actions": []},
          "delegations": ["chat_recall"]},
     ])
@@ -42,7 +42,7 @@ async def test_run_audit_loads_inputs_and_writes_summary(tmp_path: Path) -> None
     await run_audit(
         state_dir=state_dir,
         vault=fake,
-        bots=["terry"],
+        bots=["hive"],
         window_start=now - 3600,
         window_end=now,
         window_label="2026-05-01-14",
@@ -62,7 +62,7 @@ async def test_run_audit_no_turns_still_writes_zero_summary(tmp_path: Path) -> N
     await run_audit(
         state_dir=state_dir,
         vault=fake,
-        bots=["terry"],
+        bots=["hive"],
         window_start=0.0,
         window_end=1.0,
         window_label="never",

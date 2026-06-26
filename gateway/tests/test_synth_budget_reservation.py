@@ -77,7 +77,7 @@ async def test_slow_helper_cancelled_at_synth_gate(catalog):
     """
     ctx = TurnContext(
         user_msg="what ships are in the fleet",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "librarian", "synthesizer"],
     )
     synth_invoked_at: list[float] = []
@@ -197,7 +197,7 @@ async def test_synth_timeout_set_from_remaining_after_dispatch(catalog):
     gets exactly synth_reservation_s (within jitter)."""
     ctx = TurnContext(
         user_msg="quick question",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "librarian", "synthesizer"],
     )
 

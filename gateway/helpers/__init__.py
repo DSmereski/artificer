@@ -1,4 +1,4 @@
-"""Hive helpers — specialised LLM minds Terry can dispatch to.
+"""Hive helpers — specialised LLM minds Hive can dispatch to.
 
 Each helper has a role (planner, coder, researcher, …) and an output
 schema (Pydantic). Concrete helpers live in sibling modules and are

@@ -12,7 +12,7 @@ from gateway.auditor.findings_writer import write_audit
 
 def _f(kind: str, sev: Severity, turn_id: str = "t1", summary: str = "x") -> Finding:
     return Finding(
-        kind=kind, severity=sev, turn_id=turn_id, bot="terry",
+        kind=kind, severity=sev, turn_id=turn_id, bot="hive",
         summary=summary, detail="d",
     )
 

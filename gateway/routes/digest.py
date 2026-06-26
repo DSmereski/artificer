@@ -85,7 +85,7 @@ def digest(
                 daemon_port=st.config.vault_writer.port,
             )
         counts.new_pinned_turns = vc.count_chat_pinned_since(
-            bot="terry",
+            bot="hive",
             user_id=_stable_user_id(device.user),
             since_epoch=int(since),
         )

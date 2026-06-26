@@ -55,7 +55,7 @@ class _FakeAppState:
         # build_turn_context
         self.image_build_store = None
         self.skill_registry = None
-        self.memory_store_terry = None
+        self.memory_store_hive = None
         self.helpers: dict = {}
         # persist_hive_turn_history
         self.adapters: dict = {}

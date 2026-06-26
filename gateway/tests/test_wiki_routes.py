@@ -58,7 +58,7 @@ def test_reviews_no_seeded_items_returns_empty(client: TestClient, paired_token)
     the table on first access."""
     _, token = paired_token
     r = client.get("/v1/wiki/reviews", headers={"Authorization": f"Bearer {token}"})
-    # vault.db is created by CrewBoardStore at gateway startup -> always exists in tests.
+    # vault.db is created by CrewBoardStore at gateway startup → always exists in tests.
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["reviews"] == []
@@ -82,8 +82,8 @@ def test_reviews_returns_open_items(client: TestClient, paired_token) -> None:
     _, token = paired_token
     vault_path = client.app.state.ai_team.config.vault_path
     _seed_vault_db(vault_path, [
-        {"slug": "gateway-port", "kind": "contradiction", "summary": "Port mismatch."},
-        {"slug": "topic-ships", "kind": "gap", "summary": "Ships not documented."},
+        {"slug": "hive-port", "kind": "contradiction", "summary": "Port mismatch."},
+        {"slug": "sc-ships", "kind": "gap", "summary": "RSI ships not documented."},
     ])
 
     r = client.get("/v1/wiki/reviews", headers={"Authorization": f"Bearer {token}"})
@@ -91,7 +91,7 @@ def test_reviews_returns_open_items(client: TestClient, paired_token) -> None:
     data = r.json()
     assert data["count"] == 2
     slugs = {item["slug"] for item in data["reviews"]}
-    assert slugs == {"gateway-port", "topic-ships"}
+    assert slugs == {"hive-port", "sc-ships"}
 
 
 # ------------------------------------------------------------------ (b) GET /v1/wiki/reviews/count
@@ -106,7 +106,7 @@ def test_reviews_count_zero_when_no_reviews(client: TestClient, paired_token) ->
     """Returns count=0 when no wiki_reviews rows exist yet."""
     _, token = paired_token
     r = client.get("/v1/wiki/reviews/count", headers={"Authorization": f"Bearer {token}"})
-    # vault.db is created at startup -> returns 200 with count=0
+    # vault.db is created at startup → returns 200 with count=0
     assert r.status_code == 200, r.text
     assert r.json()["count"] == 0
 
@@ -131,7 +131,7 @@ def test_resolve_marks_item_resolved(client: TestClient, paired_token) -> None:
     _, token = paired_token
     vault_path = client.app.state.ai_team.config.vault_path
     db_path = _seed_vault_db(vault_path, [
-        {"slug": "gateway-port", "kind": "contradiction", "summary": "Port mismatch."},
+        {"slug": "hive-port", "kind": "contradiction", "summary": "Port mismatch."},
     ])
 
     # Find the review ID
@@ -224,13 +224,13 @@ def test_research_skipped_when_no_llm(client: TestClient, paired_token, monkeypa
     _, token = paired_token
     vault_path = client.app.state.ai_team.config.vault_path
     db_path = _seed_vault_db(vault_path, [
-        {"slug": "topic-ships", "kind": "gap", "summary": "Ships not documented."},
+        {"slug": "sc-ships", "kind": "gap", "summary": "RSI ships not documented."},
     ])
     conn = sqlite3.connect(str(db_path))
     row = conn.execute("SELECT id FROM wiki_reviews").fetchone()
     conn.close()
 
-    # Gateway config has no wiki_synth section in test fixtures -> _build_llm_fn returns None
+    # Gateway config has no wiki_synth section in test fixtures → _build_llm_fn returns None
     r = client.post(
         f"/v1/wiki/reviews/{row[0]}/research",
         headers={"Authorization": f"Bearer {token}"},
@@ -246,7 +246,7 @@ def test_research_returns_skipped_no_backend(client: TestClient, paired_token, m
     _, token = paired_token
     vault_path = client.app.state.ai_team.config.vault_path
     db_path = _seed_vault_db(vault_path, [
-        {"slug": "topic-ships", "kind": "gap", "summary": "Ships not documented."},
+        {"slug": "sc-ships", "kind": "gap", "summary": "RSI ships not documented."},
     ])
     conn = sqlite3.connect(str(db_path))
     row = conn.execute("SELECT id FROM wiki_reviews").fetchone()
@@ -257,11 +257,11 @@ def test_research_returns_skipped_no_backend(client: TestClient, paired_token, m
     # Inject a working llm_fn so we get past the 503 check
     def _fake_llm(system: str, user: str) -> str:
         import json as _json
-        return _json.dumps(["query one", "query two"])
+        return _json.dumps(["RSI ships", "Star Citizen ships"])
 
     monkeypatch.setattr(wiki_route, "_build_llm_fn", lambda ai_team: _fake_llm)
 
-    # TAVILY_API_KEY + SEARXNG_URL not set in test env -> backend='none'
+    # TAVILY_API_KEY + SEARXNG_URL not set in test env → backend='none'
     import os
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("SEARXNG_URL", raising=False)

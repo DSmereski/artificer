@@ -1,4 +1,4 @@
-"""Coder helper — write/debug/refactor code on Terry's behalf."""
+"""Coder helper — write/debug/refactor code on Hive's behalf."""
 
 from __future__ import annotations
 

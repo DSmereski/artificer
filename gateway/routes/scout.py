@@ -19,6 +19,12 @@ router = APIRouter(prefix="/v1/scout", tags=["scout"])
 log = logging.getLogger("gateway.scout")
 
 
+class GpuProcInfo(BaseModel):
+    pid: int
+    name: str            # friendly name (path + .exe stripped)
+    used_memory_mb: int
+
+
 class GPUInfo(BaseModel):
     index: int
     name: str
@@ -28,6 +34,7 @@ class GPUInfo(BaseModel):
     vram_used_pct: float
     utilization_pct: int
     game: str | None = None
+    processes: list[GpuProcInfo] = []
 
 
 class DiskInfo(BaseModel):
@@ -74,20 +81,43 @@ def _snapshot() -> ScoutStatus:
     """Read the current snapshot. Isolated so tests can monkeypatch.
 
     M1: sources moved from `bots.scout` (deleted) to
-    `services.scout_daemon`. Maggy is gone, so we only heartbeat Terry
+    `services.scout_daemon`. Maggy is gone, so we only heartbeat Hive
     + the gateway.
     """
-    from services.scout_daemon.gpu_monitor import detect_game_on_gpu, query_gpu_status
+    from services.scout_daemon.gpu_monitor import (
+        _GAME_EXES,
+        friendly_process_name,
+        processes_by_gpu,
+        query_gpu_status,
+    )
     from services.scout_daemon.system_monitor import check_all_disks, check_host
-    from services.scout_daemon.watchdog import check_gateway, check_terry
+    from services.scout_daemon.watchdog import check_gateway, check_hive
+
+    # Query compute processes ONCE (was: one nvidia-smi call per card for game
+    # detection). Reused for both the game tag and the per-card process list.
+    try:
+        procs_by_gpu = processes_by_gpu()
+    except Exception:  # noqa: BLE001
+        procs_by_gpu = {}
 
     gpu_rows: list[GPUInfo] = []
     for g in query_gpu_status():
+        card_procs = procs_by_gpu.get(g.index, [])
+        # Game = first process on this card whose exe is a known game.
         game = None
-        try:
-            game = detect_game_on_gpu(g.index)
-        except Exception:  # noqa: BLE001
-            game = None
+        for p in card_procs:
+            exe = p.process_name.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+            if exe in _GAME_EXES:
+                game = exe
+                break
+        proc_rows = [
+            GpuProcInfo(
+                pid=p.pid,
+                name=friendly_process_name(p.process_name),
+                used_memory_mb=p.used_memory_mb,
+            )
+            for p in card_procs
+        ]
         gpu_rows.append(GPUInfo(
             index=g.index,
             name=g.name,
@@ -97,6 +127,7 @@ def _snapshot() -> ScoutStatus:
             vram_used_pct=round(g.vram_used_pct, 1),
             utilization_pct=g.utilization_pct,
             game=game,
+            processes=proc_rows,
         ))
 
     disks = [
@@ -104,7 +135,7 @@ def _snapshot() -> ScoutStatus:
     ]
 
     bot_rows: list[BotHeartbeat] = []
-    for checker in (check_terry, check_gateway):
+    for checker in (check_hive, check_gateway):
         try:
             bs = checker()
             bot_rows.append(BotHeartbeat(

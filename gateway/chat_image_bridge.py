@@ -3,7 +3,7 @@
 Hive turns queue an image render via `image_shim.enqueue` and return
 immediately — the actual generation runs in `imageToVideo`'s GPU
 worker thread. Without this bridge the chat WebSocket would see the
-assistant's text reply and then nothing, so the app would show "Terry
+assistant's text reply and then nothing, so the app would show "Hive
 is rendering…" forever.
 
 Two pieces:
@@ -118,7 +118,7 @@ async def forward_image_receipts(
         if recent_images is not None:
             try:
                 recent_images.record(
-                    device_id=device_id, bot="terry",
+                    device_id=device_id, bot="hive",
                     job_id=job_id, prompt=prompt,
                 )
             except Exception as e:  # noqa: BLE001

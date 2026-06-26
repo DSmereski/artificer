@@ -3,7 +3,7 @@
 Every hive turn appends one JSON object to a daily JSONL file at
   <state_dir>/turn-logs/YYYY-MM-DD.jsonl
 
-What we capture (so the user can debug "why did Terry say X?"):
+What we capture (so the user can debug "why did Hive say X?"):
   - timestamp, turn_id, device_id, bot
   - the user_msg verbatim
   - planner.summary + delegations + raw_preview + error
@@ -76,7 +76,7 @@ class TurnLogEntry:
     turn_id: str = ""
     device_id: str = ""
     user_id: int = 0
-    bot: str = "terry"
+    bot: str = "hive"
     user_msg: str = ""
     planner_summary: str = ""
     planner_raw_preview: str = ""

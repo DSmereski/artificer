@@ -9,6 +9,22 @@ Each helper:
 Helpers run **quarantined**: their system prompt deliberately does NOT
 include user chat history or other helpers' outputs. Whatever the
 HiveCoordinator passes in `task.inputs` is the only context.
+
+P3 — Helper resilience additions
+---------------------------------
+Every failure path is now explicitly logged with structured context (helper
+name, model, raw output snippet) so no error is silently swallowed.
+
+When schema parsing fails, `_parse_fallback` is attempted.  The base
+implementation performs a best-effort prose → struct recovery via
+`extract_json`; subclasses may override for role-specific shaping.
+
+After any successful parse (normal or recovered), `_semantically_valid`
+gates the result.  Schema-structural validity is necessary but not
+sufficient: a response with empty required strings, all-empty required
+lists, or obvious placeholder values is rejected and replaced with the
+caller's `safe_default` (or an empty-but-typed dict), with HelperResult.error
+populated and the rejection logged.
 """
 
 from __future__ import annotations
@@ -130,10 +146,12 @@ class OllamaInvoker:
             # CPU+RAM, ~5s on GPU) of <think>...</think> reasoning
             # before emitting JSON, blowing the planner timeout.
             "think": False,
-            # Pin loaded models in VRAM for 24h. Without this Ollama
-            # evicts after 5min idle, so the next helper turn pays a
-            # 30-90s cold reload that blows planner/summarizer timeouts.
-            "keep_alive": "24h",
+            # Idle-unload: keep the model in VRAM for 10 min after the last
+            # call, then Ollama evicts it (frees ~12GB on the GPU). The next
+            # call after idle pays a 30-90s cold reload — the request timeout
+            # below must be generous enough to absorb that (see _TIMEOUT). David
+            # chose this over the always-pinned 24h to free the GPU when idle.
+            "keep_alive": "10m",
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -348,6 +366,98 @@ def parse_with_schema(text: str, schema: type[BaseModel]) -> BaseModel:
         raise SchemaValidationError(f"schema validation failed: {e}") from e
 
 
+# ---------------------------------------------------------------- semantic validation
+
+
+# Placeholder / null-like values that are structurally valid strings but
+# semantically meaningless.  Any required string field whose value
+# normalises to one of these is rejected.
+_PLACEHOLDER_VALUES: frozenset[str] = frozenset({
+    "", "null", "none", "n/a", "na", "todo", "placeholder",
+    "tbd", "unknown", "undefined", "...", "string", "<string>",
+    "<value>", "<id>", "<name>", "<text>",
+})
+
+
+def _semantically_valid(
+    parsed: dict[str, Any],
+    schema: type[BaseModel],
+) -> tuple[bool, str]:
+    """Check that a schema-valid dict is semantically meaningful.
+
+    Schema-structural validity is necessary but not sufficient — a
+    response can satisfy Pydantic and still be nonsense (e.g. all-empty
+    string IDs, placeholder text in required fields, or required list
+    fields that are all-empty when content was clearly expected).
+
+    Returns (True, "") when the output passes all semantic checks, or
+    (False, <reason>) on the first violation found.
+
+    Rules applied (in order):
+    1. Required string fields (no default in the schema) must be
+       non-empty and must not be a known placeholder value.
+    2. Required list fields (no default) that contain only empty-string
+       elements (or are empty themselves) are rejected when the schema
+       marks them required.
+    3. Any string field whose value is all-whitespace is rejected.
+
+    The check is deliberately conservative: it only rejects values that
+    are obviously wrong.  Borderline cases are allowed through so a
+    real but terse LLM answer is not discarded.
+    """
+    if not isinstance(parsed, dict):
+        return False, "parsed output is not a dict"
+
+    try:
+        fields = schema.model_fields
+    except AttributeError:
+        # Not a Pydantic v2 model — skip semantic check.
+        return True, ""
+
+    for field_name, field_info in fields.items():
+        value = parsed.get(field_name)
+
+        # Determine whether the field is required (no default set).
+        is_required = field_info.is_required()
+
+        # --- string fields ---
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.lower() in _PLACEHOLDER_VALUES:
+                return (
+                    False,
+                    f"field {field_name!r} has placeholder/empty value: {value!r}",
+                )
+            if not stripped and is_required:
+                return False, f"required field {field_name!r} is blank"
+
+        # --- list fields ---
+        elif isinstance(value, list) and is_required:
+            # A required list that contains only empty/whitespace strings
+            # (or is fully absent from the dict but required) is flagged.
+            if value and all(
+                isinstance(item, str) and not item.strip()
+                for item in value
+            ):
+                return (
+                    False,
+                    f"required list field {field_name!r} contains only empty strings",
+                )
+
+        # --- absent required fields ---
+        elif value is None and is_required:
+            # Absent required field.  Pydantic would normally catch this
+            # at model_validate time, but if it slipped through (e.g. the
+            # field has a validator that coerces None) we flag it here.
+            # Check annotation for str/list to avoid false-positives on
+            # Optional or union types.
+            annotation = str(getattr(field_info, "annotation", ""))
+            if "str" in annotation and "Optional" not in annotation:
+                return False, f"required string field {field_name!r} is None"
+
+    return True, ""
+
+
 # ---------------------------------------------------------------- result builder
 
 
@@ -453,8 +563,13 @@ class BaseHelper:
         prompt_name: str,
         params: dict[str, Any],
         invoker: OllamaInvoker | None = None,
-        timeout_s: int = 30,
+        # 120s (was 30s): with keep_alive=10m the model unloads when idle, so the
+        # first helper call after idle pays a 30-90s cold reload — the timeout
+        # must absorb it or "spin up when needed" errors out. Warm calls still
+        # return fast; this is only the ceiling.
+        timeout_s: int = 120,
         schema: type[BaseModel] | None = None,
+        safe_default: dict[str, Any] | None = None,
     ) -> None:
         self.model_id = model_id
         self.ollama_name = ollama_name
@@ -463,6 +578,10 @@ class BaseHelper:
         self.invoker = invoker or OllamaInvoker()
         self.timeout_s = timeout_s
         self.schema = schema
+        # Caller-provided safe default returned when both primary parse
+        # AND fallback are rejected (semantic validation failure or schema
+        # mismatch).  If not given, an empty dict is used.
+        self._safe_default: dict[str, Any] = safe_default if safe_default is not None else {}
 
     def _build_user_message(self, task: HelperTask) -> str:
         """Format the task as a JSON-shaped user message. Helpers can
@@ -482,6 +601,7 @@ class BaseHelper:
         try:
             system = load_prompt(self.prompt_name)
         except FileNotFoundError as e:
+            self._log_failure("prompt_not_found", str(e), raw="")
             return rb.fail(str(e)).build()
 
         user = self._build_user_message(task)
@@ -495,12 +615,18 @@ class BaseHelper:
                 timeout=self.timeout_s,
             )
         except asyncio.TimeoutError:
-            return rb.fail(f"helper {self.role} timed out after {self.timeout_s}s").build()
+            msg = f"helper {self.role} timed out after {self.timeout_s}s"
+            self._log_failure("timeout", msg, raw="")
+            return rb.fail(msg).build()
         except httpx.HTTPError as e:
-            return rb.fail(f"ollama call failed: {e}").build()
+            msg = f"ollama call failed: {e}"
+            self._log_failure("http_error", msg, raw="")
+            return rb.fail(msg).build()
         except Exception as e:  # noqa: BLE001
+            msg = f"unexpected: {type(e).__name__}: {e}"
+            self._log_failure("unexpected", msg, raw="")
             log.exception("helper %s unexpected error", self.role)
-            return rb.fail(f"unexpected: {type(e).__name__}: {e}").build()
+            return rb.fail(msg).build()
 
         rb.add_tokens(t_in, t_out)
         rb.raw_text = text          # captured for turn-log debugging
@@ -509,19 +635,39 @@ class BaseHelper:
         if self.schema is not None:
             try:
                 parsed = parse_with_schema(text, self.schema)
-                rb.output = parsed.model_dump()
+                candidate = parsed.model_dump()
+                # Gate: schema-structural validity is necessary but not
+                # sufficient.  Reject recovered-but-nonsense output (e.g.
+                # empty stage ids, all-blank required strings).
+                ok, reason = _semantically_valid(candidate, self.schema)
+                if not ok:
+                    err_msg = f"semantic validation failed: {reason}"
+                    self._log_failure("semantic_invalid", err_msg, raw=text)
+                    rb.output = dict(self._safe_default)
+                    return rb.fail(err_msg).build()
+                rb.output = candidate
             except SchemaValidationError as e:
-                fallback = self._parse_fallback(text, e)
-                if fallback is None:
+                # Primary parse failed — attempt prose fallback.
+                self._log_failure("schema_parse_failed", str(e), raw=text)
+                fallback_dict = self._parse_fallback(text, e)
+                if fallback_dict is None:
                     return rb.fail(str(e)).build()
                 try:
-                    parsed = self.schema.model_validate(fallback)
-                    rb.output = parsed.model_dump()
+                    recovered = self.schema.model_validate(fallback_dict)
+                    candidate = recovered.model_dump()
+                    # Semantic-validate the recovered output too.
+                    ok, reason = _semantically_valid(candidate, self.schema)
+                    if not ok:
+                        err_msg = f"recovered output failed semantic validation: {reason}"
+                        self._log_failure("semantic_invalid_after_fallback", err_msg, raw=text)
+                        rb.output = dict(self._safe_default)
+                        return rb.fail(err_msg).build()
+                    rb.output = candidate
                     rb.prose_rescue = True
                 except ValidationError as ve:
-                    return rb.fail(
-                        f"fallback failed schema: {ve}"
-                    ).build()
+                    err_msg = f"fallback failed schema: {ve}"
+                    self._log_failure("fallback_schema_failed", err_msg, raw=text)
+                    return rb.fail(err_msg).build()
         else:
             rb.output = {"text": text}
 
@@ -530,22 +676,59 @@ class BaseHelper:
         try:
             self._post_parse(task, rb)
         except Exception as e:  # noqa: BLE001
+            msg = f"post-parse: {e}"
+            self._log_failure("post_parse_failed", msg, raw="")
             log.exception("helper %s post-parse failed", self.role)
-            return rb.fail(f"post-parse: {e}").build()
+            return rb.fail(msg).build()
         return rb.build()
+
+    def _log_failure(self, reason: str, msg: str, raw: str) -> None:
+        """Emit a structured WARNING so no error is silently swallowed.
+
+        Always includes: helper role, model, failure reason, detail message,
+        and the first 200 chars of the raw LLM output (truncated for log
+        readability).  Never raises.
+
+        Note: `message` is a reserved LogRecord attribute and cannot be used
+        as an `extra` key; we use `detail` instead to carry the error text.
+        """
+        snippet = (raw or "")[:200]
+        log.warning(
+            "helper_failure reason=%s helper=%s model=%s detail=%r raw_snippet=%r",
+            reason, self.role, self.model_id, msg, snippet,
+            extra={
+                "helper": self.role,
+                "model": self.model_id,
+                "reason": reason,
+                "detail": msg,
+                "raw_snippet": snippet,
+            },
+        )
 
     def _parse_fallback(
         self, text: str, error: SchemaValidationError,
     ) -> dict[str, Any] | None:
-        """Last-resort recovery hook when schema parsing fails.
+        """Best-effort prose → struct recovery when schema parsing fails.
 
-        Default: returns None (no recovery — caller surfaces the error).
-        Subclasses may return a dict that will be validated against
-        `self.schema`. The synthesizer uses this to wrap prose-only LLM
-        output as a valid SynthesisPlan rather than emitting a
-        meaningless 'helper outputs below' fallback.
+        Base implementation: attempt `extract_json` on the raw text.
+        This handles the common case where the model emitted valid JSON
+        that failed Pydantic validation (e.g. extra fields, wrong types)
+        but can still be coerced — `extract_json` already strips think
+        blocks and fenced code.
+
+        If `extract_json` itself fails (no JSON found at all), returns
+        None so the caller surfaces the original error.
+
+        Subclasses may override for role-specific prose recovery (the
+        synthesizer wraps plain-prose replies as SynthesisPlan, for
+        instance).  Subclass overrides are called INSTEAD of this
+        default, so if a subclass wants the base behaviour it should
+        call ``super()._parse_fallback(text, error)``.
         """
-        return None
+        try:
+            return extract_json(text)  # type: ignore[return-value]
+        except SchemaValidationError:
+            return None
 
     def _post_parse(self, task: HelperTask, rb: ResultBuilder) -> None:
         """Extract `plan` / `citations` / `confidence` from rb.output.

@@ -24,7 +24,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gateway.app import _prewarm_then_probe_planner_model
+from gateway.app import _prewarm_then_probe_hive_qwen
 from gateway.ollama_probe import ProbeResult
 
 
@@ -92,7 +92,7 @@ async def test_probe_runs_after_prewarm_and_stores_result(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state, prewarm_roles=("planner",),
     )
 
@@ -117,7 +117,7 @@ async def test_cpu_verdict_logs_critical(
     app_state = SimpleNamespace(ollama_probe_result=None)
 
     with caplog.at_level(logging.CRITICAL, logger="gateway.app"):
-        await _prewarm_then_probe_planner_model(
+        await _prewarm_then_probe_hive_qwen(
             router, app_state, prewarm_roles=("planner",),
         )
 
@@ -142,7 +142,7 @@ async def test_mixed_verdict_logs_warning(
     app_state = SimpleNamespace(ollama_probe_result=None)
 
     with caplog.at_level(logging.WARNING, logger="gateway.app"):
-        await _prewarm_then_probe_planner_model(
+        await _prewarm_then_probe_hive_qwen(
             router, app_state, prewarm_roles=("planner",),
         )
 
@@ -166,7 +166,7 @@ async def test_probe_exception_does_not_propagate(
     app_state = SimpleNamespace(ollama_probe_result=None)
 
     # Should NOT raise.
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state, prewarm_roles=("planner",),
     )
     assert app_state.ollama_probe_result is None
@@ -205,7 +205,7 @@ async def test_cpu_verdict_with_abort_flag_signals_sigterm(
     app_state = SimpleNamespace(ollama_probe_result=None)
 
     with caplog.at_level(logging.CRITICAL, logger="gateway.app"):
-        await _prewarm_then_probe_planner_model(
+        await _prewarm_then_probe_hive_qwen(
             router, app_state,
             prewarm_roles=("planner",),
             abort_on_bad_verdict=True,
@@ -233,7 +233,7 @@ async def test_mixed_verdict_with_abort_flag_signals_sigterm(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state,
         prewarm_roles=("planner",),
         abort_on_bad_verdict=True,
@@ -257,7 +257,7 @@ async def test_cpu_verdict_without_abort_flag_does_not_signal(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state,
         prewarm_roles=("planner",),
         abort_on_bad_verdict=False,
@@ -280,7 +280,7 @@ async def test_gpu_verdict_with_abort_flag_does_not_signal(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state,
         prewarm_roles=("planner",),
         abort_on_bad_verdict=True,
@@ -308,7 +308,7 @@ async def test_unreachable_verdict_with_abort_flag_does_not_signal(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state,
         prewarm_roles=("planner",),
         abort_on_bad_verdict=True,
@@ -331,7 +331,7 @@ async def test_missing_verdict_with_abort_flag_does_not_signal(
     })
     app_state = SimpleNamespace(ollama_probe_result=None)
 
-    await _prewarm_then_probe_planner_model(
+    await _prewarm_then_probe_hive_qwen(
         router, app_state,
         prewarm_roles=("planner",),
         abort_on_bad_verdict=True,

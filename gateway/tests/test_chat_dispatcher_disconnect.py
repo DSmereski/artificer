@@ -60,7 +60,7 @@ async def test_disconnect_during_handler_does_not_send_error_frame() -> None:
 
     dispatcher = _ChatDispatcher(
         websocket=ws,  # type: ignore[arg-type]
-        bot="terry",
+        bot="hive",
         device=_FakeDevice(),
         app_state=state,
         thread_id="default",
@@ -87,7 +87,7 @@ async def test_generic_failure_on_open_ws_sends_error_frame() -> None:
 
     dispatcher = _ChatDispatcher(
         websocket=ws,  # type: ignore[arg-type]
-        bot="terry",
+        bot="hive",
         device=_FakeDevice(),
         app_state=state,
         thread_id="default",
@@ -117,7 +117,7 @@ async def test_generic_failure_on_closed_ws_does_not_raise() -> None:
 
     dispatcher = _ChatDispatcher(
         websocket=ws,  # type: ignore[arg-type]
-        bot="terry",
+        bot="hive",
         device=_FakeDevice(),
         app_state=state,
         thread_id="default",
@@ -176,7 +176,7 @@ async def test_recv_queues_messages_while_handler_busy() -> None:
     state = _StubAppState()
     dispatcher = _ChatDispatcher(
         websocket=ws,  # type: ignore[arg-type]
-        bot="terry",
+        bot="hive",
         device=_FakeDevice(),
         app_state=state,
         thread_id="default",
@@ -221,7 +221,7 @@ async def test_queued_ack_sent_when_message_waits() -> None:
     state = _StubAppState()
     dispatcher = _ChatDispatcher(
         websocket=ws,  # type: ignore[arg-type]
-        bot="terry",
+        bot="hive",
         device=_FakeDevice(),
         app_state=state,
         thread_id="default",

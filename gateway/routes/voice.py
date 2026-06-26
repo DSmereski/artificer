@@ -36,7 +36,7 @@ async def voice_ws(websocket: WebSocket, bot: str) -> None:
     if adapter is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="unknown bot")
         return
-    # Only Maggy / Terry / Scout make sense for voice. Claude Code doesn't have audio.
+    # Only Maggy / Hive / Scout make sense for voice. Claude Code doesn't have audio.
     if bot == "claude-code":
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="no voice for claude-code")
         return

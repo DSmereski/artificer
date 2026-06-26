@@ -6,8 +6,8 @@ is created per accepted WebSocket connection; call `await dispatcher.run()`
 to enter the loop.
 
 Message kinds handled:
-  user / terry / pending-confirm  — routed by _handle_terry_confirm
-  user / terry / hive             — routed by _handle_terry_hive
+  user / hive / pending-confirm  — routed by _handle_hive_confirm
+  user / hive / hive             — routed by _handle_hive_hive
   user / other-bot / streaming    — routed by _handle_other_bot
 
 All logic is preserved line-for-line from the original; only the
@@ -276,32 +276,32 @@ class _ChatDispatcher:
 
         Returns the coordinator-assigned `turn_id` when the message went
         through the hive coordinator; None otherwise (pending-confirm
-        branches, non-terry streaming bots).
+        branches, non-hive streaming bots).
         """
-        if self._bot == "terry":
-            return await self._handle_terry(text=text, user_id=user_id)
+        if self._bot == "hive":
+            return await self._handle_hive(text=text, user_id=user_id)
         await self._handle_other_bot(text=text, user_id=user_id)
         return None
 
-    async def _handle_terry(self, *, text: str, user_id: int) -> str | None:
-        """Route a terry-bound message: pending-confirm check, then hive.
+    async def _handle_hive(self, *, text: str, user_id: int) -> str | None:
+        """Route a hive-bound message: pending-confirm check, then hive.
 
         Returns the hive turn_id, or None when the message was consumed
         by the pending-confirm branch (which never runs a hive turn).
         """
-        # Pending-confirm hand-off: did Terry just propose a payload,
+        # Pending-confirm hand-off: did Hive just propose a payload,
         # and is this user message a yes/no on it?
         pending = self._app_state.pending_image_confirms
         if pending is not None and self._device.id in pending:
-            handled = await self._handle_terry_confirm(text=text, pending=pending)
+            handled = await self._handle_hive_confirm(text=text, pending=pending)
             if handled:
                 return None
             # Anything else: drop pending, treat as a new turn.
             pending.pop(self._device.id, None)
 
-        return await self._handle_terry_hive(text=text, user_id=user_id)
+        return await self._handle_hive_hive(text=text, user_id=user_id)
 
-    async def _handle_terry_confirm(self, *, text: str, pending: dict) -> bool:
+    async def _handle_hive_confirm(self, *, text: str, pending: dict) -> bool:
         """Handle a pending-confirm yes/no response.
 
         Returns True if the message was consumed (yes or no), False if
@@ -327,10 +327,10 @@ class _ChatDispatcher:
             return True
         return False
 
-    async def _handle_terry_hive(
+    async def _handle_hive_hive(
         self, *, text: str, user_id: int,
     ) -> str | None:
-        """Dispatch a terry message through the hive coordinator.
+        """Dispatch a hive message through the hive coordinator.
 
         Returns the turn_id when the coordinator ran the turn, or None
         when the coordinator was missing (test-only misconfig branch).
@@ -367,7 +367,7 @@ class _ChatDispatcher:
         return None
 
     async def _handle_other_bot(self, *, text: str, user_id: int) -> None:
-        """Streaming path for non-terry bots (Maggy / Scout / Claude Code).
+        """Streaming path for non-hive bots (Maggy / Scout / Claude Code).
 
         Pulls vault context for non-trivial turns so they can ground
         answers in `knowledge/` notes instead of only their canon + training.

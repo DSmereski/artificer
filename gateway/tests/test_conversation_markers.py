@@ -6,7 +6,7 @@ from gateway.conversation_markers import (
     confirmation_no,
     confirmation_yes,
     parse_remember,
-    sanitize_terry_reply,
+    sanitize_hive_reply,
     scan,
     strip_markers,
 )
@@ -116,13 +116,13 @@ def test_scan_confirm_image_json():
 def test_scan_confirm_image_multiline_json():
     """Regression: pretty-printed JSON across multiple lines must parse.
 
-    qwen-terry sometimes emits JSON with newlines and indentation. The old
+    qwen-hive sometimes emits JSON with newlines and indentation. The old
     regex matched lazy-non-greedy up to `\\n` and captured nothing.
     """
     raw = (
         "Going to render this:\n"
         "[CONFIRM_IMAGE] {\n"
-        '  "prompt": "Terry in a black silk dress",\n'
+        '  "prompt": "Hive in a black silk dress",\n'
         '  "aspect": "portrait",\n'
         '  "loras": ["Real Beauty"]\n'
         "}\n"
@@ -177,13 +177,13 @@ def test_parse_remember_valid():
     assert out["category"] == "people"
     assert out["title"] == "penguin"
     assert out["body"] == "green eyes"
-    assert out["audience"] == ["terry", "claude-code"]  # default
+    assert out["audience"] == ["hive", "claude-code"]  # default
 
 
 def test_parse_remember_with_audience():
-    raw = '{"category":"x","title":"y","body":"z","audience":["terry"]}'
+    raw = '{"category":"x","title":"y","body":"z","audience":["hive"]}'
     out = parse_remember(raw)
-    assert out["audience"] == ["terry"]
+    assert out["audience"] == ["hive"]
 
 
 def test_parse_remember_missing_required_returns_none():
@@ -257,7 +257,7 @@ def test_confirmation_neither():
         assert not confirmation_no(token), token
 
 
-# ---------------------------------------------------------------- sanitize_terry_reply
+# ---------------------------------------------------------------- sanitize_hive_reply
 
 
 def test_sanitize_strips_status_lines():
@@ -268,7 +268,7 @@ def test_sanitize_strips_status_lines():
         "Status: Finalizing... 100% complete.\n"
         "There she is."
     )
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert "Status:" not in out
     assert "complete" not in out.lower()
     assert "Here you go." in out
@@ -277,7 +277,7 @@ def test_sanitize_strips_status_lines():
 
 def test_sanitize_strips_initializing_prose():
     raw = "Sure!\nInitializing render engine...\nGenerating image now...\nDone."
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert "Initializing" not in out
     assert "Generating" not in out
     assert "Sure!" in out
@@ -286,7 +286,7 @@ def test_sanitize_strips_initializing_prose():
 
 def test_sanitize_strips_image_requested_artifact():
     raw = "[Image requested: a sunset]\nReally rendering now."
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert "Image requested" not in out
     assert "Really rendering now." in out
 
@@ -298,7 +298,7 @@ def test_sanitize_strips_marker_and_progress_together():
         "Status: 50% complete.\n"
         "Done!"
     )
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert "GENERATE_IMAGE" not in out
     assert "Status:" not in out
     assert "Sure thing." in out
@@ -307,14 +307,14 @@ def test_sanitize_strips_marker_and_progress_together():
 
 def test_sanitize_collapses_blank_lines():
     raw = "first\n\n\n\nsecond\n\n\n\nthird"
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     # No more than one blank line between paragraphs.
     assert "\n\n\n" not in out
 
 
 def test_sanitize_returns_empty_for_pure_marker_reply():
     raw = '[GENERATE_IMAGE] {"prompt":"x"}'
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert out == ""
 
 
@@ -322,7 +322,7 @@ def test_sanitize_returns_empty_for_pure_marker_reply():
 
 
 def test_scan_implicit_ask_user_without_prefix():
-    # Terry's small model sometimes drops the [ASK_USER] prefix and
+    # Hive's small model sometimes drops the [ASK_USER] prefix and
     # emits raw JSON. The scanner falls back to treating it as an
     # implicit ASK_USER so chips still render.
     raw = '{"question":"What hair colour?","options":["black","silver","let me describe it"]}'
@@ -358,6 +358,6 @@ def test_scan_explicit_marker_wins_over_lenient():
 def test_sanitize_strips_naked_json_payload():
     # Naked-JSON gets re-routed by scan() so the bubble must NOT show it.
     raw = '{"question":"Q?","options":["a","b"]}\n\nFollow-up text.'
-    out = sanitize_terry_reply(raw)
+    out = sanitize_hive_reply(raw)
     assert "{" not in out
     assert "Follow-up text." in out

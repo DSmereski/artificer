@@ -1,4 +1,4 @@
-"""HiveCoordinator — drives every Terry turn through the hive of helpers.
+"""HiveCoordinator — drives every Hive turn through the hive of helpers.
 
 Includes a programmatic hallucination guard run after synthesis: any
 sentence in the reply whose numeric facts (e.g. "1,200 m/s", "46 SCU",
@@ -55,9 +55,9 @@ log = logging.getLogger("gateway.hive")
 class TurnBudget:
     """Per-turn caps. Coordinator enforces these defensively."""
     max_concurrent_helpers: int = 5
-    # When the operator's gaming GPU (index 0) is in use by a known game
+    # When the user's gaming GPU (index 0) is in use by a known game
     # process, fall back to this lower cap so the helpers running on the
-    # remaining cards don't compete for VRAM/PCIe bandwidth.
+    # remaining cards don't fight Star Citizen for VRAM/PCIe bandwidth.
     # The actual game-detection lives in services.scout_daemon; this
     # coordinator only needs the boolean.
     gaming_concurrent_helpers: int = 3
@@ -69,7 +69,7 @@ class TurnBudget:
     max_total_tokens_out: int = 8000
     # Reserve at the END of the turn for synthesizer (+ critic). This
     # guarantees that even if dispatch runs long, we have time to
-    # compose Terry's reply. 130s = synth catalog timeout (120s) +
+    # compose Hive's reply. 130s = synth catalog timeout (120s) +
     # ~10s slack — raised from 60s after observing synth timing out
     # at 45s under long-conversation load (scenario 10, 2026-05-02).
     synth_reservation_s: float = 130.0
@@ -144,7 +144,7 @@ class TurnContext:
     user_msg: str
     user_id: int
     device_id: str
-    bot: str = "terry"
+    bot: str = "hive"
     history_digest: str = ""
     image_build: dict | None = None
     skills_digest: str = ""
@@ -592,7 +592,7 @@ class HiveCoordinator:
             )
             client = vc_factory()
             results = client.search(
-                query_embedding=vec, k=3, audience="terry",
+                query_embedding=vec, k=3, audience="hive",
                 query_text=query,
             )
         except Exception as e:  # noqa: BLE001
@@ -1354,7 +1354,7 @@ class HiveCoordinator:
         # convention.
         task = HelperTask(
             role="synthesizer",
-            goal="compose Terry's reply",
+            goal="compose Hive's reply",
             inputs={
                 "user_msg": ctx.user_msg,
                 "planner_summary": plan.output.get("summary", ""),

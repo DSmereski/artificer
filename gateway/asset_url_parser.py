@@ -33,11 +33,11 @@ class ParsedSource:
 
 
 _CIVITAI_RE = re.compile(
-    r"^https?://(civitai\.com)/models/(\d+)(?:/[^?]*)?(\?.*)?$",
+    r"^https?://(civitai\.(?:com|red))/models/(\d+)(?:/[^?]*)?(\?.*)?$",
     re.IGNORECASE,
 )
 _CIVITAI_IMAGE_RE = re.compile(
-    r"^https?://(civitai\.com)/images/(\d+)(\?.*)?$",
+    r"^https?://(civitai\.(?:com|red))/images/(\d+)(\?.*)?$",
     re.IGNORECASE,
 )
 _HF_FILE_RE = re.compile(

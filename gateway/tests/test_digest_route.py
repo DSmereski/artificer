@@ -43,7 +43,7 @@ def test_digest_counts_new_images(client: TestClient, paired_token):
     class _Job:
         job_id: str
         device_id: str = "d"
-        bot: str = "terry"
+        bot: str = "hive"
         prompt: str = "p"
         created_at: float = 0.0
         state: str = "done"

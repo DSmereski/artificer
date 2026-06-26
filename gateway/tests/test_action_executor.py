@@ -59,13 +59,13 @@ async def test_vault_learn_audience_clamp():
         "verb": "vault_learn",
         "payload": {
             "category": "knowledge", "title": "Audience Topic", "body": _OK_BODY,
-            "audience": ["all", "terry", "claude-code"],
+            "audience": ["all", "hive", "claude-code"],
         },
-    }], device_audience=["terry"])
+    }], device_audience=["hive"])
     call = fake_client.learn.await_args
-    # Device audience [terry] clamps the marker's [all, terry, claude-code]
-    # to just [terry].
-    assert call.kwargs["audience"] == ["terry"]
+    # Device audience [hive] clamps the marker's [all, hive, claude-code]
+    # to just [hive].
+    assert call.kwargs["audience"] == ["hive"]
 
 
 @pytest.mark.asyncio
@@ -183,7 +183,7 @@ async def test_vault_learn_autolinks_to_existing_titles(tmp_path):
     folder = vault / "knowledge" / "2026" / "04"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "drake-cutlass.md").write_text(
-        "---\ntype: knowledge\ntitle: Drake Cutlass\naudience: [terry]\n---\n\nbody",
+        "---\ntype: knowledge\ntitle: Drake Cutlass\naudience: [hive]\n---\n\nbody",
         encoding="utf-8",
     )
 
@@ -209,9 +209,9 @@ async def test_vault_learn_autolinks_to_existing_titles(tmp_path):
                 "the Drake fleet — bigger than the Drake Cutlass and "
                 "designed for fleet operations."
             ),
-            "audience": ["terry"],
+            "audience": ["hive"],
         },
-    }], device_audience=["terry"])
+    }], device_audience=["hive"])
     assert r.ok is True
     # First mention auto-linked.
     assert "[[Drake Cutlass]]" in captured["body"]
@@ -252,11 +252,11 @@ async def test_vault_learn_autolink_skips_audience_denied(tmp_path):
                 "Recipe notes: the Secret Sauce should not be linked here "
                 "because it's a different audience. Cooking method follows."
             ),
-            "audience": ["terry"],
+            "audience": ["hive"],
         },
-    }], device_audience=["terry"])
+    }], device_audience=["hive"])
     assert r.ok is True
-    # No wikilink — terry-audience caller can't see claude-code-only notes.
+    # No wikilink — hive-audience caller can't see claude-code-only notes.
     assert "[[Secret Sauce]]" not in captured["body"]
     assert r.payload.get("linked_titles", []) == []
 
@@ -268,7 +268,7 @@ async def test_vault_learn_autolink_preserves_existing_wikilinks(tmp_path):
     folder = vault / "knowledge" / "2026" / "04"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "drake.md").write_text(
-        "---\ntype: knowledge\ntitle: Drake\naudience: [terry]\n---\n\nbody",
+        "---\ntype: knowledge\ntitle: Drake\naudience: [hive]\n---\n\nbody",
         encoding="utf-8",
     )
 
@@ -293,9 +293,9 @@ async def test_vault_learn_autolink_preserves_existing_wikilinks(tmp_path):
                 "Already mentioned [[Drake]] before. Drake also makes the "
                 "Cutlass and several other ships in the fleet roster."
             ),
-            "audience": ["terry"],
+            "audience": ["hive"],
         },
-    }], device_audience=["terry"])
+    }], device_audience=["hive"])
     assert r.ok is True
     body = captured["body"]
     # Existing wikilink kept.
@@ -311,13 +311,13 @@ async def test_vault_learn_dedup_skipped_for_journal(tmp_path):
     the daemon already has merge semantics for them."""
     vault = tmp_path / "vault"
     folder = vault / "journals"
-    _seed_existing_note(folder, "terry", "Terry")
+    _seed_existing_note(folder, "hive", "Hive")
 
     captured: dict[str, Any] = {}
 
     async def _capture_learn(**kwargs: Any) -> dict[str, Any]:
         captured.update(kwargs)
-        return {"ok": True, "path": "journals/terry.md"}
+        return {"ok": True, "path": "journals/hive.md"}
 
     fake_client = MagicMock()
     fake_client.learn = _capture_learn
@@ -329,14 +329,14 @@ async def test_vault_learn_dedup_skipped_for_journal(tmp_path):
         "verb": "vault_learn",
         "payload": {
             "category": "journal",
-            "title": "Terry Status Check",
+            "title": "Hive Status Check",
             "body": "all good",
-            "author": "terry",
+            "author": "hive",
         },
     }])
     assert r.ok is True
     # Title untouched — journal is append-style, no dedup ran.
-    assert captured["title"] == "Terry Status Check"
+    assert captured["title"] == "Hive Status Check"
 
 
 # ---------------------------------------------------------------- image_render
@@ -413,7 +413,7 @@ async def test_create_skill_writes(tmp_path):
 
     body = (
         "---\nname: new-skill\ndescription: A test skill.\n"
-        "audience: [terry]\n---\n\n# New skill\n\n"
+        "audience: [hive]\n---\n\n# New skill\n\n"
         "1. Step one (this body must be ≥100 chars to pass the rubric).\n"
         "2. Step two.\n"
     )
@@ -616,18 +616,18 @@ async def test_vault_forget_caps_at_20(tmp_path):
 @pytest.mark.asyncio
 async def test_vault_forget_filters_by_device_audience(tmp_path):
     """A device with audience=['claude-code'] cannot delete notes
-    whose audience is ['terry'] — fail-closed protection."""
+    whose audience is ['hive'] — fail-closed protection."""
     vault = tmp_path / "vault"
     kn = vault / "knowledge"
     kn.mkdir(parents=True)
-    (kn / "terry-only.md").write_text(
-        "---\naudience: [terry]\n---\n\nTerry's note\n",
+    (kn / "hive-only.md").write_text(
+        "---\naudience: [hive]\n---\n\nHive's note\n",
     )
     (kn / "claude-only.md").write_text(
         "---\naudience: [claude-code]\n---\n\nCC's note\n",
     )
     (kn / "shared.md").write_text(
-        "---\naudience: [terry, claude-code]\n---\n\nshared\n",
+        "---\naudience: [hive, claude-code]\n---\n\nshared\n",
     )
 
     ex = ActionExecutor(vault_path=vault)
@@ -635,9 +635,9 @@ async def test_vault_forget_filters_by_device_audience(tmp_path):
         "verb": "vault_forget",
         "payload": {"query": "md"},      # match all
     }], device_audience=["claude-code"])
-    # claude-only AND shared get deleted; terry-only survives.
+    # claude-only AND shared get deleted; hive-only survives.
     assert r.ok is True
-    assert (kn / "terry-only.md").exists(), "terry-only should survive"
+    assert (kn / "hive-only.md").exists(), "hive-only should survive"
     assert not (kn / "claude-only.md").exists(), "claude-only should be deleted"
     assert not (kn / "shared.md").exists(), "shared should be deleted"
 
@@ -669,18 +669,18 @@ async def test_vault_forget_no_audience_passes_legacy(tmp_path):
     vault = tmp_path / "vault"
     kn = vault / "knowledge"
     kn.mkdir(parents=True)
-    (kn / "terry-only.md").write_text(
-        "---\naudience: [terry]\n---\n\nTerry's note\n",
+    (kn / "hive-only.md").write_text(
+        "---\naudience: [hive]\n---\n\nHive's note\n",
     )
 
     ex = ActionExecutor(vault_path=vault)
     # No device_audience kwarg — should NOT filter.
     [r] = await ex.execute_all([{
         "verb": "vault_forget",
-        "payload": {"query": "terry"},
+        "payload": {"query": "hive"},
     }])
     assert r.ok is True
-    assert not (kn / "terry-only.md").exists()
+    assert not (kn / "hive-only.md").exists()
 
 
 @pytest.mark.asyncio
@@ -694,7 +694,7 @@ async def test_image_render_refuses_synthesizer_reference_path():
         "verb": "image_render",
         "payload": {
             "prompt": "x",
-            "reference_path": "/etc/shadow",
+            "reference_path": "/tmp/.ssh/id_ed25519",
         },
     }])
     assert r.ok is False

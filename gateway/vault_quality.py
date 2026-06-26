@@ -1,6 +1,6 @@
 """Quality gate for vault writes.
 
-Per the standing directive: Claude and Terry should add to the vault
+Per the standing directive: Claude and Hive should add to the vault
 when they have knowledge worth saving — but the writes get reviewed
 against a threshold first, and below-threshold attempts are skipped
 rather than polluting the index.

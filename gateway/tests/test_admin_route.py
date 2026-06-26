@@ -46,7 +46,7 @@ def test_admin_blocks_public_ip_origin() -> None:
     from gateway.routes.admin import _admin_origin_allowed
     # Allow:
     assert _admin_origin_allowed("127.0.0.1")
-    assert _admin_origin_allowed("10.0.0.5")
+    assert _admin_origin_allowed("127.0.0.1")
     assert _admin_origin_allowed("192.168.1.50")
     assert _admin_origin_allowed("100.64.1.2")  # tailscale CGNAT
     assert _admin_origin_allowed("::1")

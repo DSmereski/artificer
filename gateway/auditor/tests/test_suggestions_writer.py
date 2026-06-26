@@ -21,7 +21,7 @@ def _fnd(kind: str, n: int) -> list[Finding]:
     return [
         Finding(
             kind=kind, severity=Severity.MEDIUM,
-            turn_id=f"t-{i}", bot="terry", summary="x",
+            turn_id=f"t-{i}", bot="hive", summary="x",
         )
         for i in range(n)
     ]

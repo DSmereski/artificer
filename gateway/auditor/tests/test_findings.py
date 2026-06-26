@@ -16,14 +16,14 @@ def test_finding_construction() -> None:
         kind="hallucination",
         severity=Severity.HIGH,
         turn_id="turn_abc",
-        bot="terry",
+        bot="hive",
         summary="Claimed Penguin's color is blue; vault says red.",
         detail="people/penguin.md",
     )
     assert f.kind == "hallucination"
     assert f.severity is Severity.HIGH
     assert f.turn_id == "turn_abc"
-    assert f.bot == "terry"
+    assert f.bot == "hive"
 
 
 def test_finding_kind_must_be_known() -> None:
@@ -32,7 +32,7 @@ def test_finding_kind_must_be_known() -> None:
             kind="unknown_kind",
             severity=Severity.LOW,
             turn_id="t",
-            bot="terry",
+            bot="hive",
             summary="x",
             detail="x",
         )
@@ -43,7 +43,7 @@ def test_finding_to_markdown_bullet() -> None:
         kind="repeat_question",
         severity=Severity.LOW,
         turn_id="t1",
-        bot="terry",
+        bot="hive",
         summary="user asked about kraken twice in 10 minutes",
         detail="turns: t1, t9",
     )

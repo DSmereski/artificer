@@ -81,12 +81,12 @@ async def hive_test(
     reg = st.skill_registry
     if reg is not None:
         reg.reload_if_changed()
-        skills_digest = reg.digest_for_planner(audience="terry")
+        skills_digest = reg.digest_for_planner(audience="hive")
 
     ctx = TurnContext(
         user_msg=body.user_msg,
         user_id=body.user_id, device_id=body.device_id,
-        bot="terry",
+        bot="hive",
         history_digest="",
         image_build=image_build,
         skills_digest=skills_digest,
@@ -102,7 +102,7 @@ async def hive_test(
         tel.record(TurnRecord(
             ts=time.time(),
             turn_id=(emitter.events[0].id if emitter.events else "?"),
-            bot="terry",
+            bot="hive",
             user_msg_preview=body.user_msg[:240],
             helpers_used=list(turn.helpers_used),
             total_tokens=turn.total_tokens,

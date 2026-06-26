@@ -21,7 +21,7 @@ def test_done_frame_includes_turn_id(
     client: TestClient, paired_token: tuple[str, str],
 ) -> None:
     _, token = paired_token
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "hello", "user_id": 1}))
         done_msg = None
         while True:
@@ -49,7 +49,7 @@ def test_done_frame_turn_id_matches_assistant_parent(
     the WebSocketEmitter stamps on the assistant frames during the turn,
     so clients can correlate streamed text -> final turn id."""
     _, token = paired_token
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "hello", "user_id": 1}))
         assistant_parents: list[str] = []
         done_id: str | None = None
@@ -87,7 +87,7 @@ def test_done_frame_no_turn_id_when_no_hive_turn(
         "prompt": "a test image", "count": 1, "enhance": False,
     }
 
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "no", "user_id": 1}))
         done_msg = None
         while True:

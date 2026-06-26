@@ -10,13 +10,13 @@ Client protocol (JSON per line):
   S -> C: {"type": "done"}
   S -> C: {"type": "error", "message": "..."}
 
-Terry's marker-aware flow (handled in this route, transparent to other bots):
+Hive's marker-aware flow (handled in this route, transparent to other bots):
 
   [GENERATE_IMAGE] {...}   → render now (one-shot or already-confirmed)
   [CONFIRM_IMAGE]  {...}   → propose payload to user, halt this turn
   [ASK_USER]       <q>     → ask question, halt this turn
   [REMEMBER]       {...}   → write a vault note via VaultClient.learn
-  [VAULT_LOOKUP]   <q>     → re-feed vault hits and let Terry continue
+  [VAULT_LOOKUP]   <q>     → re-feed vault hits and let Hive continue
 
 All markers are stripped from the visible reply before streaming back.
 Other bots (Maggy / Scout / Claude Code) keep the streaming path unchanged.
@@ -188,7 +188,7 @@ async def _render_and_stream(
         )
         if ref_path is not None:
             kwargs["reference_path"] = str(ref_path)
-            # Apply provided strength if Terry/payload set one; else default.
+            # Apply provided strength if Hive/payload set one; else default.
             kwargs.setdefault("strength", 0.6)
             log.info(
                 "img2img: using ref %s for prompt=%r",
@@ -200,7 +200,7 @@ async def _render_and_stream(
     if recent is not None:
         recent.record(
             device_id=device_id,
-            bot="terry",
+            bot="hive",
             job_id=job.id,
             prompt=kwargs["prompt"],
         )
@@ -422,7 +422,7 @@ async def _hive_turn(
     device_audience: list[str] | None,
     thread_id: str = "default",
 ) -> str | None:
-    """Drive a Terry turn through the HiveCoordinator.
+    """Drive a Hive turn through the HiveCoordinator.
 
     Pure orchestrator — every concrete step is a one-liner into
     `gateway.hive_turn_helpers`. The body order is load-bearing
@@ -520,7 +520,7 @@ async def _hive_turn(
         # deps.track_background_task.
         _maybe_touch_and_title_thread(
             app_state, turn=turn,
-            bot="terry", user_id=user_id, text=text, thread_id=thread_id,
+            bot="hive", user_id=user_id, text=text, thread_id=thread_id,
         )
 
         # Phase 2.6: at exactly turn 3, replace the heuristic
@@ -530,7 +530,7 @@ async def _hive_turn(
         if turn is not None and not turn.error and not turn.blocked:
             maybe_auto_title_thread(
                 app_state,
-                bot="terry", user_id=user_id, text=text,
+                bot="hive", user_id=user_id, text=text,
                 thread_id=thread_id,
             )
     finally:
@@ -1064,7 +1064,7 @@ async def pin_chat_turn(
     # the source of truth; the journal is a discoverable index entry.
     parts: list[str] = []
     for r in rows:
-        role = "User" if r["role"] == "user" else "Terry"
+        role = "User" if r["role"] == "user" else "Hive"
         parts.append(f"**{role}:** {r['content']}")
     body = "\n\n".join(parts)
     title = f"Pinned turn {turn_id}"
@@ -1090,13 +1090,13 @@ async def pin_chat_turn(
 
 
 # M1: Legacy bot redirect. Maggy and Scout are gone; their roles are
-# folded into Terry (with the M2 hive's Coder + Sysmon helpers). When a
+# folded into Hive (with the M2 hive's Coder + Sysmon helpers). When a
 # paired phone or watch hits the old URL, accept the WS, emit a one-shot
-# system notice, then proxy through Terry's adapter so the user keeps
+# system notice, then proxy through Hive's adapter so the user keeps
 # chatting without re-pairing.
 _LEGACY_BOTS = {"maggy", "scout"}
 _LEGACY_REDIRECT_NOTICE = (
-    "Maggy and Scout have been folded into Terry. Continuing as Terry."
+    "Maggy and Scout have been folded into Hive. Continuing as Hive."
 )
 
 
@@ -1107,7 +1107,7 @@ async def chat_ws(websocket: WebSocket, bot: str) -> None:
     app_state = state(websocket)
     legacy_redirect = bot in _LEGACY_BOTS
     if legacy_redirect:
-        bot = "terry"
+        bot = "hive"
     adapter = app_state.adapters.get(bot)
     if adapter is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="unknown bot")

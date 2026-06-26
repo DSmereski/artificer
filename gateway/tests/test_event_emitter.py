@@ -117,7 +117,7 @@ def test_list_helper_late_records_role_and_latency():
     em = ListEmitter()
     em.helper_late(
         HelperResult(
-            role="researcher", model_id="gemma3-4b",
+            role="researcher", model_id="gemma3-ablit-4b",
             output={"summary": "slow but valid"},
             confidence="medium",
             tokens_in=10, tokens_out=20, latency_ms=45000,
@@ -129,7 +129,7 @@ def test_list_helper_late_records_role_and_latency():
     assert e.type == "helper.late"
     assert e.parent == "tk-1"
     assert e.payload["role"] == "researcher"
-    assert e.payload["model_id"] == "gemma3-4b"
+    assert e.payload["model_id"] == "gemma3-ablit-4b"
     assert e.payload["latency_ms"] == 45000
     assert e.payload["error"] is None
 

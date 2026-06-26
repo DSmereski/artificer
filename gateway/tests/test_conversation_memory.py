@@ -12,16 +12,16 @@ from gateway.conversation_memory import (
 
 
 def test_default_memory_empty(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(99)
     assert mem.user_id == 99
-    assert mem.bot == "terry"
+    assert mem.bot == "hive"
     assert mem.mid_summary == ""
     assert mem.turn_count == 0
 
 
 def test_apply_summary_persists(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=42,
         summary="user is debugging a memory leak",
@@ -30,7 +30,7 @@ def test_apply_summary_persists(tmp_path):
         user_facts=["user prefers vim"],
     )
     # Reload.
-    store2 = MemoryStore(tmp_path, bot="terry")
+    store2 = MemoryStore(tmp_path, bot="hive")
     mem = store2.get(42)
     assert "memory leak" in mem.mid_summary
     assert "fix the leak" in mem.mid_open_tasks
@@ -44,7 +44,7 @@ def test_apply_summary_keeps_prior_when_new_is_empty(tmp_path):
     `mid_summary` unconditionally, so any blank or truncated result
     would throw away accumulated context. The merge guard keeps the
     longer of (prior, new) when the new is empty or strictly shorter."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=1,
         summary="user is debugging a long-running pipeline issue",
@@ -71,7 +71,7 @@ def test_apply_summary_keeps_prior_lists_when_new_are_empty(tmp_path):
     summary-text guard above. Without this, a single bad refresh
     erases multi-turn context (Star-Citizen-ship-list drift in the
     2026-04-26..05-01 prod review)."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=1, summary="rich prior",
         open_tasks=["finish the gallery refactor", "ship the installer"],
@@ -94,7 +94,7 @@ def test_apply_summary_keeps_prior_lists_when_new_are_empty(tmp_path):
 def test_apply_summary_replaces_when_new_is_longer(tmp_path):
     """Happy path: a longer summary (the summarizer extended the prior)
     replaces the old one."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=1, summary="short",
         open_tasks=[], decisions=[], user_facts=[],
@@ -122,7 +122,7 @@ def test_apply_summary_rejects_summary_at_exactly_0_8x_ratio(tmp_path):
     be accepted (just meets the threshold).
     """
     prior = "a" * 100
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary=prior,
                         open_tasks=[], decisions=[], user_facts=[])
 
@@ -138,7 +138,7 @@ def test_apply_summary_rejects_summary_at_exactly_0_8x_ratio(tmp_path):
 def test_apply_summary_rejects_summary_just_below_0_8x_ratio(tmp_path):
     """A new summary just below 0.8x should be rejected (prior kept)."""
     prior = "a" * 100
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary=prior,
                         open_tasks=[], decisions=[], user_facts=[])
 
@@ -154,7 +154,7 @@ def test_apply_summary_rejects_summary_just_below_0_8x_ratio(tmp_path):
 def test_apply_summary_accepts_summary_just_above_0_8x_ratio(tmp_path):
     """A new summary just above 0.8x should be accepted."""
     prior = "a" * 100
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary=prior,
                         open_tasks=[], decisions=[], user_facts=[])
 
@@ -172,7 +172,7 @@ async def test_refresh_summary_async_forwards_prior_summary(tmp_path):
     """`refresh_summary_async` MUST pass the existing mid_summary into
     the helper as `prior_summary` so the summarizer can extend it.
     Without this, every refresh starts from scratch."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=1, summary="prior recap to extend",
         open_tasks=[], decisions=[], user_facts=[],
@@ -199,14 +199,14 @@ async def test_refresh_summary_async_forwards_prior_summary(tmp_path):
 
 
 def test_increment_turn_persists_count(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     for _ in range(3):
         store.increment_turn(99)
     assert store.get(99).turn_count == 3
 
 
 def test_needs_refresh_at_threshold(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.increment_turn(1)
     assert store.needs_refresh(mem) is False
     for _ in range(5):
@@ -215,7 +215,7 @@ def test_needs_refresh_at_threshold(tmp_path):
 
 
 def test_render_for_planner(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(
         user_id=1,
         summary="working on the hive coordinator",
@@ -231,7 +231,7 @@ def test_render_for_planner(tmp_path):
 
 
 def test_reset_drops_disk_file(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary="x",
                         open_tasks=[], decisions=[], user_facts=[])
     sidecar = tmp_path / "1" / "default.memory.json"
@@ -241,7 +241,7 @@ def test_reset_drops_disk_file(tmp_path):
 
 
 def test_reset_with_none_drops_all_threads(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, thread_id="default", summary="x",
                         open_tasks=[], decisions=[], user_facts=[])
     store.apply_summary(user_id=1, thread_id="alt", summary="y",
@@ -263,7 +263,7 @@ def test_reset_calls_chat_log_clear_callback(tmp_path):
     The callback is injected rather than hard-wired to keep MemoryStore
     decoupled from VaultClient.
     """
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary="secret data",
                         open_tasks=[], decisions=[], user_facts=[])
 
@@ -273,14 +273,14 @@ def test_reset_calls_chat_log_clear_callback(tmp_path):
         calls.append((user_id, bot))
 
     store.reset(1, on_chat_log_clear=fake_clear)
-    assert calls == [(1, "terry")], (
+    assert calls == [(1, "hive")], (
         "reset must invoke on_chat_log_clear(user_id, bot) once"
     )
 
 
 def test_reset_chat_log_callback_not_called_when_not_provided(tmp_path):
     """Backward compat: reset without on_chat_log_clear must not raise."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, summary="x",
                         open_tasks=[], decisions=[], user_facts=[])
     # Must not raise even without the callback.
@@ -299,7 +299,7 @@ def test_reset_sweeps_legacy_sidecar_even_for_per_thread(tmp_path):
         '"turn_count":0}',
         encoding="utf-8",
     )
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.reset(1, thread_id="default")
     assert not legacy.exists()
     # And the next get returns a fresh memory, not the stale one.
@@ -317,7 +317,7 @@ def test_legacy_sidecar_migrates_on_first_read(tmp_path):
         '"turn_count":3}',
         encoding="utf-8",
     )
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(7)
     assert mem.mid_summary == "old context"
     assert mem.turn_count == 3
@@ -327,7 +327,7 @@ def test_legacy_sidecar_migrates_on_first_read(tmp_path):
 
 
 def test_per_thread_isolation(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_summary(user_id=1, thread_id="default", summary="thread A",
                         open_tasks=[], decisions=[], user_facts=[])
     store.apply_summary(user_id=1, thread_id="other", summary="thread B",
@@ -355,7 +355,7 @@ class _FakeSummarizer:
 
 @pytest.mark.asyncio
 async def test_refresh_summary_async_writes(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "a recap",
         "open_tasks": ["task1"],
@@ -375,7 +375,7 @@ async def test_refresh_summary_async_writes(tmp_path):
 
 @pytest.mark.asyncio
 async def test_refresh_summary_async_handles_helper_error(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
 
     class _BrokenSummarizer:
         async def invoke(self, task):
@@ -393,7 +393,7 @@ async def test_refresh_summary_async_handles_helper_error(tmp_path):
 
 @pytest.mark.asyncio
 async def test_refresh_summary_async_no_helper_is_noop(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     await refresh_summary_async(
         store, user_id=1, messages=[], summarizer_helper=None,
     )
@@ -404,7 +404,7 @@ async def test_refresh_summary_async_no_helper_is_noop(tmp_path):
 
 
 def test_needs_long_digest_period(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100   # 5 * 20 = 100, the configured period
     mem.mid_summary = "something to compress"
@@ -414,7 +414,7 @@ def test_needs_long_digest_period(tmp_path):
 
 
 def test_needs_long_digest_off_period(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 50    # not a multiple of 100
     mem.mid_summary = "x"
@@ -422,7 +422,7 @@ def test_needs_long_digest_off_period(tmp_path):
 
 
 def test_needs_long_digest_skipped_when_empty(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100
     # Both summary fields empty → nothing to compress.
@@ -440,7 +440,7 @@ def test_needs_long_digest_false_when_mid_summary_not_advanced(tmp_path):
     not changed since turn_count reached the boundary — digest gate should
     be False.
     """
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100
     mem.mid_summary = "something to compress"
@@ -456,7 +456,7 @@ def test_needs_long_digest_true_when_mid_summary_freshly_refreshed(tmp_path):
     """Positive counterpart to the stale-summary test: when the summary
     WAS refreshed this cycle (mid_summary_at_turn equals turn_count),
     the gate must return True so long_digest compression actually fires."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100
     mem.mid_summary = "something to compress"
@@ -466,24 +466,24 @@ def test_needs_long_digest_true_when_mid_summary_freshly_refreshed(tmp_path):
 
 
 def test_apply_long_digest_caps_length(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     big = "z" * 5000
     mem = store.apply_long_digest(user_id=1, digest=big)
     assert len(mem.long_digest) == store.LONG_DIGEST_CHAR_CAP
     # Reload from disk to make sure it persisted.
-    mem2 = MemoryStore(tmp_path, bot="terry").get(1)
+    mem2 = MemoryStore(tmp_path, bot="hive").get(1)
     assert mem2.long_digest == mem.long_digest
 
 
 def test_apply_long_digest_empty_is_noop(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_long_digest(user_id=1, digest="prior")
     store.apply_long_digest(user_id=1, digest="")  # should not wipe
     assert store.get(1).long_digest == "prior"
 
 
 def test_render_for_planner_includes_long_digest(tmp_path):
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.apply_long_digest(user_id=1, digest="- user is named Penguin")
     store.apply_summary(
         user_id=1, summary="working on memory", open_tasks=[],
@@ -500,7 +500,7 @@ async def test_refresh_fires_long_digest_compression(tmp_path):
     """When turn_count hits the period, the refresh path invokes the
     summarizer a second time in compression mode and writes its
     output to long_digest."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     # Bring the store to one turn before the period so the refresh
     # increment lands us exactly at 100.
     mem = store.get(1)
@@ -549,7 +549,7 @@ async def test_long_digest_empty_summary_logs_warning(tmp_path, caplog):
     user 3037965419 / tc=100 / long_digest='' showed on 2026-05-01."""
     import logging
 
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100
     mem.mid_summary = "lots of conversation history"
@@ -594,7 +594,7 @@ async def test_long_digest_helper_error_logs_warning(tmp_path, caplog):
     silent compress-mode parse failures surface in gateway.log.err."""
     import logging
 
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(1)
     mem.turn_count = 100
     mem.mid_summary = "history"
@@ -646,7 +646,7 @@ class _FakeFactExtractor:
 @pytest.mark.asyncio
 async def test_fact_extractor_appends_to_core_slots(tmp_path):
     """A successful fact-extractor delta lands in the right slots."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "ongoing conversation about memory",
         "open_tasks": [], "decisions": [], "user_facts": [],
@@ -681,7 +681,7 @@ async def test_fact_extractor_appends_to_core_slots(tmp_path):
 @pytest.mark.asyncio
 async def test_fact_extractor_failure_does_not_break_summary(tmp_path):
     """If fact extraction errors, the summary still persisted."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "valid recap",
         "open_tasks": [], "decisions": [], "user_facts": [],
@@ -707,7 +707,7 @@ async def test_fact_extractor_failure_does_not_break_summary(tmp_path):
 async def test_fact_extractor_skipped_when_helper_is_none(tmp_path):
     """The fact_extractor branch is opt-in — backward compat for callers
     that don't pass a helper (existing tests, scripted summaries)."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "ok", "open_tasks": [],
         "decisions": [], "user_facts": [],
@@ -726,7 +726,7 @@ async def test_fact_extractor_skipped_when_helper_is_none(tmp_path):
 async def test_fact_extractor_forwards_prior_summary(tmp_path):
     """The extractor receives the just-applied summary so it can use it
     for context (e.g. avoiding contradictions with prior turns)."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "user is debugging Hive memory",
         "open_tasks": [], "decisions": [], "user_facts": [],
@@ -801,7 +801,7 @@ def test_is_durable_fact_rejects_fragments():
 async def test_fact_extractor_filters_low_signal_items(tmp_path):
     """End-to-end: the extractor returns a mix of durable facts and
     low-signal noise; only the durable items hit the slots."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     summarizer = _FakeSummarizer({
         "summary": "ongoing", "open_tasks": [],
         "decisions": [], "user_facts": [],
@@ -845,7 +845,7 @@ def test_render_caps_runaway_mid_summary(tmp_path):
     most recent tail (plan §1.3)."""
     from gateway.conversation_memory import MID_SUMMARY_RENDER_CHAR_CAP
 
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     mem = store.get(7)
     mem.mid_summary = "OLD " * 3000 + "RECENT_MARKER"
     store.save(mem)
@@ -859,7 +859,7 @@ def test_render_caps_runaway_mid_summary(tmp_path):
 def test_append_core_slot_drops_oldest_whole_lines(tmp_path):
     """Overflow drops whole oldest lines; the newest fact stays intact
     (plan §1.4). A left byte-slice would have severed it mid-line."""
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     limit = 60
     store.append_core_slot(
         user_id=3, name="preferences",

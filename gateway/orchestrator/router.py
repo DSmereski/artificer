@@ -5,13 +5,48 @@ startup from ``ModelCatalog`` + ``BenchResults`` and pinned to
 ``app_state``. A bench harness run produces a fresh ``BenchResults``;
 the gateway swaps the Router atomically (Phase 1 does swap, not
 in-place refresh).
+
+Credential checking
+-------------------
+Cloud models require a provider API key to be usable. ``Router`` checks
+for the expected env var at routing time and silently skips any candidate
+whose creds are missing, so a role can degrade to a local model (or to
+the YAML default) without crashing the gateway.
+
+Currently supported providers and their env var:
+  - ``anthropic``  → ``ANTHROPIC_API_KEY``
+
+New providers: add an entry to ``_PROVIDER_KEY_ENV`` below.
 """
 from __future__ import annotations
 
+import logging
+import os
 from dataclasses import dataclass
 
 from gateway.model_catalog import ModelCatalog, ModelEntry
 from gateway.orchestrator.bench_results import BenchResults, BenchScore
+
+log = logging.getLogger("gateway.orchestrator.router")
+
+# Map cloud_provider name → env-var that must be non-empty for the model
+# to be considered available.  Add new providers here.
+_PROVIDER_KEY_ENV: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+
+
+def _has_creds(model: ModelEntry) -> bool:
+    """Return True if the model's cloud credentials are present (or it is local)."""
+    if model.cloud_provider is None:
+        return True  # local/Ollama models need no API key
+    env_var = _PROVIDER_KEY_ENV.get(model.cloud_provider)
+    if env_var is None:
+        # Unknown provider — be conservative: assume creds are present so
+        # we don't silently suppress a legitimate model.
+        return True
+    key = os.environ.get(env_var, "").strip()
+    return bool(key)
 
 
 @dataclass(frozen=True)
@@ -51,6 +86,12 @@ class Router:
 
         scored: list[tuple[float, ModelEntry, BenchScore]] = []
         for model in candidates:
+            if not _has_creds(model):
+                log.debug(
+                    "router: skipping %r for role %r — missing cloud creds",
+                    model.id, role,
+                )
+                continue
             score = per_role.get(model.id)
             if score is None:
                 continue

@@ -127,7 +127,7 @@ def test_paired_device_has_narrow_default_audience(
     r = client.get("/v1/devices", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     me = next(d for d in r.json() if d["id"] == device_id)
-    assert me["audience"] == ["terry", "claude-code"]
+    assert me["audience"] == ["hive", "claude-code"]
     assert "all" not in me["audience"]
 
 

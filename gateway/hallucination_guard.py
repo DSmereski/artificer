@@ -11,7 +11,7 @@ Two guards run in series on each candidate sentence:
 1. **Action-claim guard.** When a sentence claims the assistant
    performed an action (`saved to vault`, `cross-linked`, ...) we
    require the corresponding verb to be in the synthesizer's emitted
-   actions list. Discovered after 2026-04-28 turn-log review: Terry
+   actions list. Discovered after 2026-04-28 turn-log review: Hive
    kept saying "I saved that to your vault" in replies that emitted no
    `vault_learn`.
 2. **Number guard.** Sentences with no specific numbers pass through.
@@ -144,9 +144,9 @@ _ACTION_CLAIM_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         r"['\"`][^'\"`\n]{2,80}['\"`]",
         re.IGNORECASE,
     ), "vault_learn"),
-    # Third-person Terry claims: "Terry has logged...", "Terry saved...".
+    # Third-person Hive claims: "Hive has logged...", "Hive saved...".
     (re.compile(
-        r"\bTerry\s+(?:has\s+|just\s+)?"
+        r"\bHive\s+(?:has\s+|just\s+)?"
         r"(?:logged|saved|stored|added|created|recorded|persisted|"
         r"compiled|wrote)\b",
         re.IGNORECASE,
@@ -214,7 +214,7 @@ _HELPER_RUN_CLAIM_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 # place in a user-facing reply. The LLM occasionally emits these as
 # headers around its actual response.
 _META_PREAMBLE_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^\s*here\s+is\s+terry['’]?s\s+reply\b.*$",
+    re.compile(r"^\s*here\s+is\s+hive['’]?s\s+reply\b.*$",
                re.IGNORECASE | re.MULTILINE),
     re.compile(r"^\s*here\s+is\s+the\s+reply\b.*$",
                re.IGNORECASE | re.MULTILINE),
@@ -224,8 +224,8 @@ _META_PREAMBLE_PATTERNS: list[re.Pattern[str]] = [
                re.IGNORECASE | re.MULTILINE),
     # Standalone markdown horizontal rules.
     re.compile(r"^\s*---+\s*$", re.MULTILINE),
-    # `### **Terry:**` header style.
-    re.compile(r"^\s*#{1,6}\s*\*?\*?terry:?\*?\*?\s*$",
+    # `### **Hive:**` header style.
+    re.compile(r"^\s*#{1,6}\s*\*?\*?hive:?\*?\*?\s*$",
                re.IGNORECASE | re.MULTILINE),
 ]
 
@@ -307,8 +307,8 @@ def strip_hallucinated_sentences(
     # Strip leaked action-JSON fenced blocks BEFORE sentence splitting
     # — they contain newlines that would corrupt the sentence stream.
     reply = _LEAKED_ACTION_JSON_RE.sub("", reply)
-    # Strip meta-preamble lines ("Here is Terry's reply", standalone
-    # `---`, `### **Terry:**` headers, "Based on X here is Y" wrappers).
+    # Strip meta-preamble lines ("Here is Hive's reply", standalone
+    # `---`, `### **Hive:**` headers, "Based on X here is Y" wrappers).
     for pat in _META_PREAMBLE_PATTERNS:
         reply = pat.sub("", reply)
     reply = reply.strip()
@@ -608,7 +608,7 @@ def all_retrieval_helpers_empty(helper_results: list[Any]) -> bool:
 _HIT_TOKEN_RE = re.compile(r"\b[A-Z][A-Za-z0-9'-]{2,}\b")
 _GENERIC_PREAMBLE_RE = re.compile(
     r"\b(?:"
-    r"here\s+is\s+(?:terry'?s\s+)?(?:the\s+)?(?:reply|composed\s+reply|summary)"
+    r"here\s+is\s+(?:hive'?s\s+)?(?:the\s+)?(?:reply|composed\s+reply|summary)"
     r"|based\s+on\s+(?:the\s+)?(?:user'?s\s+|the\s+)?(?:query|conversation|"
     r"vault|notes?|results?|preflight|context|knowledge\s+base)"
     r"|synthesi[zs]ed\s+from"
@@ -625,7 +625,7 @@ def _extract_capitalised_tokens(text: str, *, max_tokens: int = 40) -> set[str]:
     starters ('The', 'This') by length filter + a tiny stop-set.
     """
     stops = {"The", "This", "That", "These", "Those", "Here",
-             "Terry", "Based", "Reply", "Summary", "Star", "Citizen"}
+             "Hive", "Based", "Reply", "Summary", "Star", "Citizen"}
     out: set[str] = set()
     for m in _HIT_TOKEN_RE.finditer(text):
         tok = m.group(0)
@@ -646,7 +646,7 @@ def enforce_groundedness_with_hits(
 
     Catches the SC-retrieval failure mode where synth wraps vault hits
     in fluffy preamble ("Based on the vault search results, here is
-    Terry's reply…") without surfacing any specific entity name —
+    Hive's reply…") without surfacing any specific entity name —
     a 200-char generic answer when the librarian found the exact note.
 
     Returns reply unchanged when:

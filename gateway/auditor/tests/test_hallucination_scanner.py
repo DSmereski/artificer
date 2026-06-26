@@ -15,7 +15,7 @@ def _turn(*, turn_id: str, reply: str, user_id: int = 1) -> dict:
     return {
         "ts": 0,
         "turn_id": turn_id,
-        "bot": "terry",
+        "bot": "hive",
         "user_id": user_id,
         "user_msg": "what's my favorite color?",
         "synthesis": {"reply": reply, "actions": []},
@@ -25,7 +25,7 @@ def _turn(*, turn_id: str, reply: str, user_id: int = 1) -> dict:
 
 def _memory(*, user_id: int, user_facts: list[str]) -> dict:
     return {
-        "bot": "terry",
+        "bot": "hive",
         "user_id": user_id,
         "thread_id": "default",
         "user_facts": user_facts,

@@ -32,7 +32,7 @@ def list_models(
     request: Request = None,
 ) -> dict:
     """Return the model + helper catalog. The phone app's about panel
-    renders this so the user can see Terry's toolkit."""
+    renders this so the user can see Hive's toolkit."""
     st = state(request)
     catalog = st.model_catalog
     if catalog is None:

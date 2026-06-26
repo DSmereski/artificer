@@ -18,7 +18,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from gateway.auth import DeviceStore, PairingBroker
-from gateway.bot_adapters.terry import TerryAdapter
+from gateway.bot_adapters.hive import HiveAdapter
 from gateway.claude_code import ClaudeCodeManager
 from gateway.config import Config, load_config
 from gateway.deps import AppState
@@ -30,6 +30,7 @@ from gateway.conversation_memory import MemoryStore
 from gateway.helpers.factory import build_helpers
 from gateway.hive_coordinator import HiveCoordinator
 from gateway.image_build_state import ImageBuildStore
+from gateway.avatar_shim import AvatarShim
 from gateway.image_shim import ImageJob, ImageShim
 from gateway.video_shim import VideoJob, VideoShim
 from gateway.model_catalog import ModelCatalog, load_catalog
@@ -59,6 +60,8 @@ from gateway.routes import scout as scout_route
 from gateway.routes import docker as docker_route
 from gateway.routes import gitactivity as gitactivity_route
 from gateway.routes import digest as digest_route
+from gateway.routes import gpu_mode as gpu_mode_route
+from gateway.routes import theme as theme_route
 from gateway.routes import search as search_route
 from gateway.routes import system as system_route
 from gateway.routes import invites as invites_route
@@ -72,6 +75,7 @@ from gateway.routes import proactive as proactive_route  # connected-brain Item 
 from gateway.routes import voice as voice_route
 from gateway.routes import stt as stt_route
 from gateway.routes import suno as suno_route
+from gateway.routes import music as music_route
 from gateway.routes import appstore as appstore_route
 from gateway.routes import terminal as terminal_route
 from gateway.routes import wiki as wiki_route
@@ -97,16 +101,17 @@ def _build_adapters(
 ) -> dict[str, object]:
     """Wire every bot adapter referenced in config.history_roots.
 
-    Terry is the sole chat persona. Other bots were decommissioned
-    earlier; Claude Code integration runs outside the app now.
-    Legacy bot names redirect to Terry in `routes/chat.py`.
+    Hive is the sole chat persona. Maggy + Scout were decommissioned
+    earlier; Claude Code was removed at the user's request — the
+    developer-side claude-code workflow happens outside the app now.
+    Legacy bot names redirect to Hive in `routes/chat.py`.
     """
     adapters: dict[str, object] = {}
-    hd = config.history_roots.get("terry")
+    hd = config.history_roots.get("hive")
     if hd is not None:
-        adapters["terry"] = TerryAdapter(
+        adapters["hive"] = HiveAdapter(
             history_dir=hd,
-            model=config.models.get("terry"),
+            model=config.models.get("hive"),
             vault_client=vault_client,
             image_catalog=image_catalog,
         )
@@ -140,7 +145,7 @@ def _make_calendar_fire(*, hive_coordinator, executor, app_state_holder):
                 user_msg=user_msg,
                 user_id=user_id,
                 device_id=job.owner_device_id or "calendar",
-                bot="terry",
+                bot="hive",
                 # Pass empty — the coordinator falls back to its
                 # registered helpers list when this is empty.
                 available_helpers=[],
@@ -163,7 +168,7 @@ def _make_calendar_fire(*, hive_coordinator, executor, app_state_holder):
                     index_hive_turn_to_chat_log(
                         ai_team, turn,
                         user_id=user_id, text=user_msg,
-                        bot="terry", thread_id="calendar",
+                        bot="hive", thread_id="calendar",
                     )
                 except Exception as e:  # noqa: BLE001
                     log.warning("calendar chat_log index failed: %s", e)
@@ -260,7 +265,7 @@ async def _prewarm_helper_models(router, *, roles=("planner", "summarizer", "syn
             )
 
 
-async def _prewarm_then_probe_planner_model(
+async def _prewarm_then_probe_hive_qwen(
     router,
     app_state: "AppState",
     *,
@@ -502,6 +507,10 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     video_shim = VideoShim(state_dir / "media", on_done=_video_done)
+    # Talking-head avatar content: kokoro TTS -> SadTalker. Shares the media
+    # dir so .mp4 output lands in the same gallery. The dispatcher polls the
+    # job, so no on_done callback is needed for the board path.
+    avatar_shim = AvatarShim(state_dir / "media")
     # Persisted ledger so a gateway restart doesn't strand finished
     # images. The user reported "I was never sent an image" on
     # 2026-04-28 right after a dev-cycle gateway bounce — the
@@ -517,7 +526,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     # M5.1 + M5.2 + M6.3 stores
     image_build_store = ImageBuildStore(state_dir / "image_builds")
     turn_telemetry = TurnTelemetry(max_records=100)
-    memory_store_terry = MemoryStore(state_dir / "memory" / "terry", bot="terry")
+    memory_store_hive = MemoryStore(state_dir / "memory" / "hive", bot="hive")
     turn_log_store = TurnLogStore(state_dir / "turn-logs", mem_cap=200)
     calendar_store = JobStore(state_dir / "calendar.db")
     asset_import_store = AssetImportStore(
@@ -618,7 +627,7 @@ def create_app(config: Config | None = None) -> FastAPI:
                 rate_limiter=rate_limiter,
                 vault_path=config.vault_path,
                 state_dir=state_dir,
-                memory_store=memory_store_terry,
+                memory_store=memory_store_hive,
                 contradiction_detector=contradiction_detector,
                 composio_client=composio_client,
             )
@@ -649,7 +658,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         if config.images.image_app_root:
             registry_path = config.images.image_app_root / "models" / "loras" / "lora_registry.json"
             # Knowledge/ (not canon/) — catalog is reference data, queried via
-            # vault search at request time, NOT spliced into Terry's prompt.
+            # vault search at request time, NOT spliced into Hive's prompt.
             canon_path = config.vault_path / "knowledge" / "imagegen-loras.md"
             rewrote, n = image_lora_doc.regenerate_if_stale(
                 registry_path=registry_path,
@@ -658,12 +667,22 @@ def create_app(config: Config | None = None) -> FastAPI:
             if rewrote:
                 log.info("regenerated %s (%d LoRAs)", canon_path, n)
 
-        # Smart-link pass: rewrite proper nouns to [[wikilinks]] across
-        # canon + knowledge notes. Best-effort; idempotent.
+        # Smart-link pass: rewrite proper nouns to [[wikilinks]] across canon +
+        # knowledge notes. Best-effort + idempotent, and the smart-link daemon
+        # re-runs it every 600s — so do NOT block startup on it. Run it in a
+        # worker thread; a slow/hung vault walk (cold disk + vault-writer
+        # contention at boot) must never stall the lifespan and keep the gateway
+        # from reaching serve() (the cold-boot hang that needed a manual restart).
         try:
-            vault_smart_link.run(config.vault_path)
+            _smartlink_task = asyncio.create_task(
+                asyncio.to_thread(vault_smart_link.run, config.vault_path),
+                name="smart-link-boot",
+            )
+            _smartlink_task.add_done_callback(
+                lambda t: (not t.cancelled() and t.exception())
+                and log.warning("smart-link pass failed: %s", t.exception()))
         except Exception as e:  # noqa: BLE001
-            log.warning("smart-link pass failed: %s", e)
+            log.warning("smart-link pass kickoff failed: %s", e)
         adapters = _build_adapters(config, claude_manager, vault_client, catalog)
         app.state.ai_team = AppState(
             config=config,
@@ -687,7 +706,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             skill_registry=skill_registry,
             turn_telemetry=turn_telemetry,
             image_build_store=image_build_store,
-            memory_store_terry=memory_store_terry,
+            memory_store_hive=memory_store_hive,
             turn_log_store=turn_log_store,
             calendar_store=calendar_store,
             asset_import_store=asset_import_store,
@@ -711,7 +730,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             auditor_scheduler = AuditorScheduler(
                 state_dir=state_dir,
                 vault=vault_client,
-                bots=["terry", "scout"],
+                bots=["hive", "maggy", "scout"],
             )
             auditor_task = auditor_scheduler.start()
             from gateway.deps import track_background_task as _track
@@ -735,7 +754,7 @@ def create_app(config: Config | None = None) -> FastAPI:
                 # mid-conversation runs. Original CPU-eviction theory
                 # blamed groomer competition for planner-qwen, but the
                 # real cause turned out to be Ollama tray autostart
-                # missing CUDA_VISIBLE_DEVICES env-var (#437, #438).
+                # missing CUDA_VISIBLE_DEVICES=1,2 (#437, #438).
                 idle_threshold_s=1800.0,
             )
             groomer_task = groomer_idle_loop.start()
@@ -754,7 +773,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         # cold-load happens at most once per gateway lifecycle.
         try:
             prewarm_task = asyncio.create_task(
-                _prewarm_then_probe_planner_model(
+                _prewarm_then_probe_hive_qwen(
                     router, app.state.ai_team,
                     abort_on_bad_verdict=config.ollama_probe_abort_on_bad_verdict,
                 ),
@@ -898,6 +917,19 @@ def create_app(config: Config | None = None) -> FastAPI:
                     log.info("crew dispatcher started")
                 except Exception:  # noqa: BLE001
                     log.exception("crew dispatcher start failed")
+
+            # Start Crew Board Manager daemon loop (same pattern as dispatcher).
+            manager_daemon_task: asyncio.Task | None = None
+            if getattr(app.state, "_manager_daemon_pending", False):
+                try:
+                    md = app.state.manager_daemon
+                    manager_daemon_task = asyncio.create_task(
+                        md.start(), name="crew-board-manager",
+                    )
+                    log.info("crew board manager daemon started")
+                except Exception:  # noqa: BLE001
+                    log.exception("crew board manager daemon start failed")
+
             yield
         finally:
             log.info("gateway shutting down")
@@ -907,6 +939,15 @@ def create_app(config: Config | None = None) -> FastAPI:
                     await asyncio.wait_for(crew_dispatcher_task, timeout=5.0)
                 except (asyncio.TimeoutError, Exception):  # noqa: BLE001
                     crew_dispatcher_task.cancel()
+
+            # Cleanup: Crew Board Manager daemon
+            if manager_daemon_task is not None:
+                try:
+                    app.state.manager_daemon.stop()
+                    await asyncio.wait_for(manager_daemon_task, timeout=5.0)
+                except (asyncio.TimeoutError, Exception):  # noqa: BLE001
+                    log.exception("manager daemon shutdown failed")
+
             if auditor_scheduler is not None:
                 try:
                     await auditor_scheduler.stop()
@@ -985,7 +1026,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         skill_registry=skill_registry,
         turn_telemetry=turn_telemetry,
         image_build_store=image_build_store,
-        memory_store_terry=memory_store_terry,
+        memory_store_hive=memory_store_hive,
         turn_log_store=turn_log_store,
         calendar_store=calendar_store,
         recipe_store=recipe_store,
@@ -1002,6 +1043,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(proactive_route.router)  # connected-brain Item 2: line 979
     app.include_router(scout_route.router)
     app.include_router(docker_route.router)
+    app.include_router(gpu_mode_route.router)
     app.include_router(gitactivity_route.router)
     app.include_router(vault_route.router)
     app.include_router(graph_route.router)
@@ -1029,6 +1071,8 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(jobs_route.router)
     app.include_router(admin_route.router)
     app.include_router(suno_route.router)
+    app.include_router(music_route.router)
+    app.include_router(theme_route.router)
     app.include_router(appstore_route.router)
     app.include_router(terminal_route.router)
     app.include_router(wiki_route.router)
@@ -1052,6 +1096,17 @@ def create_app(config: Config | None = None) -> FastAPI:
         app.state.crew_store = crew_store
         app.state.crew_notifier = crew_notifier
         app.state.crew_vault_path = crew_vault_path
+        # Corsair iCUE RGB → saved UI theme on boot (#189). Holds the SDK session
+        # open so the colour persists; in a daemon thread so the ~5s SDK
+        # handshake never delays startup. Best-effort.
+        try:
+            import threading as _thr
+            from gateway.helpers import icue as _icue
+            _saved_theme = crew_store.get_meta("ui_theme", "hive-v2") or "hive-v2"
+            _thr.Thread(target=_icue.set_theme, args=(_saved_theme,),
+                        name="icue-startup", daemon=True).start()
+        except Exception:  # noqa: BLE001
+            log.debug("iCUE startup apply skipped", exc_info=True)
         # Sync Claude Code skills into the shared vault skill store so the
         # bots (/v1/skills) and the hive loop see one canonical skill set.
         try:
@@ -1078,13 +1133,33 @@ def create_app(config: Config | None = None) -> FastAPI:
             done_retention_days=getattr(config, "crew_done_retention_days", 3.0),
             image_shim=image_shim,
             video_shim=video_shim,
+            avatar_shim=avatar_shim,
         )
         app.state.crew_dispatcher = crew_dispatcher
         # The dispatcher background loop is started from the lifespan
         # hook (see _start_crew_dispatcher); we just register it here.
         app.state._crew_dispatcher_pending = True
+
+        # Crew Board Manager daemon — autonomous board management.
+        # Default: disabled until user toggles via POST /v1/crew/manager/toggle.
+        try:
+            from gateway.crew_board.manager_daemon import CrewBoardManager
+            manager = CrewBoardManager(
+                store=crew_store,
+                event_bus=event_bus,
+                model_catalog=model_catalog,
+            )
+            app.state.manager_daemon = manager
+            app.state._manager_daemon_pending = True
+            log.info("crew board manager: initialized")
+        except Exception:  # noqa: BLE001
+            log.exception("crew board manager init failed; daemon disabled")
+
         app.include_router(board_route.router)
-        log.info("crew board: wired up at /board")
+        # Mount crew board manager routes (status/toggle/prompt/activity).
+        from gateway.routes import manager as manager_route
+        app.include_router(manager_route.router)
+        log.info("crew board: wired up at /board; manager routes at /v1/crew/manager")
     except Exception:  # noqa: BLE001
         log.exception("crew board init failed; /board disabled")
     return app

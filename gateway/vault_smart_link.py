@@ -31,10 +31,10 @@ _JSON_ARRAY_RE = re.compile(r"\[[^\[\]\n]*\"[^\[\]\n]*\][^\[\]\n]*\]?", re.MULTI
 _EXISTING_LINK_RE = re.compile(r"\[\[[^\]]+\]\]")
 
 # Files that document the marker syntax itself MUST NOT be auto-linked —
-# wikilinks inside the JSON examples confuse Terry's LLM, which then copies
-# `["you ([[Terry]])"]`-style garbage into her own outputs.
+# wikilinks inside the JSON examples confuse Hive's LLM, which then copies
+# `["you ([[Hive]])"]`-style garbage into her own outputs.
 _FILENAME_DENYLIST = (
-    "terry-imagegen",
+    "hive-imagegen",
     "imagegen-",      # imagegen-vocab, imagegen-loras, etc.
 )
 

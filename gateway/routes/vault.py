@@ -70,12 +70,75 @@ async def _embed_query(ollama_url: str, model: str, text: str) -> list[float]:
     return vec
 
 
+def _estimate_tokens(text: str) -> int:
+    """Fast token estimate: chars / 4 (GPT-family rule of thumb)."""
+    return max(1, len(text) // 4)
+
+
+def _apply_token_budget(
+    hits: list["SearchHit"],
+    bodies: list[str],
+    budget: int,
+) -> list["SearchHit"]:
+    """Allocate at most `budget` tokens across `hits` (ranked by score desc).
+
+    Algorithm:
+      1. Always keep the top hit (index 0) whole — never truncate it.
+      2. Walk remaining hits in score order. For each, check if its full
+         body fits in the remaining budget. If yes, keep it whole. If no,
+         truncate its body proportionally to whatever is left, then stop.
+         Hits whose truncated share would be zero are dropped.
+
+    `bodies` is the parallel raw body list (before preview truncation) used
+    for accurate token counting. The returned hits have already had their
+    `preview` field adjusted to the truncated body where applicable.
+    """
+    if not hits or budget <= 0:
+        return hits
+
+    out: list["SearchHit"] = []
+    remaining = budget
+
+    for i, (hit, body) in enumerate(zip(hits, bodies)):
+        toks = _estimate_tokens(body)
+        if i == 0:
+            # Top hit is always kept whole regardless of budget.
+            out.append(hit)
+            remaining -= toks
+            continue
+        if remaining <= 0:
+            break
+        if toks <= remaining:
+            out.append(hit)
+            remaining -= toks
+        else:
+            # Truncate body to remaining token budget.
+            chars_allowed = remaining * 4
+            if chars_allowed < 1:
+                break
+            truncated = body[:chars_allowed].rstrip() + "..."
+            preview = truncated.replace("\n", " ")
+            out.append(hit.model_copy(update={"preview": preview}))
+            remaining = 0
+            break
+
+    return out
+
+
 @router.get("/search", response_model=list[SearchHit])
 async def vault_search(
     q: str = Query(..., min_length=1, max_length=500),
     k: int = Query(default=5, ge=1, le=50),
     expand_links: bool = Query(default=False),
     max_hops: int = Query(default=1, ge=0, le=3),
+    budget: int = Query(
+        default=0, ge=0,
+        description=(
+            "Token budget for returned bodies (chars/4 estimate). "
+            "0 = unlimited. Top hit is always kept whole; "
+            "lower-ranked hits are truncated or dropped to fit."
+        ),
+    ),
     device=Depends(require_device),
     request: Request = None,
 ) -> list[SearchHit]:
@@ -96,9 +159,11 @@ async def vault_search(
         query_embedding=vec, k=k, audience=audience, query_text=q,
     )
     hits: list[SearchHit] = []
+    bodies: list[str] = []  # parallel raw bodies for token budget accounting
     seen_paths: set[str] = set()
     for r in results:
-        preview = r.body.strip().replace("\n", " ")
+        body = r.body.strip()
+        preview = body.replace("\n", " ")
         if len(preview) > 400:
             preview = preview[:400] + "..."
         hits.append(SearchHit(
@@ -107,6 +172,7 @@ async def vault_search(
             preview=preview,
             title=_title_for(st.config.vault_path, r.path),
         ))
+        bodies.append(body)
         seen_paths.add(r.path)
 
     # Graph-walking RAG: for every seed hit, pull in the notes it [[links]] to.
@@ -120,7 +186,8 @@ async def vault_search(
         for path, body in expanded:
             if path in seen_paths:
                 continue
-            preview = body.strip().replace("\n", " ")
+            body_stripped = body.strip()
+            preview = body_stripped.replace("\n", " ")
             if len(preview) > 400:
                 preview = preview[:400] + "..."
             hits.append(SearchHit(
@@ -128,7 +195,11 @@ async def vault_search(
                 audience=["all"], score=0.0, preview=preview,
                 title=_title_for(st.config.vault_path, path),
             ))
+            bodies.append(body_stripped)
             seen_paths.add(path)
+
+    if budget > 0:
+        hits = _apply_token_budget(hits, bodies, budget)
 
     return hits
 
@@ -275,7 +346,7 @@ def delete_note(
     note_audience = list(fm.get("audience") or ["all"])
     caller_audiences = list(device.audience) if device.audience else ["all"]
     # Honour the FULL audience tuple, not just [0]. A device paired as
-    # ('terry', 'claude-code') was previously checked only as 'terry'.
+    # ('hive', 'claude-code') was previously checked only as 'hive'.
     if not any(audience_matches(a, note_audience) for a in caller_audiences):
         raise HTTPException(status_code=403, detail="audience denies delete")
     try:
@@ -372,7 +443,7 @@ def vault_backlinks(
     """Return notes that wikilink to `path`.
 
     Matches both `[[Title Words]]` (the human form) and the slug form
-    `[[slug-words]]` so backlinks survive whether Terry / the user
+    `[[slug-words]]` so backlinks survive whether Hive / the user
     typed the human title or the filename. Audience-filtered.
     """
     st = state(request)
@@ -611,7 +682,7 @@ async def learn(
     from gateway.vault_quality import evaluate as _qa_eval
 
     # Quality gate — same threshold the synthesizer's vault_learn path
-    # uses, so devices and Terry are held to the same bar.
+    # uses, so devices and Hive are held to the same bar.
     verdict = _qa_eval(title=body.title, body=body.body, category=body.category)
     if not verdict.ok:
         raise HTTPException(
@@ -623,7 +694,7 @@ async def learn(
     # Audience clamp — mirrors ActionExecutor._vault_learn so a
     # caller can't widen its own scope by passing an audience the
     # device isn't paired with. A 'claude-code' device that posts
-    # `audience=['terry']` gets that intersected to its own
+    # `audience=['hive']` gets that intersected to its own
     # audience (here: empty → falls back to device.audience).
     requested = body.audience or list(device.audience) or ["all"]
     device_audience = list(device.audience) if device.audience else ["all"]

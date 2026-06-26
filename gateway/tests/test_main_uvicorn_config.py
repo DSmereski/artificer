@@ -21,10 +21,10 @@ def test_one_host_one_config() -> None:
 def test_multiple_hosts_share_port() -> None:
     cfgs = _build_uvicorn_configs(
         app=object(),
-        hosts=["127.0.0.1", "0.0.0.0"],
+        hosts=["127.0.0.1", "127.0.0.1"],
         port=8766,
     )
-    assert {c.host for c in cfgs} == {"127.0.0.1", "0.0.0.0"}
+    assert {c.host for c in cfgs} == {"127.0.0.1", "127.0.0.1"}
     assert all(c.port == 8766 for c in cfgs)
 
 

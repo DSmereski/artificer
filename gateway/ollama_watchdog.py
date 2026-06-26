@@ -1,7 +1,7 @@
 """Mid-run Ollama GPU-residency watchdog (#473).
 
 Boot-time defense (#438/#472) catches the most common drift mode (Ollama
-tray autostart respawning without ``CUDA_VISIBLE_DEVICES`` set correctly), but
+tray autostart respawning without ``CUDA_VISIBLE_DEVICES=1,2``), but
 runtime regressions can still flip planner-qwen onto CPU after the gateway
 has been up for hours:
 
@@ -51,7 +51,7 @@ async def watchdog_loop(
     """Run residency probe forever on a slow tick.
 
     First tick fires after ``interval_s`` so it doesn't race the boot
-    probe (which already fires inside ``_prewarm_then_probe_planner_model``).
+    probe (which already fires inside ``_prewarm_then_probe_hive_qwen``).
 
     A bad verdict only triggers abort if it's *new* — repeated bad
     verdicts log at WARNING but don't re-SIGTERM (one is enough; the

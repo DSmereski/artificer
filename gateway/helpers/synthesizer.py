@@ -1,7 +1,7 @@
-"""Synthesizer helper — Terry's voice.
+"""Synthesizer helper — Hive's voice.
 
 Takes the planner's plan + every helper's result and produces:
-  - the final user-facing reply (in Terry's voice)
+  - the final user-facing reply (in Hive's voice)
   - the list of side-effect actions (vault writes, image renders, etc.)
 """
 

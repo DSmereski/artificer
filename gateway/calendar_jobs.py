@@ -42,7 +42,7 @@ _TICK_S = 30
 _RECURRENCES = {"none", "daily", "weekly", "monthly"}
 # Verbs allowed for SCHEDULED jobs. Deliberately conservative — no
 # `hive_turn` (a stolen device token shouldn't let an attacker
-# trigger an arbitrary unattended Terry turn that could exfiltrate
+# trigger an arbitrary unattended Hive turn that could exfiltrate
 # vault contents). Users who need scheduled hive turns can chain
 # vault_learn/ntfy_push instead.
 _VERBS = {"hive_turn", "ntfy_push", "vault_learn", "image_render"}

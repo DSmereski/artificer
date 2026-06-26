@@ -56,7 +56,7 @@ def store(tmp_path):
 
 def _entry(turn_id: str = "tk-1") -> TurnLogEntry:
     return TurnLogEntry(
-        turn_id=turn_id, device_id="dev1", user_id=1, bot="terry",
+        turn_id=turn_id, device_id="dev1", user_id=1, bot="hive",
         user_msg="hi", planner_summary="greet",
         delegations=[], helpers=[], final_reply="hello",
     )
@@ -103,7 +103,7 @@ def test_store_to_jsonable_includes_helpers(store):
     )
     helpers = helper_entries_from_results([helper])
     store.append(TurnLogEntry(
-        turn_id="t1", device_id="d", user_id=0, bot="terry",
+        turn_id="t1", device_id="d", user_id=0, bot="hive",
         user_msg="research X", helpers=helpers,
     ))
     out = store.tail(1)[0]

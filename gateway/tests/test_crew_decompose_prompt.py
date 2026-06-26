@@ -17,8 +17,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+import asyncio
+
 from gateway.crew_board.store import CrewBoardStore, Project
-from gateway.routes.board import _BOARD_TOKEN
+from gateway.routes.board import _BOARD_TOKEN, _auto_resolve_project
 
 
 # ---------------------------------------------------------------------------
@@ -218,3 +220,118 @@ def test_decompose_includes_files_of_interest(
     assert len(tasks) == 1
     assert "src/model.py" in tasks[0].files_of_interest
     assert "tests/test_model.py" in tasks[0].files_of_interest
+
+
+# ---------------------------------------------------------------------------
+# AUTO mode — classify a goal to an existing project, or "" for greenfield.
+# ---------------------------------------------------------------------------
+
+
+def _match_response(match: str) -> tuple[str, int, int]:
+    return json.dumps({"match": match, "reason": "test"}), 10, 10
+
+
+def test_auto_resolve_no_projects_returns_empty(tmp_path: Path) -> None:
+    """With no projects, AUTO short-circuits to greenfield ("") and never
+    calls the model."""
+    store = CrewBoardStore(tmp_path / "auto_empty.db")
+    invoker = AsyncMock(chat=AsyncMock())
+    with patch("gateway.helpers.base.OllamaInvoker", return_value=invoker):
+        slug = asyncio.run(_auto_resolve_project(store, "build a chess game"))
+    assert slug == ""
+    invoker.chat.assert_not_called()
+
+
+def test_auto_resolve_matches_existing(tmp_path: Path) -> None:
+    """A goal that continues an existing project resolves to its slug."""
+    store = CrewBoardStore(tmp_path / "auto_match.db")
+    store.upsert_project(Project(
+        slug="example-app", path=str(tmp_path / "example-app"),
+        name="example-app chess", enabled=True, push_allowed=False, test_cmd=""))
+    store.upsert_project(Project(
+        slug="poker-td", path=str(tmp_path / "poker-td"),
+        name="Poker tower defense", enabled=True, push_allowed=False, test_cmd=""))
+    with patch("gateway.helpers.base.OllamaInvoker",
+               return_value=AsyncMock(chat=AsyncMock(return_value=_match_response("example-app")))):
+        slug = asyncio.run(_auto_resolve_project(store, "add en passant to the chess game"))
+    assert slug == "example-app"
+
+
+def test_auto_resolve_new_returns_empty(tmp_path: Path) -> None:
+    """When the classifier says NEW, AUTO returns "" (greenfield)."""
+    store = CrewBoardStore(tmp_path / "auto_new.db")
+    store.upsert_project(Project(
+        slug="example-app", path=str(tmp_path / "example-app"),
+        name="example-app chess", enabled=True, push_allowed=False, test_cmd=""))
+    with patch("gateway.helpers.base.OllamaInvoker",
+               return_value=AsyncMock(chat=AsyncMock(return_value=_match_response("NEW")))):
+        slug = asyncio.run(_auto_resolve_project(store, "build a weather app for Android"))
+    assert slug == ""
+
+
+def test_auto_resolve_unknown_slug_returns_empty(tmp_path: Path) -> None:
+    """A hallucinated slug not in the catalog is rejected → greenfield."""
+    store = CrewBoardStore(tmp_path / "auto_bad.db")
+    store.upsert_project(Project(
+        slug="example-app", path=str(tmp_path / "example-app"),
+        name="example-app chess", enabled=True, push_allowed=False, test_cmd=""))
+    with patch("gateway.helpers.base.OllamaInvoker",
+               return_value=AsyncMock(chat=AsyncMock(return_value=_match_response("not-a-real-project")))):
+        slug = asyncio.run(_auto_resolve_project(store, "something"))
+    assert slug == ""
+
+
+def test_auto_resolve_classify_failure_returns_empty(tmp_path: Path) -> None:
+    """Any model failure biases to greenfield, never the wrong existing repo."""
+    store = CrewBoardStore(tmp_path / "auto_fail.db")
+    store.upsert_project(Project(
+        slug="example-app", path=str(tmp_path / "example-app"),
+        name="example-app chess", enabled=True, push_allowed=False, test_cmd=""))
+    with patch("gateway.helpers.base.OllamaInvoker",
+               return_value=AsyncMock(chat=AsyncMock(side_effect=RuntimeError("ollama down")))):
+        slug = asyncio.run(_auto_resolve_project(store, "anything"))
+    assert slug == ""
+
+
+def test_decompose_auto_routes_to_existing_project(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """POST /board/decompose with project_slug='auto' that matches an existing
+    project creates the tickets ON that project (no new scaffold)."""
+    store = _install_crew_store(client, tmp_path)  # creates 'test-proj'
+    plan = _make_plan([
+        {"title": "Add feature", "body": "do it",
+         "criteria": ["file f.py exists"], "files": ["f.py"], "depends_on": []},
+    ])
+    # First chat() call = AUTO classify → 'test-proj'; second = the plan.
+    chat = AsyncMock(side_effect=[_match_response("test-proj"), _fake_plan_response(plan)])
+    with patch("gateway.helpers.base.OllamaInvoker", return_value=AsyncMock(chat=chat)):
+        r = client.post(
+            "/board/decompose",
+            json={"goal": "extend the test project", "project_slug": "auto"},
+            headers={"x-board-token": _BOARD_TOKEN},
+        )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["project_slug"] == "test-proj"
+    assert data["scaffolded"] is False
+    assert data["created"] == 1
+    assert all(t.project_slug == "test-proj" for t in store.list_tasks())
+
+
+def test_auto_catalog_includes_task_titles(tmp_path: Path) -> None:
+    """The classifier catalog must carry recent task titles so a non-obvious
+    slug ('example-app') is identifiable by its work (chess), not just its name."""
+    from gateway.routes.board import _auto_project_catalog
+    store = CrewBoardStore(tmp_path / "cat.db")
+    store.upsert_project(Project(
+        slug="example-app", path=str(tmp_path / "example-app"), name="example-app",
+        enabled=True, push_allowed=False, test_cmd=None))
+    store.create_task(title="Implement castling and check detection",
+                      project_slug="example-app", created_by="owner")
+    store.create_task(title="Render the chess board UI",
+                      project_slug="example-app", created_by="owner")
+    catalog = _auto_project_catalog(store, store.list_projects(enabled_only=True))
+    assert "example-app" in catalog
+    assert "castling" in catalog  # task-title topic signal is present
+    assert "chess board" in catalog

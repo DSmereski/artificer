@@ -7,7 +7,7 @@ from gateway.turn_telemetry import TurnRecord, TurnTelemetry
 
 def _record(turn_id: str = "tk-1", **kw) -> TurnRecord:
     base = dict(
-        ts=1.0, turn_id=turn_id, bot="terry",
+        ts=1.0, turn_id=turn_id, bot="hive",
         user_msg_preview="hi", helpers_used=["planner"],
         total_tokens=100, total_latency_ms=500,
         blocked=False, error=None, actions=[],

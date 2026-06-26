@@ -35,6 +35,7 @@ import asyncio
 import base64
 import logging
 import time
+import uuid
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, status
@@ -352,20 +353,36 @@ async def terminal_ws(websocket: WebSocket) -> None:
         return
     device_obj = app_state.devices.verify(token)
     if device_obj is None:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="invalid token",
-        )
-        return
-    app_state.devices.touch(device_obj.id)
+        # The wallpaper dashboard runs on loopback and authenticates with the
+        # per-process BOARD session-token (the same one it uses for board
+        # mutations), NOT a device Bearer. Accept it here — the connection is
+        # already loopback-gated above, and that token is only ever handed to
+        # loopback callers. Any other unknown token is still rejected.
+        import secrets as _secrets
+        from gateway.routes.board import _BOARD_TOKEN
+        if _is_loopback(remote_host) and _secrets.compare_digest(token, _BOARD_TOKEN):
+            pass  # board-token loopback session — allowed
+        else:
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION,
+                reason="invalid token",
+            )
+            return
+    else:
+        app_state.devices.touch(device_obj.id)
 
     # ── 4. Accept WebSocket (auth passed — safe to upgrade) ───────────────────
     await websocket.accept()
     device = device_obj
+    _dev_id = device_obj.id if device_obj is not None else "loopback-board"
 
     # ── 5. Concurrency cap ────────────────────────────────────────────────────
     max_sessions = getattr(cfg, "terminal_max_sessions", 2)
-    session_id = f"{device.id}:{id(websocket)}"
+    # Unique per connection. NOT id(websocket): CPython recycles object ids after
+    # GC, so a reconnecting socket could collide with a just-closed session's id
+    # and desync _active_sessions — leaking slots until the cap wedges and new
+    # shells are refused ("terminal broke after closing a tab").
+    session_id = f"{_dev_id}:{uuid.uuid4().hex}"
 
     async with _session_lock:
         if len(_active_sessions) >= max_sessions:
@@ -378,7 +395,7 @@ async def terminal_ws(websocket: WebSocket) -> None:
 
     log.debug(
         "terminal: session started device=%s sessions_now=%d",
-        device.id,
+        _dev_id,
         len(_active_sessions),
     )
 
@@ -396,7 +413,7 @@ async def terminal_ws(websocket: WebSocket) -> None:
             _active_sessions.discard(session_id)
         log.debug(
             "terminal: session closed device=%s sessions_now=%d",
-            device.id,
+            _dev_id,
             len(_active_sessions),
         )
         try:

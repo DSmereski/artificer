@@ -28,9 +28,9 @@ def test_load_turns_filters_by_window(tmp_path: Path) -> None:
     after_ts = now + 600
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     _write_jsonl(log_dir / f"{day}.jsonl", [
-        {"ts": before_ts, "turn_id": "t_old", "bot": "terry"},
-        {"ts": inside_ts, "turn_id": "t_inside", "bot": "terry"},
-        {"ts": after_ts, "turn_id": "t_future", "bot": "terry"},
+        {"ts": before_ts, "turn_id": "t_old", "bot": "hive"},
+        {"ts": inside_ts, "turn_id": "t_inside", "bot": "hive"},
+        {"ts": after_ts, "turn_id": "t_future", "bot": "hive"},
     ])
     turns = load_turns_in_window(
         log_root=log_dir,
@@ -56,9 +56,9 @@ def test_load_turns_skips_malformed_lines(tmp_path: Path) -> None:
     p = log_dir / f"{day}.jsonl"
     now = time.time()
     p.write_text(
-        json.dumps({"ts": now - 60, "turn_id": "t1", "bot": "terry"}) + "\n"
+        json.dumps({"ts": now - 60, "turn_id": "t1", "bot": "hive"}) + "\n"
         + "not json garbage\n"
-        + json.dumps({"ts": now - 30, "turn_id": "t2", "bot": "terry"}) + "\n",
+        + json.dumps({"ts": now - 30, "turn_id": "t2", "bot": "hive"}) + "\n",
         encoding="utf-8",
     )
     turns = load_turns_in_window(
@@ -70,7 +70,7 @@ def test_load_turns_skips_malformed_lines(tmp_path: Path) -> None:
 
 
 def test_load_thread_memories_reads_per_thread_jsons(tmp_path: Path) -> None:
-    mem_dir = tmp_path / "memory" / "terry" / "42"
+    mem_dir = tmp_path / "memory" / "hive" / "42"
     mem_dir.mkdir(parents=True)
     (mem_dir / "default.memory.json").write_text(
         json.dumps({
@@ -80,7 +80,7 @@ def test_load_thread_memories_reads_per_thread_jsons(tmp_path: Path) -> None:
             "decisions": [],
         }), encoding="utf-8",
     )
-    mems = load_thread_memories(memory_root=tmp_path / "memory", bot="terry")
+    mems = load_thread_memories(memory_root=tmp_path / "memory", bot="hive")
     assert len(mems) == 1
     assert mems[0]["user_id"] == 42
     assert mems[0]["thread_id"] == "default"
@@ -88,5 +88,5 @@ def test_load_thread_memories_reads_per_thread_jsons(tmp_path: Path) -> None:
 
 
 def test_load_thread_memories_handles_missing_root(tmp_path: Path) -> None:
-    out = load_thread_memories(memory_root=tmp_path / "no", bot="terry")
+    out = load_thread_memories(memory_root=tmp_path / "no", bot="hive")
     assert out == []

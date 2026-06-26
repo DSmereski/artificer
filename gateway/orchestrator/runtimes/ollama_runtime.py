@@ -31,7 +31,7 @@ async def invoke_ollama(
 ) -> BenchInvocation:
     options: dict = {"num_predict": max_tokens}
     # When the caller pins num_gpu (e.g., 0 for CPU-only models such as
-    # gemma3-4b registered with gpu_vram_mb=0), forward it so the
+    # gemma3-ablit-4b registered with gpu_vram_mb=0), forward it so the
     # bench measures the same path the production helper will take.
     if num_gpu is not None:
         options["num_gpu"] = num_gpu

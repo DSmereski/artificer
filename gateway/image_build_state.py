@@ -1,7 +1,7 @@
 """ImageBuildState — explicit slot-filling state for in-progress image builds.
 
 Why this exists: pre-M5 the image-build state was implicit in chat
-history. With a 20-message hard cap and helper turn pollution, Terry
+history. With a 20-message hard cap and helper turn pollution, Hive
 forgot subject/aspect/LoRA choices mid-build. Now the state is:
 
   - explicit (this dataclass — every slot has a name)

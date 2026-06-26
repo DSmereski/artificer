@@ -53,7 +53,7 @@ def test_image_request_negative(text: str):
 
 def test_slugify_basic():
     assert _slugify_user("Penguin") == "penguin"
-    assert _slugify_user("Operator Account") == "operator-account"
+    assert _slugify_user("Sample User") == "sample-user"
     assert _slugify_user("user@example.com") == "user-example.com"
 
 
@@ -69,10 +69,10 @@ def test_read_people_note_finds_match(tmp_path: Path):
     people = tmp_path / "people"
     people.mkdir()
     (people / "penguin.md").write_text(
-        "---\naudience: [terry]\n---\n\n# Penguin\n\nGreen eyes.",
+        "---\naudience: [hive]\n---\n\n# Penguin\n\nGreen eyes.",
         encoding="utf-8",
     )
-    out = _read_people_note(tmp_path, "Penguin", "terry")
+    out = _read_people_note(tmp_path, "Penguin", "hive")
     assert out is not None
     rel, body = out
     assert rel == "people/penguin.md"
@@ -86,13 +86,13 @@ def test_read_people_note_audience_filtered(tmp_path: Path):
         "---\naudience: [maggy]\n---\n\n# Boss",
         encoding="utf-8",
     )
-    # terry shouldn't see a maggy-only note
-    assert _read_people_note(tmp_path, "Boss", "terry") is None
+    # hive shouldn't see a maggy-only note
+    assert _read_people_note(tmp_path, "Boss", "hive") is None
 
 
 def test_read_people_note_missing(tmp_path: Path):
     (tmp_path / "people").mkdir()
-    assert _read_people_note(tmp_path, "ghost", "terry") is None
+    assert _read_people_note(tmp_path, "ghost", "hive") is None
 
 
 # ---------------------------------------------------------------- _format_block
@@ -155,7 +155,7 @@ def test_gather_includes_user_note_even_without_embedding(tmp_path: Path):
     people = tmp_path / "people"
     people.mkdir()
     (people / "penguin.md").write_text(
-        "---\naudience: [terry]\n---\n\n# Penguin appearance\n\nGreen eyes.",
+        "---\naudience: [hive]\n---\n\n# Penguin appearance\n\nGreen eyes.",
         encoding="utf-8",
     )
     out = asyncio.run(

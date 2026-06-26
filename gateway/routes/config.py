@@ -18,7 +18,7 @@ router = APIRouter(prefix="/v1/config", tags=["config"])
 # Topics the gateway publishes to. Keep in sync with ntfy.publish() call
 # sites elsewhere — used by the Hive app to know what to subscribe.
 _NTFY_TOPICS = [
-    {"id": "ai-team-chat",     "label": "Terry replies",       "default_on": False},
+    {"id": "ai-team-chat",     "label": "Hive replies",       "default_on": False},
     {"id": "ai-team-image",    "label": "Image renders done",  "default_on": True},
     {"id": "ai-team-video",    "label": "Video renders done",  "default_on": True},
     {"id": "ai-team-loras",    "label": "LoRA imports",        "default_on": True},

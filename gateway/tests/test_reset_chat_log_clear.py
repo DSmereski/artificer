@@ -75,19 +75,19 @@ def _build_client(
 
     # Fake adapter that exposes the fake LLM.
     fake_adapter = MagicMock()
-    fake_adapter.name = "terry"
+    fake_adapter.name = "hive"
     fake_adapter._llm = fake_llm
 
     ai_team = AppState(
         config=cfg,
         devices=prev.devices,
         pairing=prev.pairing,
-        adapters={"terry": fake_adapter},
+        adapters={"hive": fake_adapter},
         vault_client=vault_client,
     )
-    # Attach the optional memory_store_terry so the reset block can reach it.
+    # Attach the optional memory_store_hive so the reset block can reach it.
     if memory_store is not None:
-        ai_team.memory_store_terry = memory_store
+        ai_team.memory_store_hive = memory_store
 
     app.state.ai_team = ai_team
 
@@ -109,7 +109,7 @@ def _build_client(
 
 
 def test_reset_calls_vault_client_chat_log_clear(tmp_path: Path) -> None:
-    """#444: POST /v1/chat/terry/reset must call vault_client.chat_log_clear
+    """#444: POST /v1/chat/hive/reset must call vault_client.chat_log_clear
     with the correct bot and user_id so that the daemon's chat_log rows are
     wiped alongside the in-process MemoryStore sidecar.
 
@@ -144,7 +144,7 @@ def test_reset_calls_vault_client_chat_log_clear(tmp_path: Path) -> None:
             )
             # Actually invoke the callback so we can verify the vault call.
             if on_chat_log_clear is not None:
-                on_chat_log_clear(user_id, "terry")
+                on_chat_log_clear(user_id, "hive")
 
     client, token_data = _build_client(
         tmp_path,
@@ -154,7 +154,7 @@ def test_reset_calls_vault_client_chat_log_clear(tmp_path: Path) -> None:
     token = token_data["token"]
 
     r = client.post(
-        "/v1/chat/terry/reset",
+        "/v1/chat/hive/reset",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
@@ -172,7 +172,7 @@ def test_reset_calls_vault_client_chat_log_clear(tmp_path: Path) -> None:
     assert clear_calls, (
         "vault_client.chat_log_clear was not called — #444 still open"
     )
-    assert clear_calls[0]["bot"] == "terry"
+    assert clear_calls[0]["bot"] == "hive"
     # user_id is derived deterministically from device.user via _stable_user_id;
     # we only assert it's an integer, not the exact value, because the device
     # username is assigned by the fake pairing fixture.
@@ -186,7 +186,7 @@ def test_reset_without_vault_client_does_not_raise(tmp_path: Path) -> None:
     token = token_data["token"]
 
     r = client.post(
-        "/v1/chat/terry/reset",
+        "/v1/chat/hive/reset",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
@@ -209,5 +209,5 @@ def test_reset_requires_auth(tmp_path: Path) -> None:
     """POST /v1/chat/{bot}/reset without a bearer token must be rejected."""
     client, _ = _build_client(tmp_path, vault_client=None)
 
-    r = client.post("/v1/chat/terry/reset")
+    r = client.post("/v1/chat/hive/reset")
     assert r.status_code == 401, r.text

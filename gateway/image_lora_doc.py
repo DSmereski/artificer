@@ -1,9 +1,9 @@
 """Generate canon/imagegen-loras.md from the imageToVideo LoRA registry.
 
-Why this exists: Terry's system prompt used to dump all 76 active LoRAs
+Why this exists: Hive's system prompt used to dump all 76 active LoRAs
 inline (~1500 chars). That's wasteful — the catalog rarely changes within
-a session and Terry only needs LoRA detail when she's actually building
-an image prompt. Better to write the catalog as a vault note Terry can
+a session and Hive only needs LoRA detail when she's actually building
+an image prompt. Better to write the catalog as a vault note Hive can
 reach for via vault search at chat-time.
 
 Idempotent: only rewrites when `lora_registry.json` is newer than the
@@ -25,8 +25,9 @@ _FRONTMATTER = """\
 ---
 type: canon
 author: claude-code
-audience: [terry, claude-code]
+audience: [hive, claude-code]
 tags: [image-gen, loras, catalog]
+source: C:\\Projects\\imageToVideo\\models\\loras\\lora_registry.json
 ---
 """
 
@@ -63,7 +64,7 @@ _CATEGORY_USAGE = {
     "enhancement": "User wants quality polish — apply with low strength alongside a primary LoRA.",
     "style":       "User asks for a specific aesthetic or art style (cyberpunk, oil painting, etc.).",
     "fantasy":     "User asks for fantasy / sci-fi / mythical scenes.",
-    "nsfw":        "Adult-content LoRAs. ONLY use when user explicitly asks; filtered by default.",
+    "nsfw":        "***REMOVED***. ONLY use when user explicitly asks; filtered by default.",
     "":            "General-purpose. Match by trigger words.",
 }
 
@@ -113,7 +114,7 @@ def render_catalog(loras: Iterable[dict]) -> str:
     lines = [_FRONTMATTER, "", "# LoRA Catalog"]
     lines.append("")
     lines.append(
-        f"All LoRAs Terry can use, grouped by pipeline. "
+        f"All LoRAs Hive can use, grouped by pipeline. "
         f"**{len(normalized)} total**, {nsfw_count} NSFW (🔞 — request explicitly only)."
     )
     lines.append("")

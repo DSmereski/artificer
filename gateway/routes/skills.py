@@ -2,7 +2,7 @@
 
 Surfaces the M3 SkillRegistry. Skills authored either by the user
 (markdown drop into vault/skills/), by Claude Code (via the symlink),
-or by Terry (after Critic approval) appear here.
+or by Hive (after Critic approval) appear here.
 """
 
 from __future__ import annotations

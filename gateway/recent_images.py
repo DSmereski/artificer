@@ -163,7 +163,7 @@ class RecentImagesStore:
             job = self._jobs.get(job_id)
             if job is None:
                 # Job not tracked (e.g. created before the store existed,
-                # or via a non-Terry path). Ignore; can't tie it to a device.
+                # or via a non-Hive path). Ignore; can't tie it to a device.
                 return
             job.state = state
             if result_ids is not None:

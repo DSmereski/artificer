@@ -259,8 +259,8 @@ class ModelCatalog:
 
     # ---------------------------------------------------------------- prompt
 
-    def render_for_terry_prompt(self) -> str:
-        """Markdown summary suitable for embedding in Terry's system prompt.
+    def render_for_hive_prompt(self) -> str:
+        """Markdown summary suitable for embedding in Hive's system prompt.
 
         Caps to ~2000 chars so it doesn't dominate the context window.
         """

@@ -84,7 +84,7 @@ class EntityContradictionDetector:
         title: str,
         prior: str,
         new: str,
-        bot: str = "terry",
+        bot: str = "hive",
         device_audience: list[str] | None = None,
     ) -> bool:
         """Return True iff a contradiction was flagged. Best-effort —
@@ -118,7 +118,7 @@ class EntityContradictionDetector:
                     f"(threshold: {self._sim_threshold})."
                 ),
                 author=bot,
-                audience=device_audience or ["terry", "claude-code"],
+                audience=device_audience or ["hive", "claude-code"],
                 tags=["contradiction", "entity"],
             )
         except Exception as e:  # noqa: BLE001

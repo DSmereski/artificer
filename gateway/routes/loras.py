@@ -113,7 +113,7 @@ async def start_import(
     if parsed is None:
         raise HTTPException(
             400,
-            "URL not recognised. Supported: civitai.com model pages, "
+            "URL not recognised. Supported: civitai.com/.red model pages, "
             "huggingface.co/.../<file>.safetensors, raw .safetensors URLs.",
         )
 
@@ -176,7 +176,7 @@ async def start_import(
                 except Exception as e:  # noqa: BLE001
                     log.warning("ntfy import-fail publish failed: %s", e)
                 return
-            # Refresh canon doc so Terry's catalog mirrors the new entry.
+            # Refresh canon doc so Hive's catalog mirrors the new entry.
             try:
                 canon_path = st.config.vault_path / "knowledge" / "imagegen-loras.md"
                 rewrote, n = image_lora_doc.regenerate_if_stale(
@@ -258,7 +258,7 @@ def list_installed(
 ) -> dict:
     """Read the on-disk lora_registry.json. Source of truth for the
     image-gen pipeline; anything here will be candidate-selected by
-    Terry's image director.
+    Hive's image director.
 
     Optional `?pipeline=` filter (case-insensitive substring on the
     entry's `pipeline` field). Used by Studio's LoRA picker to hide

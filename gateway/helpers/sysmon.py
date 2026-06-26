@@ -94,7 +94,7 @@ class SysmonHelper(BaseHelper):
             rb.output["game_gpu"] = snapshot["game_gpu"]
 
         # Build a one-line output_summary the synthesizer reads. With
-        # game_gpu in here, Terry no longer guesses which GPU a game
+        # game_gpu in here, Hive no longer guesses which GPU a game
         # is on from heat readings.
         if not rb.output.get("summary"):
             rb.output["summary"] = self._compose_summary(rb.output)

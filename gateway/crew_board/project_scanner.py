@@ -10,7 +10,9 @@ refreshes path / name / test_cmd.
 from __future__ import annotations
 
 import logging
+import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from gateway.crew_board.store import CrewBoardStore, Project
@@ -59,6 +61,31 @@ def _detect_test_cmd(repo: Path) -> str | None:
     return None
 
 
+def _last_modified(entry: Path) -> str | None:
+    """Best-effort 'when was this project last worked on', as an ISO-8601
+    UTC string. Uses the NEWER of the git HEAD commit time and the project
+    directory's own mtime, so uncommitted local edits still count. Returns
+    None only if neither can be read."""
+    ts: float | None = None
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(entry), "log", "-1", "--format=%ct"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            ts = float(out.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        ts = None
+    try:
+        dir_mtime = entry.stat().st_mtime
+        ts = dir_mtime if ts is None else max(ts, dir_mtime)
+    except OSError:
+        pass
+    if ts is None:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
+
 def _norm_path(p: str) -> str:
     """Normalise a path for identity comparison: forward slashes, lower-case,
     no trailing slash. So 'C:\\Projects\\Foo' and 'c:/projects/foo/' match."""
@@ -100,6 +127,7 @@ def scan(
             if canon is not None:
                 canon.path = str(entry).replace("\\", "/")
                 canon.test_cmd = _detect_test_cmd(entry)
+                canon.modified_at = _last_modified(entry)
                 store.upsert_project(canon)
                 updated += 1
             seen.append(owner)
@@ -111,6 +139,7 @@ def scan(
             path=str(entry).replace("\\", "/"),
             name=entry.name,
             test_cmd=_detect_test_cmd(entry),
+            modified_at=_last_modified(entry),
         )
         if existing is None:
             store.upsert_project(p)

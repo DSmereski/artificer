@@ -37,7 +37,7 @@ def turn_log(
     per-helper role/model/latency/tokens/raw preview/error; synthesis
     reply/raw/error; action receipts; final reply.
 
-    Use to debug "why did Terry say X" without grovelling through
+    Use to debug "why did Hive say X" without grovelling through
     journal logs.
     """
     st = state(request)

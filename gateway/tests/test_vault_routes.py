@@ -222,15 +222,15 @@ def test_vault_note_delete_rejects_non_md(
 
 def test_audience_matches_all_caller_sees_everything() -> None:
     """The 'all' caller wildcard regression we hit in the app's vault tab —
-    devices paired with audience=['all'] couldn't see Terry-saved notes
-    because audience_matches('all', ['terry', 'claude-code']) returned False."""
+    devices paired with audience=['all'] couldn't see Hive-saved notes
+    because audience_matches('all', ['hive', 'claude-code']) returned False."""
     from vault_writer.util import audience_matches
-    assert audience_matches("all", ["terry", "claude-code"]) is True
-    assert audience_matches("all", ["terry"]) is True
+    assert audience_matches("all", ["hive", "claude-code"]) is True
+    assert audience_matches("all", ["hive"]) is True
     assert audience_matches("all", ["all"]) is True
     # Other agents still gated normally.
-    assert audience_matches("terry", ["claude-code"]) is False
-    assert audience_matches("terry", ["terry"]) is True
+    assert audience_matches("hive", ["claude-code"]) is False
+    assert audience_matches("hive", ["hive"]) is True
 
 
 # ---------------------------------------------------------------- title field

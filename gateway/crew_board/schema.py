@@ -176,6 +176,11 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         # its own git worktree (.crew-worktrees/<slug>) and allows more
         # than one concurrent task for the assignee, capped by lane count.
         ("crew_projects", "parallel", "INTEGER", "0"),
+        # Real "last worked on" timestamp (ISO-8601 UTC), computed by the
+        # scanner as max(git HEAD commit time, dir mtime). Distinct from
+        # updated_at, which only marks the last DB upsert (≈ last scan) and
+        # is therefore useless for sorting projects by recency.
+        ("crew_projects", "modified_at", "TEXT", "NULL"),
         # Agent-turn telemetry, accumulated by the hive loop. Lets the
         # stats endpoint compute the parse-fail rate from a cheap SUM
         # instead of scanning transcript files on every poll.

@@ -203,7 +203,7 @@ def recent_images(
     """Replay this device's recent image jobs (for app reconnect after sleep).
 
     `since` is a unix timestamp; jobs created at/after that point are returned.
-    Pass `bot=terry` to limit to one bot. State is `running`, `done`, or `error`;
+    Pass `bot=hive` to limit to one bot. State is `running`, `done`, or `error`;
     when `done`, `result_ids[0]` is the media id to fetch via /v1/media/{id}.
     """
     st = state(request)
@@ -254,7 +254,7 @@ def images_catalog(
     device=Depends(require_device),
     request: Request = None,
 ) -> dict:
-    """Return the current LoRA / aspect / preset catalog Terry sees."""
+    """Return the current LoRA / aspect / preset catalog Hive sees."""
     from gateway.image_catalog import ImageCatalog, catalog_as_json
     st = state(request)
     cat = st.image_catalog or ImageCatalog()

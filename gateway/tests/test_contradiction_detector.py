@@ -64,7 +64,7 @@ async def test_skips_when_no_negation_cue():
         slug="kraken", title="Kraken",
         prior="A capital ship from Star Citizen.",
         new="A capital ship from Star Citizen with a hangar bay.",
-        bot="terry",
+        bot="hive",
     )
     assert flagged is False
     assert fake.calls == []
@@ -79,7 +79,7 @@ async def test_skips_when_similarity_above_threshold():
         slug="penguin", title="Penguin",
         prior="Penguin's favorite color is red.",
         new="Actually Penguin's favorite color is still red.",
-        bot="terry",
+        bot="hive",
     )
     assert flagged is False
     assert fake.calls == []
@@ -94,8 +94,8 @@ async def test_flags_when_low_similarity_and_negation():
         slug="penguin", title="Penguin",
         prior="Penguin's favorite color is red.",
         new="Actually Penguin's favorite color is teal, not red.",
-        bot="terry",
-        device_audience=["terry"],
+        bot="hive",
+        device_audience=["hive"],
     )
     assert flagged is True
     assert len(fake.calls) == 1

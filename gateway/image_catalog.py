@@ -1,8 +1,8 @@
-"""Image-gen catalog for Terry.
+"""Image-gen catalog for Hive.
 
 Surfaces what the imageToVideo app already knows about LoRAs, aspect-ratio
 shortcuts, and named presets, so:
-  - Terry's system prompt can list what's available (she picks when asked)
+  - Hive's system prompt can list what's available (she picks when asked)
   - The chat route can auto-pick LoRAs from a bare prompt (no explicit list)
   - The app can expose pickers (via GET /v1/images/catalog)
 
@@ -355,7 +355,7 @@ def compact_catalog_block(
 ) -> str:
     """Format the catalog as a short system-prompt-friendly block.
 
-    Compact by design — Terry doesn't need the full registry dump. If the
+    Compact by design — Hive doesn't need the full registry dump. If the
     catalog is bigger than `max_chars`, we drop the trigger-word strings
     first (they're often the longest), then start trimming LoRAs.
     """
@@ -425,12 +425,12 @@ def compact_catalog_block(
 
 
 def pointer_catalog_block(catalog: ImageCatalog) -> str:
-    """Compact pointer Terry sees in her system prompt.
+    """Compact pointer Hive sees in her system prompt.
 
-    Replaces the full LoRA dump (saves ~1500 chars). Tells Terry that
+    Replaces the full LoRA dump (saves ~1500 chars). Tells Hive that
     detailed LoRA info lives in the vault and how to reach it. The chat
     route also runs a proactive vault search on image-request turns, so
-    Terry usually doesn't need to look up the catalog manually.
+    Hive usually doesn't need to look up the catalog manually.
     """
     if not catalog.loaded and not catalog.loras and not catalog.presets:
         return ""

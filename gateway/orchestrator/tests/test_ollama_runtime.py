@@ -79,7 +79,7 @@ async def test_invoke_ollama_passes_num_gpu_when_provided():
 
         await invoke_ollama(
             host_url="http://localhost:11434",
-            model="gemma3-4b",
+            model="gemma3-ablit-4b",
             prompt="x",
             max_tokens=10,
             num_gpu=0,

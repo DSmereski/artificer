@@ -68,7 +68,7 @@ _SKILL_BODY = dedent("""\
     ---
     name: post-test
     description: A skill authored via POST.
-    audience: [terry]
+    audience: [hive]
     ---
 
     # Post test

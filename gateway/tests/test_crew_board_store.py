@@ -36,14 +36,14 @@ def test_schema_apply_is_idempotent(tmp_path):
 
 def test_upsert_and_list_projects(store):
     p = store.upsert_project(Project(
-        slug="example-project", path="./example-project",
-        name="ExampleProject",
+        slug="example-app", path="C:/Projects/example-app",
+        name="example-app",
     ))
-    assert p.slug == "example-project"
+    assert p.slug == "example-app"
     assert p.enabled is False
     listed = store.list_projects()
     assert len(listed) == 1
-    assert listed[0].name == "ExampleProject"
+    assert listed[0].name == "example-app"
 
 
 def test_set_project_enabled(store):
@@ -378,3 +378,61 @@ def test_parse_fail_totals(store):
     fails, turns = store.parse_fail_totals()
     assert fails == 1 and turns == 2
     assert store.get_task(t.slug).agent_turns == 2
+
+
+# ---------------------------------------------------------- #198 last summary
+
+
+def test_set_task_summary_roundtrip(store):
+    store.upsert_project(Project(slug="fg", path="x", name="fg"))
+    t = store.create_task(title="x", project_slug="fg")
+    # no summary by default
+    assert store.get_task(t.slug).last_summary is None
+
+    store.set_task_summary(
+        t.slug, "  Added auth; tests green; next: rate-limit.  ",
+        by="qwen2.5-coder:7b",
+    )
+    got = store.get_task(t.slug)
+    assert got.last_summary == "Added auth; tests green; next: rate-limit."
+    assert got.last_summary_by == "qwen2.5-coder:7b"
+    assert got.last_summary_at                   # timestamp stamped
+
+    # overwrite reflects the most recent worker (last AI to touch it)
+    store.set_task_summary(t.slug, "Escalated; claude fixed import.", by="claude-code")
+    got2 = store.get_task(t.slug)
+    assert got2.last_summary == "Escalated; claude fixed import."
+    assert got2.last_summary_by == "claude-code"
+
+
+def test_set_task_summary_empty_is_noop(store):
+    store.upsert_project(Project(slug="fg", path="x", name="fg"))
+    t = store.create_task(title="x", project_slug="fg")
+    store.set_task_summary(t.slug, "real note", by="hive")
+    store.set_task_summary(t.slug, "   ", by="hive")   # blank — must not clobber
+    assert store.get_task(t.slug).last_summary == "real note"
+
+
+# ---------------------------------------------------------- CP1 thoughts/steer
+
+
+def test_append_thought_buffer_caps(store):
+    store.upsert_project(Project(slug="fg", path="x", name="fg"))
+    t = store.create_task(title="x", project_slug="fg")
+    for i in range(15):
+        store.append_thought(t.slug, i, f"thinking {i}", f"turn {i} write_file")
+    th = store.get_task(t.slug).live_thoughts
+    assert len(th) == 12                       # capped to last 12
+    assert th[-1]["t"] == 14 and "thinking 14" in th[-1]["th"]
+    assert th[0]["t"] == 3                      # oldest 3 dropped
+
+
+def test_steer_set_and_pop_once(store):
+    store.upsert_project(Project(slug="fg", path="x", name="fg"))
+    t = store.create_task(title="x", project_slug="fg")
+    assert store.pop_steer(t.slug) is None      # nothing queued
+    store.set_steer(t.slug, "  use the existing util, do not rewrite it  ")
+    assert store.get_task(t.slug).steer_message == "use the existing util, do not rewrite it"
+    assert store.pop_steer(t.slug) == "use the existing util, do not rewrite it"
+    assert store.pop_steer(t.slug) is None      # consumed — one-shot
+    assert store.get_task(t.slug).steer_message is None

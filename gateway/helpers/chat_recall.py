@@ -145,7 +145,7 @@ class ChatRecallHelper(TypedHelper):
     def _extract_bot(inputs: ChatRecallInputs | None) -> str:
         if inputs is not None and isinstance(inputs.bot, str) and inputs.bot.strip():
             return inputs.bot.strip()
-        return "terry"
+        return "hive"
 
     @staticmethod
     def _extract_user_id(inputs: ChatRecallInputs | None) -> int | None:

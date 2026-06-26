@@ -3,7 +3,7 @@
 A configured ``test_cmd`` that cannot spawn (Windows ``WinError 2`` on a
 ``.bat`` shim) or a missing project path is a broken *environment*, not a
 failing *agent*. Retrying it just burns attempts and tokens: T-0301
-('Publish all Android apps to the example app store') wasted all 5
+('Publish all Android apps to the Sample Android store') wasted all 5
 attempts and 144k claude tokens because ``flutter test`` could not resolve
 its shim under the gateway's minimal PATH, so every attempt hard-failed the
 verify gate identically and the work was rolled back each time.

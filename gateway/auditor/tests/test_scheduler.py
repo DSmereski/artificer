@@ -22,7 +22,7 @@ async def test_tick_runs_audit_when_new_hour(tmp_path: Path) -> None:
     sch = AuditorScheduler(
         state_dir=tmp_path,
         vault=_FakeVault(),
-        bots=["terry"],
+        bots=["hive"],
         run_fn=fake_run,
     )
     # Force last_run_hour earlier than current — should trigger.
@@ -49,7 +49,7 @@ async def test_tick_no_op_in_same_hour(tmp_path: Path) -> None:
     sch = AuditorScheduler(
         state_dir=tmp_path,
         vault=_FakeVault(),
-        bots=["terry"],
+        bots=["hive"],
         run_fn=fake_run,
     )
     await sch.tick(now_ts=1714564800.0)
@@ -62,7 +62,7 @@ async def test_start_stop_cleanly(tmp_path: Path) -> None:
     sch = AuditorScheduler(
         state_dir=tmp_path,
         vault=_FakeVault(),
-        bots=["terry"],
+        bots=["hive"],
         run_fn=AsyncNoop(),
         tick_interval_s=0.05,
     )

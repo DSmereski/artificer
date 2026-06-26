@@ -58,9 +58,9 @@ class _FakeLLM:
 class _AppState:
     def __init__(self, *, llm, summarizer, memory_store) -> None:
         self.background_tasks = set()
-        self.adapters = {"terry": type("A", (), {"_llm": llm})()}
+        self.adapters = {"hive": type("A", (), {"_llm": llm})()}
         self.helpers = {"summarizer": summarizer}
-        self.memory_store_terry = memory_store
+        self.memory_store_hive = memory_store
 
 
 @pytest.mark.asyncio
@@ -76,7 +76,7 @@ async def test_summarizer_sees_full_window(tmp_path):
     ]
     llm = _FakeLLM(messages=twenty)
     summarizer = _RecordingSummarizer()
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
 
     # Drive turn count to the refresh threshold (5).
     for _ in range(5):
@@ -103,7 +103,7 @@ async def test_falls_back_to_pair_when_llm_missing(tmp_path):
     from gateway.conversation_memory import MemoryStore
 
     summarizer = _RecordingSummarizer()
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     for _ in range(5):
         store.increment_turn(9)
 
@@ -113,7 +113,7 @@ async def test_falls_back_to_pair_when_llm_missing(tmp_path):
         helpers = {"summarizer": summarizer}
 
     state = _NoAdapters()
-    state.memory_store_terry = store
+    state.memory_store_hive = store
     schedule_summarizer_refresh(
         state, _FakeTurn(reply="hi back"), user_id=9, text="hi",
     )
@@ -134,7 +134,7 @@ async def test_no_refresh_below_threshold(tmp_path):
     from gateway.conversation_memory import MemoryStore
 
     summarizer = _RecordingSummarizer()
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.increment_turn(1)   # only 1 turn — below the 5-turn threshold
     state = _AppState(llm=_FakeLLM([]), summarizer=summarizer,
                       memory_store=store)

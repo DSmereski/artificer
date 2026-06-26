@@ -2,8 +2,8 @@
 
 Defense layer 2 against the env-var-drift regression (#437): the
 Ollama tray autostart re-spawns `ollama.exe serve` without
-``CUDA_VISIBLE_DEVICES`` set correctly and silently falls back to CPU
-when the primary GPU doesn't have headroom. Symptoms look identical to
+``CUDA_VISIBLE_DEVICES=1,2`` and silently falls back to CPU when GPU0
+(the gaming 4080) doesn't have headroom. Symptoms look identical to
 VRAM contention but the fix is a relaunch via
 ``scripts/start-ollama-tuned.cmd``.
 
@@ -178,7 +178,7 @@ def _verdict_from_entry(entry: dict, model_prefix: str) -> ProbeResult:
             gpu_pct=0.0,
             message=(
                 f"{name} is 100% CPU — Ollama probably started without "
-                f"CUDA_VISIBLE_DEVICES not set correctly (see #437)"
+                f"CUDA_VISIBLE_DEVICES=1,2 (see #437)"
             ),
             model_name=name,
         )

@@ -6,7 +6,7 @@ from gateway.auditor.findings import Severity
 from gateway.auditor.scanners.repeat_question import RepeatQuestionScanner
 
 
-def _turn(turn_id: str, user_msg: str, bot: str = "terry") -> dict:
+def _turn(turn_id: str, user_msg: str, bot: str = "hive") -> dict:
     return {
         "ts": 0,
         "turn_id": turn_id,

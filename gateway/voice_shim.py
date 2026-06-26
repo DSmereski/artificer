@@ -81,7 +81,7 @@ class VoicePipeline:
         """STT -> LLM -> TTS. ``llm_reply`` is a callable (user_id, text) -> str.
 
         Split out so the gateway can wire any bot adapter's reply function
-        (Maggy/Terry/Scout) without the pipeline knowing about adapters.
+        (Maggy/Hive/Scout) without the pipeline knowing about adapters.
         """
         transcript = self.transcribe(wav_bytes).strip()
         if not transcript:

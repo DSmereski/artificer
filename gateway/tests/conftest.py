@@ -37,7 +37,7 @@ class _FakeAdapter:
     async def reply(
         self, user_id: int, text: str, *, extra_system: str = "",
     ) -> str:
-        # The Terry special-path in routes/chat.py calls reply() for
+        # The Hive special-path in routes/chat.py calls reply() for
         # marker scanning. The fake just returns its canned string.
         del user_id, text, extra_system
         return self._reply
@@ -111,16 +111,16 @@ def client(tmp_config: Config) -> TestClient:
     # security test for rate-limiting still works — it tightens the
     # bucket explicitly.
     prev.rate_limiter.register("pair_attempts", per_minute=200, burst=30)
-    fake_terry = _FakeAdapter("terry", reply="Terry says hello")
+    fake_hive = _FakeAdapter("hive", reply="Hive says hello")
     app.state.ai_team = AppState(
         config=tmp_config,
         devices=prev.devices,
         pairing=prev.pairing,
         adapters={
             # M1: Maggy and Scout are decommissioned. Their /v1/chat/<bot>
-            # URLs soft-redirect to Terry; tests for that path live in
+            # URLs soft-redirect to Hive; tests for that path live in
             # test_legacy_redirect.py.
-            "terry": fake_terry,
+            "hive": fake_hive,
         },
         scout_history=prev.scout_history,
         image_shim=prev.image_shim,
@@ -128,7 +128,7 @@ def client(tmp_config: Config) -> TestClient:
         ntfy=prev.ntfy,
         # Fake coordinator so the chat WS happy-path tests don't need
         # the full planner/synth helper graph (or Ollama).
-        hive_coordinator=_FakeHiveCoordinator(fake_terry),
+        hive_coordinator=_FakeHiveCoordinator(fake_hive),
         node_registry=prev.node_registry,
         node_invites=prev.node_invites,
         dispatcher=prev.dispatcher,

@@ -51,7 +51,7 @@ class AppState:
     skill_registry: Any = None         # gateway.skill_registry.SkillRegistry
     turn_telemetry: Any = None         # gateway.turn_telemetry.TurnTelemetry
     image_build_store: Any = None      # gateway.image_build_state.ImageBuildStore
-    memory_store_terry: Any = None     # gateway.conversation_memory.MemoryStore
+    memory_store_hive: Any = None     # gateway.conversation_memory.MemoryStore
     turn_log_store: Any = None         # gateway.turn_log.TurnLogStore
     calendar_store: Any = None         # gateway.calendar_jobs.JobStore
     asset_import_store: Any = None     # gateway.asset_importer.AssetImportStore
@@ -69,7 +69,7 @@ class AppState:
     ollama_probe_result: Any = None    # gateway.ollama_probe.ProbeResult — set by lifespan after prewarm (#438)
     # Pending [CONFIRM_IMAGE] payloads keyed by device_id. The next user
     # message either confirms ("yes/go"), cancels ("no/cancel"), or implicitly
-    # drops the pending (anything else — clears so Terry can re-propose).
+    # drops the pending (anything else — clears so Hive can re-propose).
     pending_image_confirms: dict[str, dict] = field(default_factory=dict)
     # Pending img2img reference media keyed by device_id. Cleared the moment
     # an image generation actually fires.

@@ -40,6 +40,10 @@ class Project:
     test_cmd: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    # Real "last worked on" timestamp (ISO-8601 UTC) = max(git HEAD commit
+    # time, dir mtime), set by the scanner. Use this for recency sorting,
+    # NOT updated_at (which is just the last DB upsert / scan time).
+    modified_at: str | None = None
     # Opt-in: run each task in its own git worktree and allow >1
     # concurrent task for the assignee (capped by lane count). Default
     # off — the bench-proven model needs both GPUs so single-lane stays
@@ -175,6 +179,9 @@ class CrewBoardStore:
             test_cmd=row["test_cmd"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            modified_at=(
+                row["modified_at"] if "modified_at" in row.keys() else None
+            ),
             parallel=bool(
                 row["parallel"] if "parallel" in row.keys() else 0
             ),
@@ -319,23 +326,27 @@ class CrewBoardStore:
                     """
                     UPDATE crew_projects
                     SET path = ?, name = ?, test_cmd = ?, parallel = ?,
+                        modified_at = COALESCE(?, modified_at),
                         updated_at = datetime('now')
                     WHERE slug = ?
                     """,
-                    (p.path, p.name, p.test_cmd, int(p.parallel), p.slug),
+                    (
+                        p.path, p.name, p.test_cmd, int(p.parallel),
+                        p.modified_at, p.slug,
+                    ),
                 )
             else:
                 self._conn.execute(
                     """
                     INSERT INTO crew_projects
                         (slug, path, name, enabled, push_allowed, test_cmd,
-                         parallel)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                         parallel, modified_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         p.slug, p.path, p.name,
                         int(p.enabled), int(p.push_allowed), p.test_cmd,
-                        int(p.parallel),
+                        int(p.parallel), p.modified_at,
                     ),
                 )
             self._conn.commit()

@@ -11,7 +11,7 @@ _GOOD_BODY = (
     "---\n"
     "name: smoke\n"
     "description: a test skill, with enough body chars.\n"
-    "audience: [terry]\n"
+    "audience: [hive]\n"
     "---\n\n"
     "# Smoke\n\n"
     "1. First step.\n"

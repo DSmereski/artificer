@@ -1,7 +1,7 @@
 """Test 3 — pending-confirm state machine.
 
 AppState.pending_image_confirms[device_id] holds a resolved image kwargs
-dict after Terry emits [CONFIRM_IMAGE].  The next user message dispatches
+dict after Hive emits [CONFIRM_IMAGE].  The next user message dispatches
 one of three branches:
 
   "yes" / "go"     -> image generates, pending cleared
@@ -41,11 +41,11 @@ def test_pending_confirm_yes_triggers_image_pending(
     paired_token: tuple[str, str],
 ) -> None:
     """Confirming with 'yes' starts a render — we get image_pending or
-    an error from the missing shim, but NOT a Terry text reply."""
+    an error from the missing shim, but NOT a Hive text reply."""
     device_id, token = paired_token
     _inject_pending(client, device_id, _fake_kwargs())
 
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "yes", "user_id": 1}))
         msgs: list[dict] = []
         while True:
@@ -58,7 +58,7 @@ def test_pending_confirm_yes_triggers_image_pending(
                 break
 
     types = {m["type"] for m in msgs}
-    # Must NOT fall through to a Terry text reply.
+    # Must NOT fall through to a Hive text reply.
     assert "assistant" not in types, f"unexpected assistant message: {msgs}"
     # No pending left after any branch.
     app_state = client.app.state.ai_team
@@ -73,7 +73,7 @@ def test_pending_confirm_no_cancels_and_clears(
     device_id, token = paired_token
     _inject_pending(client, device_id, _fake_kwargs())
 
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "no", "user_id": 1}))
         msgs: list[dict] = []
         while True:
@@ -101,7 +101,7 @@ def test_pending_confirm_other_text_clears_and_routes_to_hive(
     device_id, token = paired_token
     _inject_pending(client, device_id, _fake_kwargs())
 
-    with client.websocket_connect(f"/v1/chat/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/chat/hive?token={token}") as ws:
         ws.send_text(json.dumps({"type": "user", "text": "actually, change the colour", "user_id": 1}))
         msgs: list[dict] = []
         while True:
@@ -110,7 +110,7 @@ def test_pending_confirm_other_text_clears_and_routes_to_hive(
             if m["type"] == "done":
                 break
 
-    # The hive path returns Terry's fake reply — it's a real new turn.
+    # The hive path returns Hive's fake reply — it's a real new turn.
     types = [m["type"] for m in msgs]
     assert "assistant" in types, f"expected hive turn reply: {msgs}"
 

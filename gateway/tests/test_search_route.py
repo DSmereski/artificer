@@ -41,7 +41,7 @@ def test_search_filters_by_kinds(client: TestClient, paired_token):
     class _Job:
         job_id: str = "j1"
         device_id: str = "d"
-        bot: str = "terry"
+        bot: str = "hive"
         prompt: str = "kraken on a beach"
         created_at: float = 1000.0
         state: str = "done"
@@ -129,7 +129,7 @@ def test_search_rrf_score_ordering(client: TestClient, paired_token):
     class _Job:
         job_id: str
         device_id: str = "d"
-        bot: str = "terry"
+        bot: str = "hive"
         prompt: str = "kraken"
         created_at: float = 0.0
         state: str = "done"

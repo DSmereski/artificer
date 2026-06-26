@@ -56,7 +56,7 @@ async def test_librarian_delegation_reaches_synthesizer(catalog):
     directly as final_reply. Catches coordinator-bypass for librarian."""
     ctx = TurnContext(
         user_msg="what do we know about the Drake Cutlass",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "librarian", "synthesizer"],
     )
     synth_helper = _FakeHelper(
@@ -104,7 +104,7 @@ async def test_skill_runner_delegation_reaches_synthesizer(catalog):
     """skill_runner result must flow through the synthesizer, not bypass it."""
     ctx = TurnContext(
         user_msg="run the daily summary skill",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "skill_runner", "synthesizer"],
     )
     synth_helper = _FakeHelper(
@@ -149,7 +149,7 @@ async def test_direct_reply_is_tagged_compose_skipped_by_design(catalog):
     It must be tagged 'compose-skipped-by-design', not 'coordinator-bypass'."""
     ctx = TurnContext(
         user_msg="hi",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "synthesizer"],
     )
     helpers = {
@@ -177,7 +177,7 @@ async def test_planner_failure_tagged_skipped_by_design(catalog):
     not 'coordinator-bypass'. There's nothing to synthesize from."""
     ctx = TurnContext(
         user_msg="do something",
-        user_id=1, device_id="dev1", bot="terry",
+        user_id=1, device_id="dev1", bot="hive",
         available_helpers=["planner", "synthesizer"],
     )
     helpers = {
@@ -212,7 +212,7 @@ async def test_record_turn_log_picks_up_compose_mode(tmp_path, catalog):
 
     ctx = TurnContext(
         user_msg="what is star citizen",
-        user_id=2, device_id="dev2", bot="terry",
+        user_id=2, device_id="dev2", bot="hive",
         available_helpers=["planner", "librarian", "synthesizer"],
     )
     _synth = HelperResult(

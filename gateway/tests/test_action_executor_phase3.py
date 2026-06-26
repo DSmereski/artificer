@@ -25,13 +25,13 @@ def _run(coro):
 
 def test_core_memory_replace_writes_slot(tmp_path: Path) -> None:
     from gateway.conversation_memory import MemoryStore
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     ex = ActionExecutor(memory_store=store)
     receipts = _run(ex.execute_all(
         [{"verb": "core_memory_replace",
           "payload": {"slot": "preferences",
                       "content": "user prefers terse replies"}}],
-        user_id=42, thread_id="default", bot="terry",
+        user_id=42, thread_id="default", bot="hive",
     ))
     assert len(receipts) == 1
     assert receipts[0].ok is True
@@ -70,7 +70,7 @@ def test_core_memory_replace_no_store_configured() -> None:
 
 def test_core_memory_append_extends_slot(tmp_path: Path) -> None:
     from gateway.conversation_memory import MemoryStore
-    store = MemoryStore(tmp_path, bot="terry")
+    store = MemoryStore(tmp_path, bot="hive")
     store.set_core_slot(7, name="active_projects",
                         content="phase-1-rollout")
     ex = ActionExecutor(memory_store=store)
@@ -78,7 +78,7 @@ def test_core_memory_append_extends_slot(tmp_path: Path) -> None:
         [{"verb": "core_memory_append",
           "payload": {"slot": "active_projects",
                       "content": "phase-3-rollout"}}],
-        user_id=7, thread_id="default", bot="terry",
+        user_id=7, thread_id="default", bot="hive",
     ))
     mem = store.get(7, "default")
     txt = mem.core_slots["active_projects"].content
@@ -123,7 +123,7 @@ def test_entity_page_update_passes_relationships_to_client() -> None:
               "compiled_truth": "Drake heavy carrier.",
               "relationships": edges,
           }}],
-        user_id=42, bot="terry",
+        user_id=42, bot="hive",
     ))
     assert receipts[0].ok is True
     fake_client.entity_page_update.assert_awaited_once()
@@ -144,7 +144,7 @@ def test_entity_page_update_rejects_bad_confidence_label() -> None:
                    "confidence": "MAYBE"}
               ],
           }}],
-        user_id=42, bot="terry",
+        user_id=42, bot="hive",
     ))
     assert receipts[0].ok is False
     assert "confidence" in receipts[0].detail.lower()
@@ -165,7 +165,7 @@ def test_entity_page_update_omits_relationships_when_absent() -> None:
           "payload": {"id": "kraken", "kind": "thing",
                       "title": "Kraken",
                       "compiled_truth": "x"}}],
-        user_id=42, bot="terry",
+        user_id=42, bot="hive",
     ))
     kwargs = fake_client.entity_page_update.await_args.kwargs
     assert kwargs.get("relationships") is None

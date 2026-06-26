@@ -95,7 +95,7 @@ async def test_maybe_touch_creates_and_touches_on_real_turn():
     state = _AppState(vc=vc)
     _maybe_touch_and_title_thread(
         state, turn=_Turn(reply="hi back"),
-        bot="terry", user_id=42, text="hello world",
+        bot="hive", user_id=42, text="hello world",
         thread_id="thread-abc",
     )
     # Two background tasks tracked.
@@ -103,7 +103,7 @@ async def test_maybe_touch_creates_and_touches_on_real_turn():
     # Drain.
     await asyncio.gather(*state.background_tasks)
     assert vc.creates == [{
-        "thread_id": "thread-abc", "bot": "terry",
+        "thread_id": "thread-abc", "bot": "hive",
         "user_id": 42, "title": "hello world",
     }]
     assert vc.touches == ["thread-abc"]
@@ -115,7 +115,7 @@ async def test_maybe_touch_skips_blocked_turn():
     state = _AppState(vc=vc)
     _maybe_touch_and_title_thread(
         state, turn=_Turn(blocked=True),
-        bot="terry", user_id=1, text="x", thread_id="t",
+        bot="hive", user_id=1, text="x", thread_id="t",
     )
     assert state.background_tasks == set()
     assert vc.creates == []
@@ -127,7 +127,7 @@ async def test_maybe_touch_skips_when_no_vault_client():
     state = _AppState(vc=None)
     _maybe_touch_and_title_thread(
         state, turn=_Turn(),
-        bot="terry", user_id=1, text="hi", thread_id="t",
+        bot="hive", user_id=1, text="hi", thread_id="t",
     )
     assert state.background_tasks == set()
 
@@ -141,7 +141,7 @@ async def test_maybe_touch_title_is_first_50_chars_of_first_line():
                  "and continues\nsecond line should be ignored")
     _maybe_touch_and_title_thread(
         state, turn=_Turn(),
-        bot="terry", user_id=1, text=long_text, thread_id="t",
+        bot="hive", user_id=1, text=long_text, thread_id="t",
     )
     await asyncio.gather(*state.background_tasks)
     assert len(vc.creates) == 1
@@ -157,7 +157,7 @@ async def test_maybe_touch_title_falls_back_for_empty_text():
     state = _AppState(vc=vc)
     _maybe_touch_and_title_thread(
         state, turn=_Turn(),
-        bot="terry", user_id=1, text="", thread_id="t",
+        bot="hive", user_id=1, text="", thread_id="t",
     )
     await asyncio.gather(*state.background_tasks)
     assert vc.creates[0]["title"] == "(untitled)"

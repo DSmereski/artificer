@@ -3,8 +3,8 @@
 Skills are markdown files in `Ai-Team-Vault/skills/`. Each has YAML
 frontmatter (Claude-Code-compatible) plus a body of numbered steps.
 
-Both Claude Code and Terry's hive consume the SAME files: Claude via
-the symlinked path under `~/.claude/skills/team/`, Terry via this
+Both Claude Code and Hive's hive consume the SAME files: Claude via
+the symlinked path under `~/.claude/skills/team/`, Hive via this
 registry.
 
 Reload semantics:
@@ -130,7 +130,7 @@ class SkillRegistry:
         hits.sort(key=lambda p: -p[0])
         return [s for _, s in hits]
 
-    def digest_for_planner(self, audience: str = "terry") -> str:
+    def digest_for_planner(self, audience: str = "hive") -> str:
         """Markdown bullet list (≤2000 chars) used in Planner system
         prompt so the planner sees the catalogue."""
         skills = self.list(audience)

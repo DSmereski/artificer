@@ -14,7 +14,7 @@ _VALID_SKILL = dedent("""\
     ---
     name: research-and-cite
     description: Research a topic with corroboration.
-    audience: [terry, claude-code]
+    audience: [hive, claude-code]
     triggers:
       - "research X"
       - "look up X and remember"
@@ -54,7 +54,7 @@ def test_load_single_skill(skills_dir):
     s = reg.get("research-and-cite")
     assert s is not None
     assert s.description.startswith("Research a topic")
-    assert s.audience == ("terry", "claude-code")
+    assert s.audience == ("hive", "claude-code")
     assert "research X" in s.triggers
     assert s.read_only is True
     assert "Step one" in s.body
@@ -76,18 +76,18 @@ def test_invalid_frontmatter_skipped(skills_dir):
 
 def test_audience_filter(skills_dir):
     private = _VALID_SKILL.replace(
-        "audience: [terry, claude-code]",
-        "audience: [terry]",
-    ).replace("name: research-and-cite", "name: terry-only")
-    (skills_dir / "terry-only.md").write_text(private, encoding="utf-8")
+        "audience: [hive, claude-code]",
+        "audience: [hive]",
+    ).replace("name: research-and-cite", "name: hive-only")
+    (skills_dir / "hive-only.md").write_text(private, encoding="utf-8")
     (skills_dir / "shared.md").write_text(_VALID_SKILL, encoding="utf-8")
     reg = SkillRegistry(skills_dir)
     reg.load()
-    terry = {s.name for s in reg.list("terry")}
+    hive = {s.name for s in reg.list("hive")}
     claude = {s.name for s in reg.list("claude-code")}
-    assert "terry-only" in terry
-    assert "research-and-cite" in terry
-    assert "terry-only" not in claude
+    assert "hive-only" in hive
+    assert "research-and-cite" in hive
+    assert "hive-only" not in claude
     assert "research-and-cite" in claude
 
 
@@ -106,7 +106,7 @@ def test_digest_for_planner(skills_dir):
     (skills_dir / "research.md").write_text(_VALID_SKILL, encoding="utf-8")
     reg = SkillRegistry(skills_dir)
     reg.load()
-    digest = reg.digest_for_planner("terry")
+    digest = reg.digest_for_planner("hive")
     assert "research-and-cite" in digest
     assert "Research a topic" in digest
     assert len(digest) <= 2000
@@ -154,10 +154,7 @@ def test_write_skill_rejects_duplicate(skills_dir):
 def test_real_vault_skills_load():
     """Smoke test against the actual vault — should at least find the
     research-and-cite skill (the only multi-step seed skill)."""
-    skills_dir = Path("./vault/skills")
-    if not skills_dir.exists() or not any(skills_dir.iterdir()):
-        import pytest; pytest.skip("no seeded vault skills (public default)")
-    reg = SkillRegistry(skills_dir)
+    reg = SkillRegistry(Path(r"C:\Users\Sample User\Ai-Team-Vault\skills"))
     reg.load()
     names = {s.name for s in reg.list()}
     assert "research-and-cite" in names

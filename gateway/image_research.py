@@ -8,7 +8,7 @@ prepends the matches to the LLM context for that turn.
 
 Originally `image_research` — only fired on image cue words like "draw" /
 "picture" — which left text-only questions ("what's a Drake?") without
-vault grounding and Terry/Maggy free to hallucinate. The broader cue set
+vault grounding and Hive/Maggy free to hallucinate. The broader cue set
 plus a length threshold keeps short pleasantries cheap while real
 questions get the lookup.
 
@@ -124,7 +124,7 @@ async def gather_chat_context(
     vault_path: Path,
     daemon_host: str,
     daemon_port: int,
-    agent: str = "terry",
+    agent: str = "hive",
     k: int = 2,
     max_chars: int = 1800,
     require_image_cue: bool = False,
@@ -133,7 +133,7 @@ async def gather_chat_context(
 
     `require_image_cue=True` matches the legacy behaviour (image-only
     triggers). Default False = any non-trivial chat turn gets a lookup,
-    which lets Terry/Maggy ground answers in `knowledge/` notes
+    which lets Hive/Maggy ground answers in `knowledge/` notes
     (Star Citizen lore, WoW lore, LoRA catalog, etc.) without users
     having to phrase their question as an image request.
 

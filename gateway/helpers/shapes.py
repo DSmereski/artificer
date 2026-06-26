@@ -32,7 +32,7 @@ class Delegation(_BaseShape):
 class HelperPlan(_BaseShape):
     """Output of the Planner helper.
 
-    `delegations` lists which other helpers Terry should dispatch this
+    `delegations` lists which other helpers Hive should dispatch this
     turn (max 5). `direct_reply` is set when no delegation is needed
     (small talk, simple acknowledgement) — coordinator skips dispatch
     and goes straight to synthesis. `build_updates` accepts None for

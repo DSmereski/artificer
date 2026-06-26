@@ -49,7 +49,7 @@ class _SlowHelper:
     async def invoke(self, task: HelperTask) -> HelperResult:
         await asyncio.sleep(self._sleep_s)
         return HelperResult(
-            role=task.role, model_id="gemma3-4b",
+            role=task.role, model_id="gemma3-ablit-4b",
             latency_ms=int(self._sleep_s * 1000),
             parent_id=task.parent_id,
             output={"summary": "slow but real"}, confidence="medium",
@@ -65,7 +65,7 @@ def _build_coord(helpers: dict, *, gate: float) -> HiveCoordinator:
 
 def _ctx() -> TurnContext:
     return TurnContext(
-        bot="terry", user_id=1, device_id="dev1",
+        bot="hive", user_id=1, device_id="dev1",
         user_msg="x", thread_id="t",
         history_digest="",
         available_helpers=["librarian", "researcher"],

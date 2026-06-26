@@ -44,7 +44,7 @@ class _FakeSummarizer:
 class _AppState:
     def __init__(self, **overrides):
         self.background_tasks: set = set()
-        self.memory_store_terry = None
+        self.memory_store_hive = None
         self.vault_client = None
         self.helpers: dict = {}
         self.adapters: dict = {}
@@ -70,7 +70,7 @@ async def test_locked_thread_skips_auto_title() -> None:
     fake_vc = MagicMock()
     fake_vc.get_thread.return_value = {
         "id": "t-locked",
-        "bot": "terry",
+        "bot": "hive",
         "user_id": 1,
         "title": "Manually Set Title",
         "title_locked": 1,
@@ -79,14 +79,14 @@ async def test_locked_thread_skips_auto_title() -> None:
 
     summarizer = _FakeSummarizer()
     state = _AppState(
-        memory_store_terry=_FakeMemory(turn_count=3),
+        memory_store_hive=_FakeMemory(turn_count=3),
         vault_client=fake_vc,
         helpers={"summarizer": summarizer},
     )
 
     maybe_auto_title_thread(
         state,
-        bot="terry",
+        bot="hive",
         user_id=1,
         text="Hello there",
         thread_id="t-locked",
@@ -113,7 +113,7 @@ async def test_unlocked_thread_schedules_auto_title() -> None:
     fake_vc = MagicMock()
     fake_vc.get_thread.return_value = {
         "id": "t-unlocked",
-        "bot": "terry",
+        "bot": "hive",
         "user_id": 1,
         "title": "Old Heuristic Title",
         "title_locked": 0,
@@ -123,14 +123,14 @@ async def test_unlocked_thread_schedules_auto_title() -> None:
 
     summarizer = _FakeSummarizer()
     state = _AppState(
-        memory_store_terry=_FakeMemory(turn_count=3),
+        memory_store_hive=_FakeMemory(turn_count=3),
         vault_client=fake_vc,
         helpers={"summarizer": summarizer},
     )
 
     maybe_auto_title_thread(
         state,
-        bot="terry",
+        bot="hive",
         user_id=1,
         text="Hello there",
         thread_id="t-unlocked",
@@ -158,14 +158,14 @@ async def test_locked_bool_true_also_skips() -> None:
     }
 
     state = _AppState(
-        memory_store_terry=_FakeMemory(turn_count=3),
+        memory_store_hive=_FakeMemory(turn_count=3),
         vault_client=fake_vc,
         helpers={"summarizer": _FakeSummarizer()},
     )
 
     maybe_auto_title_thread(
         state,
-        bot="terry",
+        bot="hive",
         user_id=1,
         text="hi",
         thread_id="t-bool-locked",

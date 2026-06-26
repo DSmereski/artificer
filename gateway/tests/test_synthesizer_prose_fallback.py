@@ -1,6 +1,6 @@
 """Synthesizer must accept prose-only replies when the LLM drops the JSON wrapper.
 
-Regression test for the e2e v3 bug where Terry's planner-qwen model
+Regression test for the e2e v3 bug where Hive's planner-qwen model
 answered '17 times 23 is **391**' as plain prose, extract_json then
 raised SchemaValidationError, and the coordinator fell back to
 "helper outputs below" — losing the correct answer entirely.

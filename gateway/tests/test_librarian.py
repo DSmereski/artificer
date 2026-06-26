@@ -43,7 +43,7 @@ async def test_search_vault_passes_query_text():
     fake_embedding = [0.1] * 768
 
     with patch.object(helper, "_embed", AsyncMock(return_value=fake_embedding)):
-        await helper._search_vault("what is penguin's favorite color?", "terry")
+        await helper._search_vault("what is penguin's favorite color?", "hive")
 
     mock_client.search.assert_called_once()
     call_kwargs = mock_client.search.call_args.kwargs
@@ -85,7 +85,7 @@ async def test_search_vault_skipped_when_embed_empty():
     )
 
     with patch.object(helper, "_embed", AsyncMock(return_value=[])):
-        result = await helper._search_vault("anything", "terry")
+        result = await helper._search_vault("anything", "hive")
 
     assert result == []
     mock_client.search.assert_not_called()

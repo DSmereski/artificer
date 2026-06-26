@@ -22,7 +22,7 @@ def _snap_with_temp(temp: int) -> scout_route.ScoutStatus:
         )],
         disks=[],
         bots=[scout_route.BotHeartbeat(
-            name="Terry", is_running=True, pid=1, uptime_seconds=10.0,
+            name="Hive", is_running=True, pid=1, uptime_seconds=10.0,
         )],
     )
 

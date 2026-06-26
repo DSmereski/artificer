@@ -29,7 +29,7 @@ def test_validate_payload_unknown_verb():
 
 def test_hive_turn_allowed_with_user_msg():
     """`hive_turn` is on the calendar verb whitelist for the single-user
-    homelab — 'Run a Terry prompt' was the user's explicit ask. The
+    homelab — 'Run a Hive prompt' was the user's explicit ask. The
     stolen-token threat exists but is bounded by Tailscale + bearer
     auth. Validation still rejects missing or oversized user_msg so
     a typo can't queue a runaway turn."""

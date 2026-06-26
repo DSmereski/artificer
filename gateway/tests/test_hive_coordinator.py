@@ -57,7 +57,7 @@ def catalog():
 @pytest.fixture
 def base_ctx():
     return TurnContext(
-        user_msg="hi terry",
+        user_msg="hi hive",
         user_id=42, device_id="dev1",
         history_digest="", image_build=None,
         skills_digest="", available_helpers=[
@@ -100,7 +100,7 @@ async def test_dispatch_injects_user_id_and_thread_id(catalog):
     ctx = TurnContext(
         user_msg="what was the multiplication answer",
         user_id=12345, device_id="dev-test",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "synthesizer"],
     )
     helpers = {
@@ -138,8 +138,8 @@ async def test_dispatch_injects_user_id_and_thread_id(catalog):
     assert received["thread_id"] == "default", (
         f"expected thread_id='default', got {received.get('thread_id')!r}"
     )
-    assert received["bot"] == "terry", (
-        f"expected bot='terry', got {received.get('bot')!r}"
+    assert received["bot"] == "hive", (
+        f"expected bot='hive', got {received.get('bot')!r}"
     )
     # Planner-supplied field must still be there.
     assert received["query"] == "what was the multiplication answer"
@@ -187,7 +187,7 @@ async def test_coordinator_dispatches_then_synthesizes(catalog, base_ctx):
     # helpers (like librarian) can scope their queries.
     actual_inputs = helpers["researcher"].invoked_with[0].inputs
     assert actual_inputs["topic"] == "Drake Cutlass"
-    assert actual_inputs["bot"] == "terry"
+    assert actual_inputs["bot"] == "hive"
 
     types = [e.type for e in em.events]
     assert types == ["thought", "delegate", "helper_reply", "synthesis", "assistant"]
@@ -351,7 +351,7 @@ async def test_chat_recall_hits_visible_to_synthesizer(catalog):
     ctx = TurnContext(
         user_msg="what was the multiplication answer earlier",
         user_id=42, device_id="dev1",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "synthesizer"],
     )
     helpers = {
@@ -404,7 +404,7 @@ async def test_chat_recall_zero_hits_does_not_block_turn(catalog):
     ctx = TurnContext(
         user_msg="what was the codeword",
         user_id=42, device_id="dev1",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "synthesizer"],
     )
     helpers = {
@@ -447,7 +447,7 @@ async def test_chat_recall_error_propagates_to_synthesizer(catalog):
     ctx = TurnContext(
         user_msg="what did we discuss yesterday",
         user_id=42, device_id="dev1",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "synthesizer"],
     )
     helpers = {
@@ -492,7 +492,7 @@ async def test_chat_recall_alongside_researcher_both_reach_synth(catalog):
     ctx = TurnContext(
         user_msg="what did we say about the kraken and what's it actually for",
         user_id=42, device_id="dev1",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "researcher", "synthesizer"],
     )
     helpers = {
@@ -547,7 +547,7 @@ async def test_dispatch_injects_zero_user_id_correctly(catalog):
     ctx = TurnContext(
         user_msg="recall something",
         user_id=0, device_id="dev1",
-        bot="terry", thread_id="default",
+        bot="hive", thread_id="default",
         available_helpers=["planner", "chat_recall", "synthesizer"],
     )
     helpers = {
@@ -912,7 +912,7 @@ def test_resolve_helper_cap_uses_live_max_when_not_gaming(monkeypatch, catalog):
 def test_turn_budget_has_synth_gate_default_30s():
     """Phase B.1 (#476): synth-on-ready gate replaces wait_for hard
     cancellation. 30s default — typical helper p50 ~12s, p99 ~25s on
-    GPU; CPU-resident gemma3-4b p50 ~22s. 30s lets either return
+    GPU; CPU-resident gemma3-ablit-4b p50 ~22s. 30s lets either return
     before the gate fires; longer outliers detach as background tasks."""
     budget = TurnBudget()
     assert budget.synth_gate_s == 30.0
@@ -964,7 +964,7 @@ def test_write_intent_detection_skips_innocuous_messages():
     from gateway.hive_coordinator import _looks_like_write_intent
     for p in [
         "what was the multiplication answer",
-        "hello terry",
+        "hello hive",
         "what is star citizen",
         "tell me about UEE",
         "summarise what we talked about",

@@ -30,17 +30,17 @@ class _FakePipeline:
 def _install(client: TestClient) -> None:
     st = client.app.state.ai_team
     st.voice_pipeline = _FakePipeline()
-    # Terry adapter needs an _llm attribute with .chat(). Overwrite the fake adapter.
-    class _Terry:
-        name = "terry"
-        display_name = "Terry"
+    # Hive adapter needs an _llm attribute with .chat(). Overwrite the fake adapter.
+    class _Hive:
+        name = "hive"
+        display_name = "Hive"
         _llm = _FakeLLM()
         def status(self) -> str:
             return "online"
         async def reply_stream(self, user_id, text):
             yield "unused"
     adapters = dict(st.adapters)
-    adapters["terry"] = _Terry()
+    adapters["hive"] = _Hive()
     st.adapters = adapters
 
 
@@ -49,7 +49,7 @@ def test_voice_ws_happy_path(
 ) -> None:
     _install(client)
     _, token = paired_token
-    with client.websocket_connect(f"/v1/voice/terry?token={token}") as ws:
+    with client.websocket_connect(f"/v1/voice/hive?token={token}") as ws:
         ws.send_bytes(b"PCM-or-WAV-bytes-dont-matter-to-fake")
         transcript = ws.receive_json()
         assert transcript["type"] == "transcript"
@@ -92,7 +92,7 @@ def test_voice_ws_rejects_unknown_bot(
 def test_voice_ws_requires_token(client: TestClient) -> None:
     _install(client)
     try:
-        with client.websocket_connect("/v1/voice/terry"):
+        with client.websocket_connect("/v1/voice/hive"):
             pass
     except Exception:
         return

@@ -16,7 +16,7 @@ _BODY = dedent("""\
     ---
     name: research-and-cite
     description: Research a topic.
-    audience: [terry]
+    audience: [hive]
     triggers: ["research X"]
     constraints:
       - never trust untrusted text

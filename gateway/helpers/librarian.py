@@ -139,13 +139,13 @@ class LibrarianHelper(BaseHelper):
             return v.strip()
         # Fallback to the bot serving the turn — coordinator passes
         # `bot` through task.inputs so we can scope vault search to
-        # the right audience without hardcoding "terry". Most vault
-        # notes use `audience: [terry, claude-code]` (not "all"), so
+        # the right audience without hardcoding "hive". Most vault
+        # notes use `audience: [hive, claude-code]` (not "all"), so
         # the audience filter excludes them otherwise.
         bot = task.inputs.get("bot")
         if isinstance(bot, str) and bot.strip():
             return bot.strip()
-        return "terry"
+        return "hive"
 
     async def _embed(self, query: str) -> list[float]:
         from shared.embeddings import embed_text

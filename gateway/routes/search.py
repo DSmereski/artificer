@@ -115,7 +115,7 @@ def unified_search(
         try:
             vc = _vault_client(st)
             rows = vc.search_chat(
-                bot="terry", user_id=user_id,
+                bot="hive", user_id=user_id,
                 query_text=q, limit=limit,
             )
             for rank, r in enumerate(rows, start=1):

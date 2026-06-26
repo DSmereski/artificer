@@ -1,4 +1,4 @@
-"""Text markers Terry uses to signal structured intent in her chat reply.
+"""Text markers Hive uses to signal structured intent in her chat reply.
 
 Local Ollama models (qwen3-coder, planner-qwen) don't reliably produce OpenAI-
 style tool-calls. Text markers in her reply are reliable enough — we already
@@ -12,7 +12,7 @@ Markers:
   [CONFIRM_IMAGE]  {<json>}            # propose a payload; halt; wait for user yes/edit
   [ASK_USER]       <one-line question> # halt the turn and wait for user reply
   [REMEMBER]       {<json>}            # write a vault note via VaultClient.learn
-  [VAULT_LOOKUP]   <one-line query>    # ask the gateway to search the vault and re-feed Terry
+  [VAULT_LOOKUP]   <one-line query>    # ask the gateway to search the vault and re-feed Hive
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ log = logging.getLogger("gateway.markers")
 # Header regexes match just the [MARKER] tag. Payload extraction is custom
 # in `_extract_one`: when the payload starts with '{' we read a balanced
 # JSON object (which can span multiple lines — many models pretty-print);
-# otherwise we read to end-of-line. This was a real bug when Terry emitted
+# otherwise we read to end-of-line. This was a real bug when Hive emitted
 # multi-line JSON: a `(.*?)\n` regex captured the empty string.
 _MARKER_HEADER_RE = {
     "generate_image": re.compile(r"\[GENERATE_IMAGE\]"),
@@ -60,7 +60,7 @@ _STRIP_RE = re.compile(
 )
 
 
-# Fake "I'm rendering" prose Terry sometimes invents. The gateway emits real
+# Fake "I'm rendering" prose Hive sometimes invents. The gateway emits real
 # image_pending / image_done events; she should NEVER fabricate progress
 # lines. We strip these on output AND before saving to history so the next
 # turn doesn't see them and copy the pattern.
@@ -78,8 +78,8 @@ _FAKE_PROGRESS_RE = re.compile(
 )
 
 
-def sanitize_terry_reply(reply: str) -> str:
-    """Full sanitization for Terry's reply text.
+def sanitize_hive_reply(reply: str) -> str:
+    """Full sanitization for Hive's reply text.
 
     Strips: control markers, fake render-progress prose, orphaned
     bracket artifacts, and naked-JSON implicit-marker payloads (since
@@ -90,7 +90,7 @@ def sanitize_terry_reply(reply: str) -> str:
     out = strip_markers(reply)
     out = _FAKE_PROGRESS_RE.sub("", out)
     # Strip a leading JSON object if it looks like a marker-payload
-    # Terry forgot to prefix. Mirrors the lenient match in scan().
+    # Hive forgot to prefix. Mirrors the lenient match in scan().
     stripped = out.lstrip()
     if stripped.startswith("{"):
         end = _read_balanced_json(stripped)
@@ -131,7 +131,7 @@ class FixFactHit:
 
 @dataclass
 class MarkerHits:
-    """Result of scanning a single Terry reply for all known markers."""
+    """Result of scanning a single Hive reply for all known markers."""
     generate_image: dict | None = None    # parsed payload (uses image_catalog.parse_image_payload)
     confirm_image:  dict | None = None    # same shape as generate_image
     ask_user:       AskUserHit | None = None
@@ -180,7 +180,7 @@ def parse_create_skill(payload: str) -> dict | None:
 def strip_markers(reply: str) -> str:
     """Return `reply` with every recognised marker (and its payload) removed.
 
-    Used to compute what the user actually sees when Terry's reply contains
+    Used to compute what the user actually sees when Hive's reply contains
     a control marker. Both the gateway WS path and the Discord bot must use
     this to avoid leaking `[GENERATE_IMAGE] ...` into the visible chat.
     """
@@ -314,9 +314,9 @@ def parse_remember(payload: str) -> dict | None:
     if isinstance(raw_audience, list):
         audience = [str(x).strip() for x in raw_audience if str(x).strip()]
     if not audience:
-        # Sensible default: Terry can read it back, claude-code can audit it,
+        # Sensible default: Hive can read it back, claude-code can audit it,
         # nothing is broadcast to other bots without an explicit list.
-        audience = ["terry", "claude-code"]
+        audience = ["hive", "claude-code"]
 
     tags: list[str] = []
     raw_tags = obj.get("tags")
@@ -369,7 +369,7 @@ def scan(reply: str) -> MarkerHits:
 
     For markers that take JSON, this delegates to the appropriate validator.
     For free-text markers (ASK_USER, VAULT_LOOKUP) the raw text is returned.
-    Markers found multiple times: only the FIRST is honored. Terry should
+    Markers found multiple times: only the FIRST is honored. Hive should
     emit at most one structural marker per turn anyway.
     """
     hits = MarkerHits()
@@ -433,7 +433,7 @@ def scan(reply: str) -> MarkerHits:
             hits.create_skill = validated
             hits.raw_spans.append(span)
 
-    # Lenient fallback — Terry sometimes drops the `[ASK_USER]` /
+    # Lenient fallback — Hive sometimes drops the `[ASK_USER]` /
     # `[CONFIRM_IMAGE]` prefix and emits raw JSON. If we see a balanced
     # JSON object at the start of the reply (and we haven't already
     # matched a structural marker above), treat it as an implicit marker

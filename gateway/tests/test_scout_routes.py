@@ -27,7 +27,7 @@ def _fake_snapshot() -> scout_route.ScoutStatus:
         ],
         bots=[
             scout_route.BotHeartbeat(
-                name="Terry", is_running=True, pid=1234, uptime_seconds=60.0,
+                name="Hive", is_running=True, pid=1234, uptime_seconds=60.0,
             )
         ],
     )
@@ -43,7 +43,7 @@ def test_scout_status_happy_path(
     data = r.json()
     assert data["gpus"][0]["temp_c"] == 45
     assert data["disks"][0]["free_gb"] == 500.0
-    assert data["bots"][0]["name"] == "Terry"
+    assert data["bots"][0]["name"] == "Hive"
 
 
 def test_scout_status_requires_auth(client: TestClient, monkeypatch) -> None:

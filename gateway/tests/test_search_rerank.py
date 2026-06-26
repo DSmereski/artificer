@@ -169,7 +169,7 @@ def test_rerank_disabled_skips_llm(client: TestClient, paired_token):
 
     with patch("gateway.search_rerank.llm_rerank", new_callable=AsyncMock) as mock_rr:
         r = client.get(
-            "/v1/chat/terry/search?q=anything", headers=_auth(token),
+            "/v1/chat/hive/search?q=anything", headers=_auth(token),
         )
     assert r.status_code == 200
     mock_rr.assert_not_called()
@@ -212,7 +212,7 @@ def test_rerank_enabled_calls_llm_on_chat_search(tmp_config):
         config=cfg_with_flag,
         devices=prev.devices,
         pairing=prev.pairing,
-        adapters={"terry": _FakeAdapter()},
+        adapters={"hive": _FakeAdapter()},
         scout_history=prev.scout_history,
         image_shim=None,
         event_bus=None,
@@ -241,7 +241,7 @@ def test_rerank_enabled_calls_llm_on_chat_search(tmp_config):
     # import llm_rerank` picks up our fake.
     with patch("gateway.search_rerank.llm_rerank", new=fake_rerank):
         r = new_client.get(
-            "/v1/chat/terry/search?q=hello",
+            "/v1/chat/hive/search?q=hello",
             headers=_auth(new_token),
         )
 
@@ -278,7 +278,7 @@ def test_chat_recall_bypasses_rerank():
     task = HelperTask(
         role="chat_recall",
         goal="what did we say about kraken?",
-        inputs={"query": "kraken", "user_id": 42, "bot": "terry"},
+        inputs={"query": "kraken", "user_id": 42, "bot": "hive"},
     )
 
     with patch("gateway.search_rerank.llm_rerank", new=spy_rerank):

@@ -80,14 +80,14 @@ def _build_client(
 
     # Fake adapter that exposes the fake LLM.
     fake_adapter = MagicMock()
-    fake_adapter.name = "terry"
+    fake_adapter.name = "hive"
     fake_adapter._llm = fake_llm
 
     app.state.ai_team = AppState(
         config=cfg,
         devices=prev.devices,
         pairing=prev.pairing,
-        adapters={"terry": fake_adapter},
+        adapters={"hive": fake_adapter},
         vault_client=vault_client,
     )
 
@@ -130,7 +130,7 @@ def test_messages_returns_from_chat_log_when_available(tmp_path: Path) -> None:
     token = token_data["token"]
 
     r = client.get(
-        "/v1/chat/terry/messages",
+        "/v1/chat/hive/messages",
         headers={"Authorization": f"Bearer {token}"},
         params={"limit": "50"},
     )
@@ -164,7 +164,7 @@ def test_messages_falls_back_to_rolling_buffer_when_chat_log_empty(
     token = token_data["token"]
 
     r = client.get(
-        "/v1/chat/terry/messages",
+        "/v1/chat/hive/messages",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200
@@ -187,7 +187,7 @@ def test_messages_falls_back_when_no_vault_client(tmp_path: Path) -> None:
     token = token_data["token"]
 
     r = client.get(
-        "/v1/chat/terry/messages",
+        "/v1/chat/hive/messages",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200
@@ -217,7 +217,7 @@ def test_messages_chat_log_preferred_over_shorter_buffer(tmp_path: Path) -> None
     token = token_data["token"]
 
     r = client.get(
-        "/v1/chat/terry/messages",
+        "/v1/chat/hive/messages",
         headers={"Authorization": f"Bearer {token}"},
         params={"limit": "60"},
     )
@@ -246,7 +246,7 @@ def test_messages_vault_client_exception_falls_back_gracefully(
     token = token_data["token"]
 
     r = client.get(
-        "/v1/chat/terry/messages",
+        "/v1/chat/hive/messages",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200

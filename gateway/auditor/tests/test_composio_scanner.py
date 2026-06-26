@@ -15,7 +15,7 @@ from gateway.auditor.scanners.composio_scanner import ComposioScanner
 def _turn(**overrides) -> dict:
     base = {
         "turn_id": "t1",
-        "bot": "terry",
+        "bot": "hive",
         "delegations": [],
         "synthesis": {"actions": []},
         "receipts": [],

@@ -32,7 +32,7 @@ def _fake_app_state(*, vault_client=None, config=None):
     state.config = config
     state.image_build_store = None
     state.skill_registry = None
-    state.memory_store_terry = None
+    state.memory_store_hive = None
     state.helpers = {}
     return state
 
@@ -194,7 +194,7 @@ async def test_build_turn_context_async_injects_snippets():
     state = _fake_app_state(vault_client=fake_client, config=_fake_config())
     state.image_build_store = None
     state.skill_registry = None
-    state.memory_store_terry = None
+    state.memory_store_hive = None
     state.helpers = {}
 
     with patch("shared.embeddings.embed_text", new=AsyncMock(return_value=[0.5, 0.6])):
@@ -203,7 +203,7 @@ async def test_build_turn_context_async_injects_snippets():
             user_id=42,
             text="tell me about the 300i ship",
             device_id="dev-test",
-            device_audience=["terry"],
+            device_audience=["hive"],
             thread_id="default",
         )
 
@@ -218,7 +218,7 @@ async def test_build_turn_context_async_still_works_without_vault():
     state = _fake_app_state(vault_client=None, config=_fake_config())
     state.image_build_store = None
     state.skill_registry = None
-    state.memory_store_terry = None
+    state.memory_store_hive = None
     state.helpers = {}
 
     ctx = await build_turn_context_async(

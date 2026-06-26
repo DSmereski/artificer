@@ -81,7 +81,7 @@ def test_factory_skill_registry_passthrough(tmp_path):
     assert runner._registry is reg
 
 
-def test_factory_models_share_terry_qwen(catalog):
+def test_factory_models_share_hive_qwen(catalog):
     """All helpers in the production catalog share planner-qwen."""
     pool = build_helpers(catalog)
     for role, h in pool.items():

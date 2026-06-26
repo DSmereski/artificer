@@ -1,8 +1,8 @@
-"""Phase C.2 of #476: confirm gemma3-4b is routable for the
+"""Phase C.2 of #476: confirm gemma3-ablit-4b is routable for the
 researcher role from the real catalog + bench results.
 
-Phase A added gemma3-4b to the researcher candidate list and the
-bench harness recorded scores for both planner-qwen and gemma3-4b.
+Phase A added gemma3-ablit-4b to the researcher candidate list and the
+bench harness recorded scores for both planner-qwen and gemma3-ablit-4b.
 This test guarantees both still appear and Router.route_for picks one
 of them deterministically (no fallback to YAML default)."""
 from __future__ import annotations
@@ -26,10 +26,10 @@ def _researcher_candidate_ids() -> set[str]:
     return {m.id for m in cat.candidates_for_role("researcher")}
 
 
-def test_researcher_candidates_include_terry_qwen_and_gemma():
+def test_researcher_candidates_include_hive_qwen_and_gemma():
     ids = _researcher_candidate_ids()
     assert "planner-qwen" in ids, f"planner-qwen missing from {ids}"
-    assert "gemma3-4b" in ids, f"gemma3-4b missing from {ids}"
+    assert "gemma3-ablit-4b" in ids, f"gemma3-ablit-4b missing from {ids}"
 
 
 @pytest.mark.skipif(
@@ -41,7 +41,7 @@ def test_router_route_for_researcher_returns_a_real_candidate():
     results = load_results(_BENCH)
     router = Router(catalog=cat, results=results)
     choice = router.route_for("researcher")
-    assert choice.model.id in {"planner-qwen", "gemma3-4b"}, (
+    assert choice.model.id in {"planner-qwen", "gemma3-ablit-4b"}, (
         f"router picked unexpected model {choice.model.id!r} "
         f"with reason {choice.reason!r}"
     )

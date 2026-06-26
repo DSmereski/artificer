@@ -1,4 +1,4 @@
-"""Planner helper — Terry's first thought every turn.
+"""Planner helper — Hive's first thought every turn.
 
 Reads the user message + conversation context + image-build state
 (M5.1) + skill catalogue (M3) and decides:

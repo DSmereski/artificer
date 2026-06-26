@@ -10,6 +10,16 @@ from gateway.orchestrator.bench_results import BenchResults, BenchScore
 from gateway.orchestrator.router import ModelChoice, Router
 
 
+@pytest.fixture(autouse=True)
+def _set_anthropic_key(monkeypatch):
+    """Ensure cloud models are not skipped due to missing creds in these tests.
+
+    These tests exercise routing logic, not credential checking.  Setting a
+    dummy key lets cloud-model candidates pass the _has_creds() guard.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-dummy-key")
+
+
 def _write_yaml(tmp_path: Path, body: str) -> Path:
     p = tmp_path / "catalog.yaml"
     p.write_text(body, encoding="utf-8")

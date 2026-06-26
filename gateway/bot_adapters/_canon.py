@@ -1,6 +1,6 @@
 """Shared vault-canon loader for gateway bot adapters.
 
-The Discord bots (bots/{maggy,terry,scout}/bot.py) splice canon/*.md into their
+The Discord bots (bots/{maggy,hive,scout}/bot.py) splice canon/*.md into their
 LLM system prompts via a 30-min tasks.loop. This module is the gateway-side
 equivalent so the same bots talking through the app see the same canon.
 

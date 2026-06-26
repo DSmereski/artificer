@@ -13,7 +13,7 @@ Security:
     tailnet could brute-force claim a freshly-minted code by racing the
     legitimate phone, or mint codes endlessly to amplify load.
   - Freshly paired devices get a NARROW default audience
-    (`["terry", "claude-code"]`), not `"all"`. A lost / stolen phone
+    (`["hive", "claude-code"]`), not `"all"`. A lost / stolen phone
     bearer token therefore cannot read or write content tagged for
     other audiences (e.g. `"scout"`, `"maggy"`) until the operator
     explicitly grants it. The desktop / "all"-audience seat is paired
@@ -38,9 +38,9 @@ router = APIRouter(prefix="/v1", tags=["pair"])
 
 # Default audience for a freshly paired device (phone via QR). Narrow
 # enough that a lost token can't read other-bot or admin content; broad
-# enough that the phone can chat with Terry and read claude-code-tagged
+# enough that the phone can chat with Hive and read claude-code-tagged
 # content (the two audiences the user actually exercises from mobile).
-_DEFAULT_PAIRED_AUDIENCE: tuple[str, ...] = ("terry", "claude-code")
+_DEFAULT_PAIRED_AUDIENCE: tuple[str, ...] = ("hive", "claude-code")
 
 
 def _client_ip(request: Request) -> str:
@@ -156,7 +156,7 @@ _TRANSIENT_DEVICE_PREFIXES = [
     "prompt-battery", "research-quiz", "hive", "multi", "vault-crud",
     "verify", "apk", "log", "cal-smoke", "cal-test", "image-smoke",
     "matrix-smoke", "sc-final", "sc-test", "scout-test", "skills",
-    "sysmon-smoke", "terry-only", "ws-hive", "final", "apk-check",
+    "sysmon-smoke", "hive-only", "ws-hive", "final", "apk-check",
 ]
 
 # Matches the stamp suffix that smoke / test scripts append to device names:
@@ -239,7 +239,7 @@ def revoke_device(
 
     Audience semantics (matches the rest of the gateway):
       - caller has `all` → can delete any device
-      - caller has only `terry` → can delete only `terry` devices
+      - caller has only `hive` → can delete only `hive` devices
         (or itself)
     """
     st = state(request)

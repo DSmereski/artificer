@@ -53,7 +53,7 @@ class _AppState:
         # build_turn_context fields
         self.image_build_store = None
         self.skill_registry = None
-        self.memory_store_terry = None
+        self.memory_store_hive = None
         self.helpers: dict = {}
         # record_turn_telemetry
         self.turn_telemetry = None
@@ -125,7 +125,7 @@ def test_record_turn_telemetry_records_when_enabled():
     )
     assert len(tel.records) == 1
     rec = tel.records[0]
-    assert rec.bot == "terry"
+    assert rec.bot == "hive"
     assert rec.actions == ["vault_learn", "image_render"]
 
 
@@ -186,11 +186,11 @@ def test_persist_skips_blocked_turn():
         def record_turn(self, *args): self.calls.append(args)
     class _Adapter:
         _llm = _LLM()
-    state = _AppState(adapters={"terry": _Adapter()})
+    state = _AppState(adapters={"hive": _Adapter()})
     persist_hive_turn_history(
         state, _FakeTurn(blocked=True), user_id=1, text="hi",
     )
-    assert state.adapters["terry"]._llm.calls == []
+    assert state.adapters["hive"]._llm.calls == []
 
 
 def test_persist_writes_for_clean_turn():
@@ -200,7 +200,7 @@ def test_persist_writes_for_clean_turn():
     class _Adapter:
         _llm = _LLM()
     adapter = _Adapter()
-    state = _AppState(adapters={"terry": adapter})
+    state = _AppState(adapters={"hive": adapter})
     persist_hive_turn_history(
         state, _FakeTurn(reply="hello there"),
         user_id=42, text="hi",
@@ -209,7 +209,7 @@ def test_persist_writes_for_clean_turn():
 
 
 def test_persist_handles_missing_adapter():
-    """No `terry` adapter, no LLM — silently no-op."""
+    """No `hive` adapter, no LLM — silently no-op."""
     state = _AppState(adapters={})
     persist_hive_turn_history(
         state, _FakeTurn(reply="ok"), user_id=1, text="hi",
@@ -227,12 +227,12 @@ def test_summarizer_no_op_when_threshold_not_crossed():
             self.turns_recorded += 1
         def get(self, uid, thread_id="default"): return object()
         def needs_refresh(self, m): return False
-    state = _AppState(memory_store_terry=_Mem(), helpers={"summarizer": object()})
+    state = _AppState(memory_store_hive=_Mem(), helpers={"summarizer": object()})
     schedule_summarizer_refresh(
         state, _FakeTurn(reply="ok"), user_id=1, text="hi",
     )
     assert state.background_tasks == set()
-    assert state.memory_store_terry.turns_recorded == 1
+    assert state.memory_store_hive.turns_recorded == 1
 
 
 def test_summarizer_no_op_when_summarizer_helper_missing():
@@ -241,7 +241,7 @@ def test_summarizer_no_op_when_summarizer_helper_missing():
         def increment_turn(self, uid, thread_id="default"): pass
         def get(self, uid, thread_id="default"): return object()
         def needs_refresh(self, m): return True
-    state = _AppState(memory_store_terry=_Mem(), helpers={})
+    state = _AppState(memory_store_hive=_Mem(), helpers={})
     schedule_summarizer_refresh(
         state, _FakeTurn(reply="ok"), user_id=1, text="hi",
     )
@@ -273,12 +273,12 @@ class _FakeVC:
 
 def test_auto_title_skips_when_turn_count_below_trigger():
     state = _AppState(
-        memory_store_terry=_FakeTitleMem(turn_count=2),
+        memory_store_hive=_FakeTitleMem(turn_count=2),
         helpers={"summarizer": object()},
         vault_client=_FakeVC(),
     )
     maybe_auto_title_thread(
-        state, bot="terry", user_id=1, text="hi", thread_id="t1",
+        state, bot="hive", user_id=1, text="hi", thread_id="t1",
     )
     assert state.background_tasks == set()
 
@@ -286,36 +286,36 @@ def test_auto_title_skips_when_turn_count_below_trigger():
 def test_auto_title_skips_when_turn_count_above_trigger():
     """Don't replace a real title once we're past the trigger turn."""
     state = _AppState(
-        memory_store_terry=_FakeTitleMem(turn_count=4),
+        memory_store_hive=_FakeTitleMem(turn_count=4),
         helpers={"summarizer": object()},
         vault_client=_FakeVC(),
     )
     maybe_auto_title_thread(
-        state, bot="terry", user_id=1, text="hi", thread_id="t1",
+        state, bot="hive", user_id=1, text="hi", thread_id="t1",
     )
     assert state.background_tasks == set()
 
 
 def test_auto_title_skips_when_summarizer_helper_missing():
     state = _AppState(
-        memory_store_terry=_FakeTitleMem(turn_count=3),
+        memory_store_hive=_FakeTitleMem(turn_count=3),
         helpers={},
         vault_client=_FakeVC(),
     )
     maybe_auto_title_thread(
-        state, bot="terry", user_id=1, text="hi", thread_id="t1",
+        state, bot="hive", user_id=1, text="hi", thread_id="t1",
     )
     assert state.background_tasks == set()
 
 
 def test_auto_title_skips_when_vault_client_missing():
     state = _AppState(
-        memory_store_terry=_FakeTitleMem(turn_count=3),
+        memory_store_hive=_FakeTitleMem(turn_count=3),
         helpers={"summarizer": object()},
         vault_client=None,
     )
     maybe_auto_title_thread(
-        state, bot="terry", user_id=1, text="hi", thread_id="t1",
+        state, bot="hive", user_id=1, text="hi", thread_id="t1",
     )
     assert state.background_tasks == set()
 
@@ -329,12 +329,12 @@ async def test_auto_title_fires_at_trigger_turn():
             return HelperResult(role="summarizer", model_id="x",
                                 output={"summary": ""})
     state = _AppState(
-        memory_store_terry=_FakeTitleMem(turn_count=3),
+        memory_store_hive=_FakeTitleMem(turn_count=3),
         helpers={"summarizer": _NopSummarizer()},
         vault_client=_FakeVC(),
     )
     maybe_auto_title_thread(
-        state, bot="terry", user_id=1, text="hi", thread_id="t1",
+        state, bot="hive", user_id=1, text="hi", thread_id="t1",
     )
     assert len(state.background_tasks) == 1
     # Drain the task so pytest doesn't warn about un-awaited coroutines.

@@ -214,7 +214,7 @@ def test_groundedness_replaces_preamble_when_hits_unused():
         },
     )]
     reply = (
-        "Based on the vault search results, here is Terry's reply "
+        "Based on the vault search results, here is Hive's reply "
         "regarding Drake's lineup. Drake Interplanetary focuses on "
         "interstellar exploration and high-end luxury craft."
     )

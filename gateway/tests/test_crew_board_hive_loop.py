@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +16,8 @@ import pytest
 from gateway.crew_board import schema
 from gateway.crew_board.store import CrewBoardStore
 from gateway.crew_board.hive_agent_loop import (
-    _cmd_allowed, _list_dir, _read_file, _replace_in_file, _safe_path,
-    _write_file, run_hive_agent_loop,
+    _build_done_summary, _cmd_allowed, _list_dir, _read_file, _replace_in_file,
+    _safe_path, _write_file, run_hive_agent_loop,
 )
 
 
@@ -27,6 +28,34 @@ def test_replace_in_file_exact_match(tmp_path: Path) -> None:
                                     "replace": "y = 3"})
     assert r["ok"] and r["replacements"] == 1
     assert "y = 3" in f.read_text(encoding="utf-8")
+
+
+def test_build_done_summary_mines_tests_and_base(tmp_path: Path) -> None:
+    # No git repo here: git steps no-op, but the base + pytest mining still work.
+    transcript = [
+        {"turn": 1, "result": {"stdout_tail": "===== 34 passed in 1.2s ====="}},
+    ]
+    out = _build_done_summary(tmp_path, transcript, "auto-done after 2 green runs")
+    assert "auto-done after 2 green runs" in out
+    assert "Tests: 34 passed" in out
+
+
+def test_build_done_summary_lists_changed_files(tmp_path: Path) -> None:
+    def git(*a: str) -> None:
+        subprocess.run(["git", "-C", str(tmp_path), *a],
+                       capture_output=True, check=True)
+    git("init")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", "a.py")
+    git("commit", "-m", "init")
+    (tmp_path / "a.py").write_text("x = 2\n", encoding="utf-8")   # modified
+    (tmp_path / "b.py").write_text("y = 1\n", encoding="utf-8")   # untracked new
+    out = _build_done_summary(tmp_path, [], "built it")
+    assert "built it" in out
+    assert "Files changed (2)" in out
+    assert "a.py" in out and "b.py" in out
 
 
 def test_replace_in_file_no_match(tmp_path: Path) -> None:
@@ -306,34 +335,35 @@ async def test_loop_aborts_on_no_progress(store_and_task) -> None:
 
 @pytest.mark.asyncio
 async def test_loop_run_cmd_executes(store_and_task) -> None:
-    """run_cmd: python -c is BLOCKED by _validate_cmd_args (C1 fix);
-    a whitelisted command (echo) still executes normally."""
     store, task = store_and_task
-
-    # C1 fix: `python -c "..."` is now BLOCKED — only `python -m pytest` /
-    # `python -m py_compile` are allowed. Verify the refusal.
-    invoker_blocked = FakeInvoker(replies=[
-        json.dumps({"tool": "run_cmd", "args": {
-            "cmd": "python -c \"print(1+1)\""}}),
-        json.dumps({"tool": "done", "args": {"summary": "done"}}),
-    ])
-    result_blocked = await run_hive_agent_loop(
-        store, task, invoker=invoker_blocked, max_iters=5,
-    )
-    first_result = result_blocked.transcript[0]["result"]
-    assert not first_result["ok"], (
-        "python -c should be refused by _validate_cmd_args"
-    )
-    assert "restricted" in first_result["error"].lower() or "py_compile" in first_result["error"]
-
-    # A whitelisted command with no path args passes through fine.
-    # Use `git --version` — always on PATH, whitelisted, flag-only args.
-    invoker_ok = FakeInvoker(replies=[
-        json.dumps({"tool": "run_cmd", "args": {"cmd": "git --version"}}),
+    # `echo 2` is a safe whitelisted command (audit C1 blocks `python -c`).
+    invoker = FakeInvoker(replies=[
+        json.dumps({"tool": "run_cmd", "args": {"cmd": "echo 2"}}),
         json.dumps({"tool": "done", "args": {"summary": "ran"}}),
     ])
-    result_ok = await run_hive_agent_loop(
-        store, task, invoker=invoker_ok, max_iters=5,
+    result = await run_hive_agent_loop(
+        store, task, invoker=invoker, max_iters=5,
     )
-    assert result_ok.ok
-    assert result_ok.transcript[0]["result"]["ok"]
+    assert result.ok
+    assert result.transcript[0]["result"]["ok"]
+    assert "2" in result.transcript[0]["result"]["stdout_tail"]
+
+
+def test_run_cmd_blocks_sandbox_escape(tmp_path: Path) -> None:
+    """SECURITY (audit C1): _validate_cmd_args refuses arbitrary-Python exec and
+    path escapes, while still allowing `python -m pytest`."""
+    from gateway.crew_board.hive_agent_loop import _validate_cmd_args
+    # Blocked: arbitrary Python code.
+    ok, why = _validate_cmd_args(tmp_path, 'python -c "open(0)"')
+    assert not ok and "python is restricted" in why
+    # Blocked: running a script directly.
+    ok, _ = _validate_cmd_args(tmp_path, "python evil.py")
+    assert not ok
+    # Blocked: reading outside the sandbox.
+    ok, why = _validate_cmd_args(tmp_path, "cat ../../secret.txt")
+    assert not ok and "escapes the project sandbox" in why
+    # Allowed: pytest + in-project paths.
+    ok, _ = _validate_cmd_args(tmp_path, "python -m pytest -q tests/")
+    assert ok
+    ok, _ = _validate_cmd_args(tmp_path, "git status")
+    assert ok

@@ -69,13 +69,13 @@ def _build_client(
     prev = app.state.ai_team
 
     fake_adapter = MagicMock()
-    fake_adapter.name = "terry"
+    fake_adapter.name = "hive"
 
     app.state.ai_team = AppState(
         config=cfg,
         devices=prev.devices,
         pairing=prev.pairing,
-        adapters={"terry": fake_adapter},
+        adapters={"hive": fake_adapter},
         vault_client=vault_client,
     )
 
@@ -95,7 +95,7 @@ def _build_client(
 def _make_thread_meta(
     thread_id: str,
     *,
-    bot: str = "terry",
+    bot: str = "hive",
     user_id: int,
     archived_at: str | None = None,
     pinned: int = 0,
@@ -134,7 +134,7 @@ def _owner_user_id() -> int:
 
 
 def test_rename_thread_sets_title(tmp_path: Path) -> None:
-    """PATCH /v1/chat/terry/threads/{id} with a valid title returns 200
+    """PATCH /v1/chat/hive/threads/{id} with a valid title returns 200
     and title_locked is reflected in a subsequent list_threads call."""
     thread_id = "t-abc123"
     user_id = _owner_user_id()
@@ -152,7 +152,7 @@ def test_rename_thread_sets_title(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.patch(
-        f"/v1/chat/terry/threads/{thread_id}",
+        f"/v1/chat/hive/threads/{thread_id}",
         json={"title": "My Shiny Title"},
         headers=headers,
     )
@@ -168,7 +168,7 @@ def test_rename_thread_sets_title(tmp_path: Path) -> None:
     )
 
     # Verify that a subsequent listing shows title_locked=True.
-    r2 = client.get("/v1/chat/terry/threads", headers=headers)
+    r2 = client.get("/v1/chat/hive/threads", headers=headers)
     assert r2.status_code == 200, r2.text
     threads = r2.json()["threads"]
     assert threads[0]["title_locked"] == 1
@@ -186,7 +186,7 @@ def test_rename_rejects_empty_title(tmp_path: Path) -> None:
 
     for bad_title in ("", "   ", "\t\n"):
         r = client.patch(
-            "/v1/chat/terry/threads/some-thread",
+            "/v1/chat/hive/threads/some-thread",
             json={"title": bad_title},
             headers=headers,
         )
@@ -199,7 +199,7 @@ def test_rename_rejects_missing_title_field(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.patch(
-        "/v1/chat/terry/threads/some-thread",
+        "/v1/chat/hive/threads/some-thread",
         json={"other_field": "value"},
         headers=headers,
     )
@@ -224,7 +224,7 @@ def test_rename_rejects_other_owner(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.patch(
-        f"/v1/chat/terry/threads/{thread_id}",
+        f"/v1/chat/hive/threads/{thread_id}",
         json={"title": "Hijack Title"},
         headers=headers,
     )
@@ -237,7 +237,7 @@ def test_rename_rejects_other_owner(tmp_path: Path) -> None:
 
 
 def test_unarchive_clears_archived_at(tmp_path: Path) -> None:
-    """POST /v1/chat/terry/threads/{id}/unarchive → 200, unarchive was called."""
+    """POST /v1/chat/hive/threads/{id}/unarchive → 200, unarchive was called."""
     thread_id = "t-archived"
     user_id = _owner_user_id()
 
@@ -252,7 +252,7 @@ def test_unarchive_clears_archived_at(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.post(
-        f"/v1/chat/terry/threads/{thread_id}/unarchive",
+        f"/v1/chat/hive/threads/{thread_id}/unarchive",
         headers=headers,
     )
     assert r.status_code == 200, r.text
@@ -269,7 +269,7 @@ def test_unarchive_clears_archived_at(tmp_path: Path) -> None:
 
 
 def test_pin_toggle(tmp_path: Path) -> None:
-    """POST /v1/chat/terry/threads/{id}/pin with pinned=true → 200 + pinned:true."""
+    """POST /v1/chat/hive/threads/{id}/pin with pinned=true → 200 + pinned:true."""
     thread_id = "t-pintest"
     user_id = _owner_user_id()
 
@@ -283,7 +283,7 @@ def test_pin_toggle(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.post(
-        f"/v1/chat/terry/threads/{thread_id}/pin",
+        f"/v1/chat/hive/threads/{thread_id}/pin",
         json={"pinned": True},
         headers=headers,
     )
@@ -299,7 +299,7 @@ def test_pin_toggle(tmp_path: Path) -> None:
 
 
 def test_pin_unpin_toggle(tmp_path: Path) -> None:
-    """POST /v1/chat/terry/threads/{id}/pin with pinned=false unpins."""
+    """POST /v1/chat/hive/threads/{id}/pin with pinned=false unpins."""
     thread_id = "t-unpin"
     user_id = _owner_user_id()
 
@@ -313,7 +313,7 @@ def test_pin_unpin_toggle(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.post(
-        f"/v1/chat/terry/threads/{thread_id}/pin",
+        f"/v1/chat/hive/threads/{thread_id}/pin",
         json={"pinned": False},
         headers=headers,
     )
@@ -341,7 +341,7 @@ def test_pin_defaults_to_true_when_no_payload(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.post(
-        f"/v1/chat/terry/threads/{thread_id}/pin",
+        f"/v1/chat/hive/threads/{thread_id}/pin",
         headers=headers,
     )
     assert r.status_code == 200, r.text
@@ -355,7 +355,7 @@ def test_pin_defaults_to_true_when_no_payload(tmp_path: Path) -> None:
 
 
 def test_search_threads_returns_hits(tmp_path: Path) -> None:
-    """GET /v1/chat/terry/threads/search?q=kraken returns matching thread."""
+    """GET /v1/chat/hive/threads/search?q=kraken returns matching thread."""
     user_id = _owner_user_id()
 
     fake_vc = MagicMock()
@@ -370,7 +370,7 @@ def test_search_threads_returns_hits(tmp_path: Path) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     r = client.get(
-        "/v1/chat/terry/threads/search",
+        "/v1/chat/hive/threads/search",
         params={"q": "kraken", "limit": 10},
         headers=headers,
     )
@@ -383,7 +383,7 @@ def test_search_threads_returns_hits(tmp_path: Path) -> None:
     assert "kraken" in hit["snippet"].lower()
 
     fake_vc.search_threads.assert_called_once_with(
-        bot="terry", user_id=user_id, query="kraken", limit=10,
+        bot="hive", user_id=user_id, query="kraken", limit=10,
     )
 
 
@@ -412,11 +412,11 @@ def test_search_threads_limit_clamped(tmp_path: Path) -> None:
 
     # Request limit=999 → should be clamped to 100
     r = client.get(
-        "/v1/chat/terry/threads/search",
+        "/v1/chat/hive/threads/search",
         params={"q": "anything", "limit": 999},
         headers=headers,
     )
     assert r.status_code == 200, r.text
     fake_vc.search_threads.assert_called_once_with(
-        bot="terry", user_id=user_id, query="anything", limit=100,
+        bot="hive", user_id=user_id, query="anything", limit=100,
     )
