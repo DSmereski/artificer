@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import pytest_asyncio  # noqa: F401
 
-from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig
+from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig, WikiSynthConfig
 from vault_writer.daemon import Daemon
 
 
@@ -54,6 +54,8 @@ def _config(tmp_vault: Path, port: int) -> Config:
         scan=ScanConfig(initial_full_scan=True, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
 
@@ -63,8 +65,8 @@ async def test_daemon_initial_scan_indexes_existing_files(tmp_vault: Path) -> No
         "---\ntype: canon\nauthor: human\naudience: [all]\n---\n\nMaggy body.\n",
         encoding="utf-8",
     )
-    (tmp_vault / "canon" / "terry.md").write_text(
-        "---\ntype: canon\nauthor: human\naudience: [all]\n---\n\nTerry body.\n",
+    (tmp_vault / "canon" / "hive.md").write_text(
+        "---\ntype: canon\nauthor: human\naudience: [all]\n---\n\nHive body.\n",
         encoding="utf-8",
     )
 
@@ -255,6 +257,7 @@ async def test_daemon_learn_with_auth_required_rejects_unauthed(
         search=cfg.search,
         scan=cfg.scan,
         auth=AuthConfig(token_path=tok),
+        wiki_synth=cfg.wiki_synth,
     )
     daemon = Daemon(cfg_with_auth, embedder=FakeEmbedder())
     await daemon.start()

@@ -24,6 +24,8 @@
 
 import { register } from './registry.js';
 import { boardEmbedUrl } from '../gateway.js';
+import { getActiveBoard } from '../topbar/board-switcher.js';
+import { cmdTogglePause, cmdNewTask, cmdNewGoal, isBoardPaused } from '../topbar/commands.js';
 import type { PanelPlugin, RelevanceResult } from './contract.js';
 import type { SystemState, RenderBudget } from '../state/types.js';
 
@@ -71,12 +73,34 @@ export function deactivateFullBoard(): void {
 
 function _loadFrame(): void {
   if (!_iframe) return;
-  const target = boardEmbedUrl();
+  const target = boardEmbedUrl(getActiveBoard());
   if (_iframe.src !== target) _iframe.src = target;
+}
+
+/**
+ * Re-point the embedded board at the current active project. Called when the
+ * top-bar project switcher changes: the src now carries a different
+ * &project=<slug>, so this reloads the iframe and the framed board re-filters.
+ */
+export function reloadBoardFrame(): void {
+  if (_shouldRender()) _loadFrame();
 }
 
 function _blankFrame(): void {
   if (_iframe && _iframe.src !== BLANK) _iframe.src = BLANK;
+}
+
+// Push the current theme into the board iframe. The wallpaper runs file:// while
+// the board iframe is http://gateway — DIFFERENT origins, so localStorage/storage
+// don't sync. postMessage crosses origins (targetOrigin '*'); the board has a
+// matching 'message' listener that applies data-theme. Fired on load + on switch.
+function _sendTheme(): void {
+  if (!_iframe || !_iframe.contentWindow || _iframe.src === BLANK) return;
+  const name =
+    document.documentElement.dataset.theme ||
+    (() => { try { return localStorage.getItem('hive.theme'); } catch { return null; } })() ||
+    'hive-v2';
+  try { _iframe.contentWindow.postMessage({ type: 'theme', name }, '*'); } catch { /* noop */ }
 }
 
 /** True when the board should actively render (visible, not suspended/gaming). */
@@ -96,9 +120,17 @@ function relevance(state: SystemState): RelevanceResult {
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
 function mount(el: HTMLElement): void {
+  // #211: the embedded board's own header is hidden in ?embed mode, and on the
+  // wallpaper the top bar can be turned off per-monitor — so the module carries
+  // its own Pause/Task/Goal bar. The buttons reuse the top-bar command surface.
   el.innerHTML = `
     <div class="panel-header">
       <span class="panel-label">CREW BOARD</span>
+      <div class="panel-actions" id="cbf-actions">
+        <button class="panel-act-btn" data-act="pause" title="Pause / resume the dispatcher">⏸ Pause</button>
+        <button class="panel-act-btn" data-act="task" title="New task">＋ Task</button>
+        <button class="panel-act-btn" data-act="goal" title="Decompose a goal">✦ Goal</button>
+      </div>
     </div>
     <div class="board-full-frame-wrap">
       <iframe
@@ -110,7 +142,21 @@ function mount(el: HTMLElement): void {
     </div>
   `;
 
+  const actions = el.querySelector('#cbf-actions');
+  actions?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.panel-act-btn');
+    if (!btn) return;
+    const act = btn.dataset['act'];
+    if (act === 'pause') cmdTogglePause();
+    else if (act === 'task') cmdNewTask();
+    else if (act === 'goal') cmdNewGoal();
+  });
+  const pauseBtn = actions?.querySelector<HTMLButtonElement>('[data-act="pause"]');
+  if (pauseBtn) pauseBtn.textContent = isBoardPaused() ? '▶ Resume' : '⏸ Pause';
+
   _iframe = el.querySelector('#v2-board-full-frame');
+  if (_iframe) _iframe.addEventListener('load', _sendTheme);
+  window.addEventListener('hive-theme-change', _sendTheme);
   if (_shouldRender()) _loadFrame();
   else _blankFrame();
 }

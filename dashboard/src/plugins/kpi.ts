@@ -31,15 +31,14 @@ let _rootEl: HTMLElement | null = null;
 const _hist: Record<string, number[]> = {};
 const _prevRaw: Record<string, number> = {};
 
-// Resolved accent colors for canvas strokes (canvas can't read CSS vars).
-const _STROKE: Record<string, string> = {
-  'var(--green)':  '#7dae75',
-  'var(--amber)':  '#e0a445',
-  'var(--copper)': '#c17f24',
-  'var(--cyan)':   '#6aadaa',
-  'var(--red)':    '#c0392b',
-  'var(--dim)':    '#9a8c78',
-};
+// Resolve accent colors for canvas strokes from CSS vars at draw-time.
+// Canvas can't read CSS vars directly — we resolve them via getComputedStyle.
+function _resolveStroke(cssVar: string): string {
+  const hex = getComputedStyle(document.documentElement).getPropertyValue(
+    cssVar.replace('var(', '').replace(')', '')
+  ).trim();
+  return hex || '#c07840';
+}
 
 const STALL_MS = 90_000; // a lane with no update for this long reads as stalled
 
@@ -100,15 +99,16 @@ function _lane(t: TaskProgress): string {
   const now = t.lastAction ? _esc(t.lastAction) : 'working…';
   const pct = Math.round(Math.max(0, Math.min(1, t.progress)) * 100);
   const stalled = t.stalledMs > STALL_MS;
+  // F3: stalled lanes get the hazard stall-border; lane-bar fill gets gradient
   return `
-    <div class="hero-lane${stalled ? ' is-stalled' : ''}">
+    <div class="hero-lane${stalled ? ' is-stalled fx3-stall-border' : ''}">
       <div class="hero-lane-top">
         <span class="hero-lane-name" title="${_esc(t.title)}">${_esc(name)}</span>
         <span class="hero-lane-turns" title="agent turns">${t.turns}t</span>
         ${stalled ? '<span class="hero-lane-stall" title="no update recently">stalled</span>' : ''}
       </div>
       <div class="hero-lane-now">${now}</div>
-      <div class="hero-lane-bar"><span style="width:${pct}%"></span></div>
+      <div class="hero-lane-bar"><span class="fx3-lane-bar" style="width:${pct}%"></span></div>
     </div>`;
 }
 
@@ -170,9 +170,11 @@ function update(state: SystemState, _budget: RenderBudget): void {
   if (!pulseEl || !lanesEl || !headEl) return;
 
   // PULSE
+  // F3: RGB-split chromatic glow on the pulse word; breathing variant for NEEDS YOU / OFFLINE
   const p = _pulse(state);
+  const needsBreath = p.word === 'NEEDS YOU' || p.word === 'OFFLINE';
   pulseEl.innerHTML = `
-    <div class="hero-pulse-word" style="color:${p.accent}">${p.word}</div>
+    <div class="hero-pulse-word fx3-rgb-split${needsBreath ? ' fx3-rgb-breathe' : ''}" style="color:${p.accent}">${p.word}</div>
     <div class="hero-pulse-sub">${_esc(p.sub)}</div>
     <div class="hero-vitals">${_vitals(state)}</div>`;
 
@@ -198,7 +200,7 @@ function update(state: SystemState, _budget: RenderBudget): void {
   headEl.querySelectorAll<HTMLCanvasElement>('.hero-head-spark').forEach((cv) => {
     const h = heads.find((x) => x.key === cv.dataset['key']);
     if (!h) return;
-    drawSparkline(cv, _hist[h.key] ?? [], { color: _STROKE[h.accent] ?? '#c17f24' });
+    drawSparkline(cv, _hist[h.key] ?? [], { color: _resolveStroke(h.accent) });
   });
 }
 

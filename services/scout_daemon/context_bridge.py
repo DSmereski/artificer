@@ -14,9 +14,9 @@ class SystemContext:
     last_updated: float = 0.0
     game_running: str | None = None
     game_gpu: int | None = None
-    terry_online: bool = False
-    terry_pid: int | None = None
-    terry_uptime_s: float | None = None
+    hive_online: bool = False
+    hive_pid: int | None = None
+    hive_uptime_s: float | None = None
     gateway_online: bool = False
     gateway_pid: int | None = None
     gateway_uptime_s: float | None = None
@@ -50,9 +50,9 @@ def load_context() -> SystemContext:
             last_updated=data.get("last_updated", 0.0),
             game_running=data.get("game_running"),
             game_gpu=data.get("game_gpu"),
-            terry_online=data.get("terry_online", False),
-            terry_pid=data.get("terry_pid"),
-            terry_uptime_s=data.get("terry_uptime_s"),
+            hive_online=data.get("hive_online", False),
+            hive_pid=data.get("hive_pid"),
+            hive_uptime_s=data.get("hive_uptime_s"),
             gateway_online=data.get("gateway_online", False),
             gateway_pid=data.get("gateway_pid"),
             gateway_uptime_s=data.get("gateway_uptime_s"),

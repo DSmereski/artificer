@@ -18,6 +18,7 @@ from watchdog.observers import Observer
 from vault_writer import __version__
 from vault_writer.config import Config
 from vault_writer.index import VaultIndex
+from vault_writer.ingest_queue import drain as _iq_drain, recover_stuck as _iq_recover
 from vault_writer.protocol import (
     AuthRequired,
     ChatLogAppendRequest,
@@ -129,6 +130,8 @@ class Daemon:
         self._queue: asyncio.Queue[tuple[str, Path]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
         self._commit_task: asyncio.Task | None = None
+        self._drain_task: asyncio.Task | None = None
+        self._smart_link_task: asyncio.Task | None = None
         self._server: asyncio.Server | None = None
         self._observer: Observer | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -160,6 +163,12 @@ class Daemon:
         except Exception as e:  # noqa: BLE001
             log.warning("FTS backfill failed (continuing): %s", e)
 
+        # Crash recovery: reset any 'processing' rows from a prior run.
+        try:
+            _iq_recover(self.index._conn)
+        except Exception as e:  # noqa: BLE001
+            log.warning("ingest_queue: crash recovery failed (continuing): %s", e)
+
         # Ensure wiki_reviews table exists (idempotent).
         try:
             from vault_writer.review_queue import ensure_schema as _rq_ensure
@@ -168,6 +177,9 @@ class Daemon:
             log.warning("review_queue: schema ensure failed (continuing): %s", e)
 
         self._worker_task = asyncio.create_task(self._worker(), name="vault-worker")
+        self._drain_task = asyncio.create_task(
+            self._drain_loop(), name="vault-ingest-drain"
+        )
         self._server = await asyncio.start_server(
             self._handle_client,
             host=self._config.daemon_bind_host,
@@ -211,10 +223,27 @@ class Daemon:
                 self._commit_loop(), name="vault-commit"
             )
 
+        if self._config.smart_link.enabled:
+            self._smart_link_task = asyncio.create_task(
+                self._smart_link_loop(), name="vault-smart-link"
+            )
+
     async def stop(self) -> None:
         if self._observer:
             self._observer.stop()
             self._observer.join(timeout=2.0)
+        if self._drain_task:
+            self._drain_task.cancel()
+            try:
+                await self._drain_task
+            except asyncio.CancelledError:
+                pass
+        if self._smart_link_task:
+            self._smart_link_task.cancel()
+            try:
+                await self._smart_link_task
+            except asyncio.CancelledError:
+                pass
         if self._commit_task:
             self._commit_task.cancel()
             try:
@@ -426,6 +455,150 @@ class Daemon:
         if self.index is None:
             raise RuntimeError("VaultIndex not initialized — call start() first")
         self.index.delete(rel)
+
+    # ======================================================= ingest queue
+
+    async def _drain_loop(self) -> None:
+        """Periodically drain pending rows from ingest_queue.
+
+        Wakes every 2 seconds and processes a batch.  Fast enough for
+        near-realtime delivery while leaving the event loop free for RPCs.
+        """
+        _DRAIN_INTERVAL = 2.0
+        try:
+            while True:
+                await asyncio.sleep(_DRAIN_INTERVAL)
+                if self.index is None:
+                    continue
+                try:
+                    await _iq_drain(
+                        self.index._conn,
+                        self._drain_one,
+                    )
+                except Exception:  # noqa: BLE001
+                    log.exception("ingest_queue drain batch failed")
+        except asyncio.CancelledError:
+            raise
+
+    async def _smart_link_loop(self) -> None:
+        """Periodically wire loose notes into the knowledge graph.
+
+        Runs ``vault_writer.smart_link.run_link`` in a worker thread (the
+        O(n^2) similarity pass must not block the event loop).  Keeps the
+        auto-generated note piles (tasks/ops/skills) attached to hub MOCs +
+        a root INDEX after each regeneration, so they never reappear as loose
+        graph dots.  Idempotent: a steady-state pass writes nothing and adds
+        no git churn.  Fail-soft — a linker error never takes the daemon down.
+        """
+        from vault_writer.smart_link import run_link
+
+        period = max(60, self._config.smart_link.period_seconds)
+        # brief initial delay so the first pass doesn't fight the full scan
+        await asyncio.sleep(min(period, 60.0))
+        while True:
+            try:
+                stats = await asyncio.to_thread(
+                    run_link, self._config.vault_path, True, False, True
+                )
+                edited = stats.get("notes_to_edit", 0)
+                if edited:
+                    log.info(
+                        "smart_link: wired graph (%d notes edited, %d hubs, "
+                        "%d links)",
+                        edited, stats.get("hubs", 0), stats.get("links_added", 0),
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.exception("smart_link: periodic pass failed (continuing)")
+            await asyncio.sleep(period)
+
+    async def _drain_one(self, payload: dict) -> None:
+        """Process a single ingest_queue payload through the learn path.
+
+        Converts the raw payload dict back into a LearnRequest and calls
+        ``_do_learn``, which handles file write + embed + index.  If the
+        daemon is not yet ready (unlikely — drain only runs after start())
+        this raises RuntimeError, which the drain loop records as a
+        transient failure and retries.
+
+        After a successful write+index, wiki synthesis runs as a FAIL-SOFT
+        post-step (config flag: ``wiki_synth.enabled``, default True).
+        A synthesis error is logged but NEVER re-raises — the note write
+        contract is unchanged.
+        """
+        from vault_writer.protocol import LearnRequest
+        req = LearnRequest(**payload)
+        resp = await self._do_learn(req)
+        # --- post-ingest wiki synthesis (C3) ---
+        if self._config.wiki_synth.enabled:
+            try:
+                self._run_wiki_synth(req, resp.path)
+            except Exception:  # noqa: BLE001
+                log.exception(
+                    "wiki_synth: unexpected error for %r (note write OK, synthesis skipped)",
+                    resp.path,
+                )
+
+    def _run_wiki_synth(self, req: "LearnRequest", note_rel_path: str) -> None:  # type: ignore[name-defined]
+        """Build the LLM + search callables and invoke wiki_synth.synthesize().
+
+        Runs synchronously in the daemon's asyncio thread — synthesis calls
+        Ollama via the blocking ``ollama.Client`` (same as LLMClient does).
+        This is acceptable because ``_drain_one`` itself is called from the
+        drain-loop task (not the RPC handler), so a slow synthesis cannot
+        block live RPC responses.  A future enhancement can wrap this in
+        ``asyncio.to_thread`` if contention becomes measurable.
+        """
+        from vault_writer.wiki_synth import make_ollama_llm_fn, synthesize
+
+        cfg = self._config.wiki_synth
+
+        # Search function: wraps VaultIndex.search using FTS only (no
+        # embedder needed here — we pass query_text and a zero-vec for the
+        # vector half; the FTS half drives recall for wiki pages).
+        idx = self.index
+        if idx is None:
+            return
+
+        def _search_fn(query: str, k: int) -> list:
+            dummy_vec = [0.0] * self._config.embedding_dimension
+            return idx.search(
+                dummy_vec, k=k, audience="all", query_text=query
+            )
+
+        llm_fn = make_ollama_llm_fn(
+            ollama_url=self._config.ollama_url,
+            model=cfg.model,
+            timeout=cfg.timeout_seconds,
+        )
+
+        # Pass the VaultIndex connection so contradictions/gaps are queued
+        # into wiki_reviews for the dashboard "needs human review" rail.
+        review_conn = idx._conn if idx is not None else None
+        result = synthesize(
+            req.body,
+            note_id=note_rel_path,
+            search_fn=_search_fn,
+            llm_fn=llm_fn,
+            vault_root=self._config.vault_path,
+            top_k=cfg.top_k,
+            review_conn=review_conn,
+        )
+        if result.ok:
+            log.info(
+                "wiki_synth: article written %s (contradictions=%d, gaps=%d, reviews_queued=%d)",
+                result.wiki_path, len(result.contradictions),
+                len(result.gaps), result.reviews_queued,
+            )
+            if result.contradictions:
+                for c in result.contradictions:
+                    log.warning("wiki_synth: contradiction detected: %s", c)
+            if result.gaps:
+                for g in result.gaps:
+                    log.info("wiki_synth: knowledge gap queued: %s", g)
+        else:
+            log.warning("wiki_synth: synthesis failed: %s", result.error)
 
     # =========================================================== learn RPC
 
@@ -721,66 +894,6 @@ class Daemon:
             prior_existed=bool(result.get("prior_existed")),
         )
 
-    def _run_wiki_synth(self, req: "LearnRequest", note_rel_path: str) -> None:  # type: ignore[name-defined]
-        """Build the LLM + search callables and invoke wiki_synth.synthesize().
-
-        Runs synchronously in the daemon's asyncio thread via run_in_executor —
-        synthesis calls Ollama via the blocking ``ollama.Client`` so it must
-        not block the event loop directly.  A slow synthesis cannot block live
-        RPC responses because it runs in the executor thread pool.
-        A synthesis failure MUST NOT propagate — the note write is the primary
-        outcome; synthesis is fail-soft.
-        """
-        from vault_writer.wiki_synth import make_ollama_llm_fn, synthesize
-
-        cfg = self._config.wiki_synth
-
-        # Search function: wraps VaultIndex.search using FTS only (no
-        # embedder needed here — we pass query_text and a zero-vec for the
-        # vector half; the FTS half drives recall for wiki pages).
-        idx = self.index
-        if idx is None:
-            return
-
-        def _search_fn(query: str, k: int) -> list:
-            dummy_vec = [0.0] * self._config.embedding_dimension
-            return idx.search(
-                dummy_vec, k=k, audience="all", query_text=query
-            )
-
-        llm_fn = make_ollama_llm_fn(
-            ollama_url=self._config.ollama_url,
-            model=cfg.model,
-            timeout=cfg.timeout_seconds,
-        )
-
-        # Pass the VaultIndex connection so contradictions/gaps are queued
-        # into wiki_reviews for the dashboard "needs human review" rail.
-        review_conn = idx._conn if idx is not None else None
-        result = synthesize(
-            req.body,
-            note_id=note_rel_path,
-            search_fn=_search_fn,
-            llm_fn=llm_fn,
-            vault_root=self._config.vault_path,
-            top_k=cfg.top_k,
-            review_conn=review_conn,
-        )
-        if result.ok:
-            log.info(
-                "wiki_synth: article written %s (contradictions=%d, gaps=%d, reviews_queued=%d)",
-                result.wiki_path, len(result.contradictions),
-                len(result.gaps), result.reviews_queued,
-            )
-            if result.contradictions:
-                for c in result.contradictions:
-                    log.warning("wiki_synth: contradiction detected: %s", c)
-            if result.gaps:
-                for g in result.gaps:
-                    log.info("wiki_synth: knowledge gap queued: %s", g)
-        else:
-            log.warning("wiki_synth: synthesis failed: %s", result.error)
-
     # =========================================================== git loop
 
     async def _commit_loop(self) -> None:
@@ -885,9 +998,10 @@ class Daemon:
                     return
                 writer.write(encode_response(resp))
                 await writer.drain()
-                # Persistent-wiki synthesis (#175): synthesize a wiki article
-                # for this note after the RPC has returned. Runs in a thread
-                # so the blocking Ollama call never stalls the event loop.
+                # #175 activation: synthesize the wiki page for this note. The
+                # note write already returned to the caller above; synthesis is
+                # a blocking LLM call, so run it in a thread (NOT inline — that
+                # would stall the event loop) and never let it affect the RPC.
                 if (
                     getattr(self._config, "wiki_synth", None) is not None
                     and self._config.wiki_synth.enabled

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio  # noqa: F401
 
-from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig
+from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig, WikiSynthConfig
 from vault_writer.daemon import Daemon
 from vault_writer.embedder import Embedder, chunk_text, _CHUNK_SIZE
 
@@ -124,6 +124,8 @@ def _make_config(vault: Path, chunk_max_chars: int) -> Config:
         scan=ScanConfig(initial_full_scan=True, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
 
@@ -138,7 +140,7 @@ async def test_daemon_uses_chunk_max_chars_from_config(tmp_path: Path) -> None:
     body = "x " * 4_500  # 9 000 chars
     note_path = vault / "knowledge" / "big-configurable.md"
     note_path.write_text(
-        "---\ntype: knowledge\nauthor: terry\naudience: [all]\n"
+        "---\ntype: knowledge\nauthor: hive\naudience: [all]\n"
         f"title: Big\n---\n\n{body}\n",
         encoding="utf-8",
     )

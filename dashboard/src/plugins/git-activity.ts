@@ -13,11 +13,22 @@ import { escHtml, fmtRelative } from '../format.js';
 
 let _data: GitActivity | null = null;
 let _rootEl: HTMLElement | null = null;
+// F3: track seen hashes so we can flash new arrivals
+const _seenHashes = new Set<string>();
 
 export function onGitActivity(d: GitActivity | null): void {
-  if (d) _data = d;
+  if (d) {
+    // Identify newly-arrived commits before updating _data
+    _newHashes = new Set(
+      (d.commits ?? []).map((c) => c.hash).filter((h) => !_seenHashes.has(h))
+    );
+    _data = d;
+    for (const c of d.commits ?? []) _seenHashes.add(c.hash);
+  }
   _render();
 }
+
+let _newHashes = new Set<string>();
 
 function relevance(state: SystemState): RelevanceResult {
   if (state.tier === 'gaming') return { priority: 0, size: 'hidden' };
@@ -50,15 +61,30 @@ function _render(): void {
     return;
   }
 
-  list.innerHTML = commits.map((c) => `
-    <div class="git-row">
-      <span class="git-hash">${escHtml(c.hash)}</span>
+  // F3: new commits get the fresh-flash class; apply post-render via rAF
+  const newSet = _newHashes;
+  _newHashes = new Set<string>();
+
+  list.innerHTML = commits.map((c) => {
+    // F3: fx3-matrix = green monospace glow on hash; fx3-fresh = single-shot flash on new rows
+    const freshClass = newSet.has(c.hash) ? ' fx3-fresh' : '';
+    return `
+    <div class="git-row${freshClass}">
+      <span class="git-hash fx3-matrix">${escHtml(c.hash.slice(0, 7))}</span>
       <div class="git-info">
         <span class="git-subject">${escHtml(c.subject)}</span>
         <span class="git-sub">${escHtml(c.project)} · ${escHtml(fmtRelative(c.ts * 1000))}</span>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+
+  // Remove the fx3-fresh class after the animation ends (self-cleaning)
+  if (newSet.size > 0) {
+    list.querySelectorAll<HTMLElement>('.fx3-fresh').forEach((row) => {
+      row.addEventListener('animationend', () => row.classList.remove('fx3-fresh'), { once: true });
+    });
+  }
 }
 
 function update(_state: SystemState, _budget: RenderBudget): void {

@@ -16,7 +16,7 @@ from hive_node_agent.heartbeat import run_heartbeat_loop, send_one
 async def test_send_one_posts_to_correct_url(tmp_path: Path) -> None:
     cfg = NodeAgentConfig(
         state_dir=tmp_path,
-        host_url="http://192.0.2.10:8766",
+        host_url="http://127.0.0.1:8766",
         token="tok",
         node_id="n_abc",
     )
@@ -27,7 +27,7 @@ async def test_send_one_posts_to_correct_url(tmp_path: Path) -> None:
         result = await send_one(cfg, capabilities={"agent_version": "0.1.0"})
     assert result["ok"] is True
     called_url = mock.await_args.args[0]
-    assert called_url == "http://192.0.2.10:8766/v1/nodes/n_abc/heartbeat"
+    assert called_url == "http://127.0.0.1:8766/v1/nodes/n_abc/heartbeat"
     # Auth header populated.
     kwargs = mock.await_args.kwargs
     assert kwargs.get("token") == "tok"

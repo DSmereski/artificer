@@ -12,6 +12,19 @@ import type { SystemState, RenderBudget } from '../state/types.js';
 import type { BoardTask } from '../gateway.js';
 import { mediaUrl } from '../gateway.js';
 import { escHtml } from '../format.js';
+import { resolveSettings } from './instances.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+interface GallerySettings {
+  maxItems: number;
+}
+
+/**
+ * Default 24 == today's behavior (the old `onContentBoard` `slice(0, 24)`).
+ * Set lower to show fewer thumbnails. A fresh user sees no change.
+ */
+const DEFAULT_SETTINGS: GallerySettings = { maxItems: 24 };
 
 let _items: BoardTask[] = [];
 let _rootEl: HTMLElement | null = null;
@@ -63,16 +76,20 @@ function _render(): void {
     return;
   }
 
-  grid.innerHTML = _items.map((t) => {
+  const { maxItems } = resolveSettings(_rootEl, 'content-gallery', DEFAULT_SETTINGS);
+  const cap = maxItems > 0 ? maxItems : DEFAULT_SETTINGS.maxItems;
+
+  grid.innerHTML = _items.slice(0, cap).map((t) => {
     const spec = t.content_spec ?? {};
     const media = spec.result_media_ids ?? [];
     const done = t.status === 'done' && media.length > 0;
     const failed = t.status === 'review' || spec.state === 'error';
     const typeTag = spec.type === 'video' ? '▶' : '▣';
 
+    // F3: pending (non-failed) items get shimmer sweep to signal "actively generating"
     const thumbs = done
       ? media.map((id) => `<img class="cg-thumb" data-media="${escHtml(id)}" src="${mediaUrl(id)}" alt="" loading="lazy" />`).join('')
-      : `<div class="cg-pending ${failed ? 'cg-failed' : ''}">${failed ? '✕ failed' : '◴ generating…'}</div>`;
+      : `<div class="cg-pending ${failed ? 'cg-failed' : 'fx3-shimmer'}">${failed ? '✕ failed' : '◴ generating…'}</div>`;
 
     return `
       <div class="cg-item">
@@ -110,6 +127,18 @@ const contentGalleryPlugin: PanelPlugin = {
   relevance,
   mount,
   update,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'maxItems',
+        label: 'Max items',
+        type: 'number',
+        default: 24,
+        hint: 'How many content cards to show',
+      },
+    ],
+  },
 };
 
 register(contentGalleryPlugin);

@@ -2,7 +2,7 @@
 
 The function wraps vault-sourced text in human-readable BEGIN/END
 markers before that text flows into LLM system prompts (chat_dispatcher
-non-terry path, terry canon, adapter canon, claude-code preload). The
+non-hive path, hive canon, adapter canon, claude-code preload). The
 markers are a soft signal to the LLM that the content is data, not
 instructions — but if the content itself contains the literal close
 marker, an attacker can break out and have the rest of their note

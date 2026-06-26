@@ -1,7 +1,7 @@
 """Scout daemon: headless watchdog + system monitoring.
 
 Replaces the old Discord-bot Scout. No chat persona, no LLM. Just:
-- Process supervision (auto-restart of Terry / gateway)
+- Process supervision (auto-restart of Hive / gateway)
 - GPU temp + VRAM monitoring (ntfy push on critical temp)
 - Game detection (mute notifications when gaming)
 - Disk space checks (ntfy push when free space below DISK_WARN_GB)

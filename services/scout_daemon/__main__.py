@@ -3,7 +3,7 @@
 Run as: `python -m services.scout_daemon`
 
 Loops:
-  - Watchdog: every WATCHDOG_INTERVAL seconds, check Terry + gateway,
+  - Watchdog: every WATCHDOG_INTERVAL seconds, check Hive + gateway,
     auto-restart if either is down.
   - GPU monitor: every GPU_CHECK_INTERVAL seconds, snapshot temps/VRAM
     + detect a game on the gaming GPU.
@@ -68,14 +68,14 @@ def _setup_logging() -> logging.Logger:
 def _watchdog_loop(log: logging.Logger, ctx: context_bridge.SystemContext) -> None:
     while True:
         try:
-            t = watchdog.check_terry()
-            ctx.terry_online = t.is_running
-            ctx.terry_pid = t.pid
-            ctx.terry_uptime_s = t.uptime_seconds
+            t = watchdog.check_hive()
+            ctx.hive_online = t.is_running
+            ctx.hive_pid = t.pid
+            ctx.hive_uptime_s = t.uptime_seconds
             if not t.is_running:
-                log.warning("terry not running — restarting")
-                if watchdog.restart_terry():
-                    ctx.alerts.append(f"restarted terry @ {time.strftime('%H:%M:%S')}")
+                log.warning("hive not running — restarting")
+                if watchdog.restart_hive():
+                    ctx.alerts.append(f"restarted hive @ {time.strftime('%H:%M:%S')}")
                     ctx.alerts = ctx.alerts[-100:]
 
             g = watchdog.check_gateway()

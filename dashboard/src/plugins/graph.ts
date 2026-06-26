@@ -29,6 +29,28 @@ import {
   type NeighborResponse,
 } from '../charts/force.js';
 import { escHtml } from '../format.js';
+import { resolveSettings } from './instances.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+interface GraphSettings {
+  maxNodes: number;
+}
+
+/**
+ * Default 120 == today's idle-tier node budget ceiling (graphMaxNodes=120).
+ * The effective cap is min(budget.graphMaxNodes, userMaxNodes), so the user
+ * setting can only ever LOWER the node count vs the governor's budget — never
+ * raise it past what the tier allows. With the default 120, min(120,120)=120
+ * in idle and min(60,120)=60 in busy, exactly today's behavior.
+ */
+const DEFAULT_SETTINGS: GraphSettings = { maxNodes: 120 };
+
+/** Resolve the user node cap for the graph cell (single-instance friendly). */
+function _maxNodesSetting(): number {
+  const { maxNodes } = resolveSettings(_rootEl, 'graph', DEFAULT_SETTINGS);
+  return maxNodes > 0 ? maxNodes : DEFAULT_SETTINGS.maxNodes;
+}
 
 // ─── Relevance ────────────────────────────────────────────────────────────────
 
@@ -206,7 +228,9 @@ function update(state: SystemState, budget: RenderBudget): void {
   if (offlineEl) offlineEl.style.display = 'none';
   if (wrapEl)    wrapEl.style.display    = '';
 
-  const maxNodes = budget.graphMaxNodes;
+  // Effective node cap: the governor's tier budget, lowered (never raised) by
+  // the user's per-instance maxNodes setting. Default 120 == today's idle cap.
+  const maxNodes = Math.min(budget.graphMaxNodes, _maxNodesSetting());
 
   // Slow cadence god-node refresh (60s) or on max-node count change
   const now = Date.now();
@@ -257,6 +281,18 @@ const graphPlugin: PanelPlugin = {
   onResize,
   suspend,
   resume,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'maxNodes',
+        label: 'Max nodes',
+        type: 'number',
+        default: 120,
+        hint: 'User cap, min-ed with the tier node budget',
+      },
+    ],
+  },
 };
 
 register(graphPlugin);

@@ -30,7 +30,8 @@ export function drawSparkline(
   g.clearRect(0, 0, W, H);
   if (vals.length < 2) return;
 
-  const color = opts.color ?? '#c17f24';
+  const color = opts.color ??
+    (getComputedStyle(document.documentElement).getPropertyValue('--hex-copper').trim() || '#c07840');
   const lw = opts.width ?? 1.5;
   let max = -Infinity, min = Infinity;
   for (const v of vals) { if (v > max) max = v; if (v < min) min = v; }

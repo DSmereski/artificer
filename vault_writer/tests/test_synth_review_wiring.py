@@ -1,14 +1,14 @@
-"""Tests for wiki_synth -> review_queue wiring (C4).
+"""Tests for wiki_synth → review_queue wiring (C4).
 
 When review_conn is passed to synthesize() and the LLM detects
 contradictions or gaps, rows must be inserted into wiki_reviews.
 
 Covers:
-  (a) contradiction detected -> row in wiki_reviews with kind='contradiction'.
-  (b) gap detected -> row in wiki_reviews with kind='gap'.
-  (c) multiple items -> multiple rows.
-  (d) no issues -> no rows written.
-  (e) review_conn=None -> no rows, synthesis still completes (existing tests).
+  (a) contradiction detected → row in wiki_reviews with kind='contradiction'.
+  (b) gap detected → row in wiki_reviews with kind='gap'.
+  (c) multiple items → multiple rows.
+  (d) no issues → no rows written.
+  (e) review_conn=None → no rows, synthesis still completes (existing tests).
   (f) review_queue write failure is fail-soft (synthesis completes).
 """
 
@@ -46,7 +46,7 @@ def _make_fake_search():
     return _search
 
 
-# ------------------------------------------------------------------ (a) contradiction -> row
+# ------------------------------------------------------------------ (a) contradiction → row
 
 
 def test_synth_contradiction_writes_review_row(tmp_path: Path) -> None:
@@ -58,18 +58,18 @@ def test_synth_contradiction_writes_review_row(tmp_path: Path) -> None:
     ensure_schema(db)
 
     analyze = {
-        "slug": "gateway-port",
-        "title": "Gateway Port",
+        "slug": "hive-port",
+        "title": "Hive Port",
         "entities": ["port"],
         "related_slugs": [],
         "contradictions": ["Note says port 9000 but wiki says 8765."],
         "gaps": [],
     }
-    llm_fn = _make_fake_llm(analyze, "The gateway daemon binds to a configurable port.")
+    llm_fn = _make_fake_llm(analyze, "Hive listens on a configurable port.")
 
     result = synthesize(
-        "The gateway daemon binds to port 9000.",
-        note_id="ops/gateway.md",
+        "The hive daemon binds to port 9000.",
+        note_id="ops/hive.md",
         search_fn=_make_fake_search(),
         llm_fn=llm_fn,
         vault_root=vault,
@@ -84,11 +84,11 @@ def test_synth_contradiction_writes_review_row(tmp_path: Path) -> None:
     r = reviews[0]
     assert r["kind"] == "contradiction"
     assert "9000" in r["summary"]
-    assert "ops/gateway.md" in r["source_notes"]
-    assert r["slug"] == "gateway-port"
+    assert "ops/hive.md" in r["source_notes"]
+    assert r["slug"] == "hive-port"
 
 
-# ------------------------------------------------------------------ (b) gap -> row
+# ------------------------------------------------------------------ (b) gap → row
 
 
 def test_synth_gap_writes_review_row(tmp_path: Path) -> None:
@@ -100,18 +100,18 @@ def test_synth_gap_writes_review_row(tmp_path: Path) -> None:
     ensure_schema(db)
 
     analyze = {
-        "slug": "topic-ships",
-        "title": "Topic Ships",
+        "slug": "star-citizen-ships",
+        "title": "Star Citizen Ships",
         "entities": ["ships", "manufacturers"],
         "related_slugs": [],
         "contradictions": [],
-        "gaps": ["Ship manufacturer has no wiki page."],
+        "gaps": ["RSI ship manufacturer has no wiki page."],
     }
-    llm_fn = _make_fake_llm(analyze, "Ships span multiple manufacturers.")
+    llm_fn = _make_fake_llm(analyze, "Ships in the verse span multiple manufacturers.")
 
     result = synthesize(
-        "The Aurora and Constellation are popular ships.",
-        note_id="knowledge/ships.md",
+        "RSI makes the Aurora and Constellation ships.",
+        note_id="knowledge/sc-ships.md",
         search_fn=_make_fake_search(),
         llm_fn=llm_fn,
         vault_root=vault,
@@ -125,10 +125,10 @@ def test_synth_gap_writes_review_row(tmp_path: Path) -> None:
     assert len(reviews) == 1
     r = reviews[0]
     assert r["kind"] == "gap"
-    assert "manufacturer" in r["summary"]
+    assert "RSI" in r["summary"]
 
 
-# ------------------------------------------------------------------ (c) multiple items -> multiple rows
+# ------------------------------------------------------------------ (c) multiple items → multiple rows
 
 
 def test_synth_multiple_contradictions_and_gaps(tmp_path: Path) -> None:
@@ -166,7 +166,7 @@ def test_synth_multiple_contradictions_and_gaps(tmp_path: Path) -> None:
     assert kinds == {"contradiction", "gap"}
 
 
-# ------------------------------------------------------------------ (d) no issues -> no rows
+# ------------------------------------------------------------------ (d) no issues → no rows
 
 
 def test_synth_no_issues_no_rows(tmp_path: Path) -> None:
@@ -200,7 +200,7 @@ def test_synth_no_issues_no_rows(tmp_path: Path) -> None:
     assert get_open_reviews(db) == []
 
 
-# ------------------------------------------------------------------ (e) review_conn=None -> no rows, synth ok
+# ------------------------------------------------------------------ (e) review_conn=None → no rows, synth ok
 
 
 def test_synth_no_review_conn_still_ok(tmp_path: Path) -> None:

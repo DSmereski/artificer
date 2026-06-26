@@ -1,11 +1,11 @@
 """Tests for vault_writer.gap_fill (C5).
 
 Covers:
-  (a) no search backend -> GapFillResult(ok=False, skipped_reason set).
-  (b) topics generated (fake LLM) -> confirm=False -> no ingest.
-  (c) confirm=True + fake search + fake learn_fn -> results ingested.
-  (d) declining (confirm=False) -> nothing ingested.
-  (e) LLM returns bad JSON -> GapFillResult(ok=False, error set).
+  (a) no search backend → GapFillResult(ok=False, skipped_reason set).
+  (b) topics generated (fake LLM) → confirm=False → no ingest.
+  (c) confirm=True + fake search + fake learn_fn → results ingested.
+  (d) declining (confirm=False) → nothing ingested.
+  (e) LLM returns bad JSON → GapFillResult(ok=False, error set).
   (f) search failure is handled gracefully (partial results ok).
   (g) _parse_topics handles markdown-fenced JSON arrays.
 """
@@ -51,8 +51,8 @@ def _make_fake_search(results: list[dict]) -> Callable:
 
 def test_gap_fill_no_backend_returns_skipped() -> None:
     result = gap_fill(
-        "Ship manufacturer has no wiki page.",
-        llm_fn=_make_fake_llm(["ships query one", "ships query two"]),
+        "RSI ship manufacturer has no wiki page.",
+        llm_fn=_make_fake_llm(["RSI ships Star Citizen", "RSI Aurora specs"]),
         search_backend="none",
     )
     assert result.ok is False
@@ -61,11 +61,11 @@ def test_gap_fill_no_backend_returns_skipped() -> None:
     assert result.ingested is False
 
 
-# ------------------------------------------------------------------ (b) topics generated, confirm=False -> no ingest
+# ------------------------------------------------------------------ (b) topics generated, confirm=False → no ingest
 
 
 def test_gap_fill_confirm_false_no_ingest(monkeypatch) -> None:
-    """confirm=False -> topics generated, search run, but learn_fn never called."""
+    """confirm=False → topics generated, search run, but learn_fn never called."""
     import vault_writer.gap_fill as gf_mod
 
     search_calls: list[str] = []
@@ -82,8 +82,8 @@ def test_gap_fill_confirm_false_no_ingest(monkeypatch) -> None:
         learn_calls.append(title)
 
     result = gap_fill(
-        "Ship manufacturer has no wiki page.",
-        llm_fn=_make_fake_llm(["ships query one", "ships query two"]),
+        "RSI ship manufacturer has no wiki page.",
+        llm_fn=_make_fake_llm(["RSI ships Star Citizen", "RSI Aurora specs"]),
         confirm=False,
         learn_fn=_learn,
         search_backend="tavily",  # non-none but monkeypatched
@@ -92,17 +92,17 @@ def test_gap_fill_confirm_false_no_ingest(monkeypatch) -> None:
     assert result.ok is True
     assert len(result.topics) == 2
     assert len(result.search_results) > 0
-    # confirm=False -> learn_fn NEVER called
+    # confirm=False → learn_fn NEVER called
     assert learn_calls == []
     assert result.ingested is False
     assert result.skipped_reason is not None
 
 
-# ------------------------------------------------------------------ (c) confirm=True + fake search -> ingested
+# ------------------------------------------------------------------ (c) confirm=True + fake search → ingested
 
 
 def test_gap_fill_confirm_true_ingests(monkeypatch) -> None:
-    """confirm=True + search results -> learn_fn called once per result."""
+    """confirm=True + search results → learn_fn called once per result."""
     import vault_writer.gap_fill as gf_mod
 
     def _fake_run_search(query: str, *, backend: str, max_results: int = 3) -> list[dict]:
@@ -119,8 +119,8 @@ def test_gap_fill_confirm_true_ingests(monkeypatch) -> None:
         learn_calls.append((title, url))
 
     result = gap_fill(
-        "Ship manufacturer has no wiki page.",
-        llm_fn=_make_fake_llm(["query alpha", "query beta"]),
+        "RSI ship manufacturer has no wiki page.",
+        llm_fn=_make_fake_llm(["RSI Aurora", "RSI Constellation"]),
         confirm=True,
         learn_fn=_learn,
         search_backend="searxng",  # monkeypatched
@@ -128,7 +128,7 @@ def test_gap_fill_confirm_true_ingests(monkeypatch) -> None:
 
     assert result.ok is True
     assert result.ingested is True
-    # 2 topics x 2 results = 4 calls
+    # 2 topics × 2 results = 4 calls
     assert len(learn_calls) == 4
     # All calls use real search result data (not fences)
     for title, url in learn_calls:
@@ -136,11 +136,11 @@ def test_gap_fill_confirm_true_ingests(monkeypatch) -> None:
         assert url.startswith("https://")
 
 
-# ------------------------------------------------------------------ (d) declining -> nothing ingested
+# ------------------------------------------------------------------ (d) declining → nothing ingested
 
 
 def test_gap_fill_confirm_false_explicitly_skips(monkeypatch) -> None:
-    """Explicitly declining (confirm=False, no learn_fn) -> nothing ingested."""
+    """Explicitly declining (confirm=False, no learn_fn) → nothing ingested."""
     import vault_writer.gap_fill as gf_mod
 
     monkeypatch.setattr(gf_mod, "_run_search", lambda q, *, backend, max_results=3: [
@@ -160,7 +160,7 @@ def test_gap_fill_confirm_false_explicitly_skips(monkeypatch) -> None:
     assert result.skipped_reason is not None
 
 
-# ------------------------------------------------------------------ (e) bad LLM JSON -> error
+# ------------------------------------------------------------------ (e) bad LLM JSON → error
 
 
 def test_gap_fill_bad_llm_json_returns_error(monkeypatch) -> None:
@@ -236,7 +236,7 @@ def test_parse_topics_filters_empty_strings() -> None:
 
 
 def test_gap_fill_confirm_true_no_learn_fn_skipped(monkeypatch) -> None:
-    """confirm=True but learn_fn=None -> skipped, not ingested."""
+    """confirm=True but learn_fn=None → skipped, not ingested."""
     import vault_writer.gap_fill as gf_mod
 
     monkeypatch.setattr(gf_mod, "_run_search", lambda q, *, backend, max_results=3: [

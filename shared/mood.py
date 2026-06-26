@@ -1,11 +1,11 @@
 """
-Mood & affinity engine for Terry.
+Mood & affinity engine for Hive.
 
-Tracks how Terry feels based on interactions. Mood affects her text tone
+Tracks how Hive feels based on interactions. Mood affects her text tone
 and the selfie prompts she generates. Higher affinity = warmer responses,
 more revealing selfies (owner only).
 
-Persists to memory/terry-mood.json across restarts.
+Persists to memory/hive-mood.json across restarts.
 """
 
 import json
@@ -16,15 +16,15 @@ from pathlib import Path
 from typing import Optional
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_MOOD_FILE = _PROJECT_ROOT / "memory" / "terry-mood.json"
+_MOOD_FILE = _PROJECT_ROOT / "memory" / "hive-mood.json"
 
-OWNER_ID = int(os.environ.get("HIVE_OWNER_DISCORD_ID", "0"))
+OWNER_ID = 000000000000000000
 
 # ---------------------------------------------------------------------------
 # Fixed appearance — never changes, ensures visual consistency
 # ---------------------------------------------------------------------------
 
-TERRY_APPEARANCE = (
+HIVE_APPEARANCE = (
     "photorealistic portrait of a night elf woman, early 30s appearance, "
     "tall athletic build, soft purple-blue skin, long silvery-white hair "
     "falling past her shoulders with a slight wave, two long pointed elven ears, "
@@ -327,7 +327,7 @@ class MoodEngine:
     # ------------------------------------------------------------------
 
     def get_system_clause(self, user_id: int) -> str:
-        """Get a mood clause to append to Terry's system prompt."""
+        """Get a mood clause to append to Hive's system prompt."""
         level = self.current_level
         tier = _MOOD_TIERS[level]
         ua = self.per_user.get(user_id, UserAffinity())
@@ -364,7 +364,7 @@ class MoodEngine:
             setting = _SFW_SETTING.get(level, setting)
 
         return (
-            f"{TERRY_APPEARANCE}, {expression}, "
+            f"{HIVE_APPEARANCE}, {expression}, "
             f"wearing {clothing}, {setting}"
         )
 

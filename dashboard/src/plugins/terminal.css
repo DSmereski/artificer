@@ -1,0 +1,52 @@
+/** Terminal panel styles (P3) — multi-session tabs + xterm host.
+ *
+ * Extracted from index.html inline <style> so Vite always bundles these
+ * regardless of HTML processing. Import here (not in the HTML) to ensure
+ * the CSS ends up in dist/assets/*.css on every build. */
+
+/* ── Terminal: multi-session tabs (P3) ───────────────────────────── */
+.term-header { gap: 8px; }
+.term-tabs {
+  display: flex; align-items: center; gap: 4px;
+  flex: 1; min-width: 0; overflow-x: auto;
+}
+.term-tabs::-webkit-scrollbar { height: 0; }
+.term-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--dim);
+  font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.02em;
+  cursor: pointer; white-space: nowrap; transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.term-tab:hover { border-color: color-mix(in oklch, var(--copper) 50%, transparent); color: var(--ink); }
+.term-tab.is-active {
+  border-color: var(--amber); color: var(--amber);
+  background: color-mix(in oklch, var(--copper) 8%, transparent);
+}
+.term-tab-dot { font-size: 8px; line-height: 1; }
+.term-tab-close {
+  margin-left: 2px; padding: 0 3px; border-radius: 4px;
+  color: var(--faint); font-size: 12px; line-height: 1;
+}
+.term-tab-close:hover { color: var(--red); background: color-mix(in oklch, var(--red) 14%, transparent); }
+.term-add {
+  flex-shrink: 0; width: 22px; height: 22px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--dim);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.term-add:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+.term-add:disabled { opacity: 0.3; cursor: not-allowed; }
+.term-sessions { position: relative; height: calc(100% - 40px); }
+.term-session { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.term-session .term-container { flex: 1; min-height: 0; padding: 4px 6px; }
+/* Status chip — shown for any non-connected state, hidden when connected. */
+.term-status {
+  display: flex; align-items: center;
+  margin: 8px; padding: 7px 11px; width: fit-content;
+  border: 1px dashed var(--line); border-radius: 8px;
+  background: color-mix(in oklch, var(--copper) 4%, transparent);
+  color: var(--dim); font-size: 11px;
+}
+.term-status-connected { display: none; }

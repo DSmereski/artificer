@@ -27,7 +27,7 @@ def rpc_server(tmp_path, monkeypatch):
         gpu_vram_used_pct={0: 45.0, 1: 88.0},
         disk_free_gb={"C:\\": 120.5, "D:\\": 8000.0},
         game_running=None,
-        terry_online=True,
+        hive_online=True,
         gateway_online=True,
     )
     context_bridge.save_context(ctx)
@@ -54,7 +54,7 @@ def test_health(rpc_server):
 
 def test_snapshot(rpc_server):
     j = _get(f"{rpc_server}/sysmon/snapshot")
-    assert j["terry_online"] is True
+    assert j["hive_online"] is True
     assert j["gateway_online"] is True
     assert j["gpu_temps"]["0"] == 65
     assert j["gpu_temps"]["1"] == 72

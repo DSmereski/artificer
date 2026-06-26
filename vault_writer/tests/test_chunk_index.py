@@ -32,7 +32,7 @@ def test_upsert_chunks_stores_rows(tmp_path: Path) -> None:
     idx = _make_index(tmp_path)
     try:
         idx.upsert(
-            path="k/note.md", note_type="knowledge", author="terry",
+            path="k/note.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={}, body="text",
             embedding=[0.5] * DIM,
         )
@@ -58,7 +58,7 @@ def test_upsert_chunks_replaces_on_second_call(tmp_path: Path) -> None:
     idx = _make_index(tmp_path)
     try:
         idx.upsert(
-            path="k/note.md", note_type="knowledge", author="terry",
+            path="k/note.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={}, body="text",
             embedding=[0.5] * DIM,
         )
@@ -91,7 +91,7 @@ def test_search_by_chunks_recalls_later_chunk_match(tmp_path: Path) -> None:
         # Primary embedding (chunk 0) is far from query.
         # Chunk-1 embedding is very close to query.
         idx.upsert(
-            path="k/starship.md", note_type="knowledge", author="terry",
+            path="k/starship.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={"title": "Starship Note"},
             body="Intro text that is generic.",
             embedding=[0.1] * DIM,  # far from query
@@ -107,7 +107,7 @@ def test_search_by_chunks_recalls_later_chunk_match(tmp_path: Path) -> None:
 
         # Note 2: a completely unrelated note — primary and all chunk vectors far.
         idx.upsert(
-            path="k/other.md", note_type="knowledge", author="terry",
+            path="k/other.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={}, body="Cooking recipes.",
             embedding=[0.9] * DIM,
         )
@@ -132,7 +132,7 @@ def test_search_by_chunks_falls_back_when_empty(tmp_path: Path) -> None:
     idx = _make_index(tmp_path)
     try:
         idx.upsert(
-            path="k/a.md", note_type="knowledge", author="terry",
+            path="k/a.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={}, body="text",
             embedding=[0.5] * DIM,
         )
@@ -153,7 +153,7 @@ def test_delete_removes_chunk_rows(tmp_path: Path) -> None:
     idx = _make_index(tmp_path)
     try:
         idx.upsert(
-            path="k/del.md", note_type="knowledge", author="terry",
+            path="k/del.md", note_type="knowledge", author="hive",
             audience=["all"], frontmatter={}, body="text",
             embedding=[0.5] * DIM,
         )
@@ -182,7 +182,7 @@ def test_reindex_chunks_count_all_pending(tmp_path: Path) -> None:
     try:
         for i in range(3):
             idx.upsert(
-                path=f"k/note{i}.md", note_type="knowledge", author="terry",
+                path=f"k/note{i}.md", note_type="knowledge", author="hive",
                 audience=["all"], frontmatter={}, body="text",
                 embedding=[0.5] * DIM,
             )
@@ -197,7 +197,7 @@ def test_reindex_chunks_count_decreases_after_upsert(tmp_path: Path) -> None:
     try:
         for i in range(3):
             idx.upsert(
-                path=f"k/note{i}.md", note_type="knowledge", author="terry",
+                path=f"k/note{i}.md", note_type="knowledge", author="hive",
                 audience=["all"], frontmatter={}, body="text",
                 embedding=[0.5] * DIM,
             )

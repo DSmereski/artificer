@@ -5,6 +5,13 @@
  * No edits to core files required when adding new panels.
  *
  * Version: 2 (bump on breaking changes; plugins should tolerate unknown budget fields).
+ *
+ * P0 v-Next additions (all optional, fully back-compat):
+ *   `defaultSettings`  — seed settings for a new instance; plugins without it
+ *                        have no settings and only ever run as a single default
+ *                        instance.
+ *   `settingsSchema`   — schema-driven settings descriptor; drives the per-
+ *                        instance settings form in the Module Manager gear UI.
  */
 
 import type { SystemState, SizeHint, RenderBudget } from '../state/types.js';
@@ -36,6 +43,40 @@ export interface RelevanceResult {
   size: SizeHint;
   /** Optional area multiplier applied after size→span conversion. Default 1. */
   weight?: number;
+}
+
+// ─── PanelPlugin interface ────────────────────────────────────────────────────
+
+// ─── Settings schema (P0 v-Next) ─────────────────────────────────────────────
+
+/**
+ * A single field descriptor in a plugin's settings schema.
+ * The Module Manager renders a form from this — keeps all UI logic in one place.
+ */
+export type SettingsFieldType = 'string' | 'number' | 'boolean' | 'select';
+
+export interface SettingsSelectOption {
+  value: string;
+  label: string;
+}
+
+export interface SettingsField {
+  /** Machine key — used as the settings object property name. */
+  readonly key: string;
+  /** Human label shown in the settings form. */
+  readonly label: string;
+  readonly type: SettingsFieldType;
+  /** Default value for new instances (should match `defaultSettings[key]`). */
+  readonly default: string | number | boolean;
+  /** Only relevant when type === 'select'. */
+  readonly options?: readonly SettingsSelectOption[];
+  /** Optional helper text shown below the field. */
+  readonly hint?: string;
+}
+
+/** Full settings schema for a plugin type. */
+export interface SettingsSchema {
+  readonly fields: readonly SettingsField[];
 }
 
 // ─── PanelPlugin interface ────────────────────────────────────────────────────
@@ -75,4 +116,20 @@ export interface PanelPlugin {
 
   /** Optional: resume timers, restart sims. Called when panel becomes visible again. */
   resume?(): void;
+
+  // ─── P0 v-Next additions (all optional; plugins without them are back-compat) ──
+
+  /**
+   * Seed settings for a new instance of this plugin type.
+   * Plugins that omit this field have no configurable settings and only ever
+   * run as a single default instance.
+   */
+  readonly defaultSettings?: Record<string, unknown>;
+
+  /**
+   * Describes every configurable field; drives the schema-driven settings form
+   * in the Module Manager focus-mode gear.
+   * Only meaningful when `defaultSettings` is also defined.
+   */
+  readonly settingsSchema?: SettingsSchema;
 }

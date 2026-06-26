@@ -29,7 +29,7 @@ def _default_state_dir() -> Path:
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="hive_node_agent")
     p.add_argument("--state-dir", type=Path, default=_default_state_dir())
-    p.add_argument("--host", help="Host URL, e.g. http://192.0.2.10:8766")
+    p.add_argument("--host", help="Host URL, e.g. http://127.0.0.1:8766")
     p.add_argument("--code", help="6-digit invite code (e.g. 814-273)")
     p.add_argument("--name", default="", help="Display name for this node")
     p.add_argument("--label", action="append", default=[], help="Repeatable")

@@ -13,6 +13,7 @@
 import type { PanelPlugin } from '../plugins/contract.js';
 import type { SystemState } from '../state/types.js';
 import type { Template } from './templates.js';
+import { isPanelEnabled } from '../plugins/registry.js';
 
 let _container: HTMLElement | null = null;
 const _cellEls = new Map<string, HTMLElement>(); // id → DOM element
@@ -69,7 +70,7 @@ export function applyTemplate(
     const slot = focusId
       ? (p.id === focusId ? FOCUS_AREA : null)
       : (tpl.slots[p.id] ?? null);
-    const visible = slot != null && (focusId != null || isPanelVisible(p, state));
+    const visible = slot != null && isPanelEnabled(p.id) && (focusId != null || isPanelVisible(p, state));
 
     let el = _cellEls.get(p.id);
     const wasHidden = !el || el.style.display === 'none';
@@ -133,4 +134,12 @@ function _ensureCell(id: string): HTMLElement {
 /** Get the DOM element for a cell (or null). */
 export function getCellEl(id: string): HTMLElement | null {
   return _cellEls.get(id) ?? null;
+}
+
+/**
+ * Register an externally-created cell element so `getCellEl` can find it.
+ * Used by desktop.ts to share the lookup map with the main update loop.
+ */
+export function registerCellEl(id: string, el: HTMLElement): void {
+  _cellEls.set(id, el);
 }

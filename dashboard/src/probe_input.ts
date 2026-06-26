@@ -6,7 +6,7 @@
  * area (which forwards to the WebView2) should increment this counter —
  * proving input forwarding is active.
  *
- * the operator's manual check: click the button, see the counter go up.
+ * David's manual check: click the button, see the counter go up.
  */
 
 const LS_KEY = 'hive_click_count';
@@ -43,8 +43,9 @@ export function initProbeInput(): void {
       lastEl.textContent = new Date().toLocaleTimeString();
     }
 
-    // Visual flash feedback (brief amber border pulse)
-    btn.style.boxShadow = '0 0 24px oklch(0.83 0.15 78 / 0.6)';
+    // Visual flash feedback (brief amber border pulse — use inline custom property
+    // so it inherits the current theme automatically).
+    btn.style.boxShadow = '0 0 24px var(--amber-glow)';
     setTimeout(() => {
       btn.style.boxShadow = '';
     }, 200);

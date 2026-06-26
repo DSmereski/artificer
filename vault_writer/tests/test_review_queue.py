@@ -38,7 +38,7 @@ def conn() -> sqlite3.Connection:
 
 
 def test_add_review_returns_positive_id(conn: sqlite3.Connection) -> None:
-    row_id = add_review(conn, slug="config-gap", kind="gap", summary="Port not documented")
+    row_id = add_review(conn, slug="hive-config", kind="gap", summary="Port not documented")
     assert isinstance(row_id, int)
     assert row_id > 0
 
@@ -46,7 +46,7 @@ def test_add_review_returns_positive_id(conn: sqlite3.Connection) -> None:
 def test_add_review_fields_stored(conn: sqlite3.Connection) -> None:
     add_review(
         conn,
-        slug="gateway-port",
+        slug="hive-gateway",
         kind="contradiction",
         summary="Port 9000 contradicts existing 8765.",
         source_notes=["ops/config.md"],
@@ -54,7 +54,7 @@ def test_add_review_fields_stored(conn: sqlite3.Connection) -> None:
     rows = conn.execute("SELECT slug, kind, summary, source_notes, status FROM wiki_reviews").fetchall()
     assert len(rows) == 1
     slug, kind, summary, source_notes_raw, status = rows[0]
-    assert slug == "gateway-port"
+    assert slug == "hive-gateway"
     assert kind == "contradiction"
     assert "9000" in summary
     assert "ops/config.md" in source_notes_raw
@@ -62,7 +62,7 @@ def test_add_review_fields_stored(conn: sqlite3.Connection) -> None:
 
 
 def test_add_review_source_notes_default_empty(conn: sqlite3.Connection) -> None:
-    add_review(conn, slug="topic-economy", kind="gap", summary="Economy gap")
+    add_review(conn, slug="sc-economy", kind="gap", summary="Economy gap")
     rows = conn.execute("SELECT source_notes FROM wiki_reviews").fetchall()
     assert rows[0][0] == "[]"
 

@@ -257,7 +257,7 @@ def synthesize(
         LLM call that returns the model's text response.  The daemon passes
         a thin Ollama wrapper; tests pass a fake.
     vault_root:
-        Absolute path to the vault root (``wiki/`` will be
+        Absolute path to the Obsidian vault root (``wiki/`` will be
         created inside it).
     top_k:
         How many existing wiki pages to pull for context.
@@ -492,9 +492,9 @@ def make_ollama_llm_fn(
 
     ``llm_fn(system_prompt, user_prompt) → str``
 
-    Uses the Ollama client so no new dependency is introduced.
-    The model is injected at factory time so callers can configure it
-    via the config flag.
+    Uses the same ``ollama.Client`` that ``shared.llm_client`` uses, so no
+    new dependency is introduced.  The model is injected at factory time so
+    callers can configure it via the config flag.
     """
     from ollama import Client
 

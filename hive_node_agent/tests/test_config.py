@@ -18,14 +18,14 @@ def test_default_config(tmp_path: Path) -> None:
 def test_persist_roundtrip(tmp_path: Path) -> None:
     cfg = NodeAgentConfig(
         state_dir=tmp_path,
-        host_url="http://192.0.2.10:8766",
+        host_url="http://127.0.0.1:8766",
         token="abc",
         node_id="n_xyz",
         labels=("livingroom",),
     )
     cfg.save()
     reloaded = NodeAgentConfig.load(tmp_path)
-    assert reloaded.host_url == "http://192.0.2.10:8766"
+    assert reloaded.host_url == "http://127.0.0.1:8766"
     assert reloaded.token == "abc"
     assert reloaded.node_id == "n_xyz"
     assert reloaded.labels == ("livingroom",)

@@ -27,7 +27,7 @@ async def test_dup_scanner_wired_to_real_vault_index(tmp_path: Path) -> None:
         idx.upsert(
             path="people/penguin.md",
             note_type="knowledge",
-            author="terry",
+            author="hive",
             audience=["all"],
             frontmatter={},
             body="penguin body",
@@ -36,7 +36,7 @@ async def test_dup_scanner_wired_to_real_vault_index(tmp_path: Path) -> None:
         idx.upsert(
             path="people/penguin-old.md",
             note_type="knowledge",
-            author="terry",
+            author="hive",
             audience=["all"],
             frontmatter={},
             body="penguin body older copy",

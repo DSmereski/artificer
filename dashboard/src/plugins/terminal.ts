@@ -17,12 +17,35 @@
  */
 
 import '@xterm/xterm/css/xterm.css';
+import './terminal.css';  /* terminal panel styles — kept in sync with index.html <style> */
 import { register } from './registry.js';
-import { getBearerToken } from '../gateway.js';
-import { TermSession } from './term-session.js';
+import { getBearerToken, getBoardSessionToken } from '../gateway.js';
+
+// The wallpaper runs on loopback with no device Bearer, so fall back to the
+// board session-token (the gateway's /v1/term accepts it for loopback). Primed
+// once on mount; the device token wins if one is set.
+let _termToken: string | null = null;
+function _token(): string | null { return getBearerToken() || _termToken; }
+import { TermSession, DEFAULT_TERM_FONT_SIZE } from './term-session.js';
 import { sessionLabel } from './term-protocol.js';
+import { resolveSettings } from './instances.js';
 import type { PanelPlugin, RelevanceResult, Rect } from './contract.js';
 import type { SystemState, RenderBudget } from '../state/types.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+interface TerminalSettings {
+  /** xterm font size in px. Default 13 == today's hardcoded value. */
+  fontSize: number;
+}
+
+const DEFAULT_SETTINGS: TerminalSettings = { fontSize: DEFAULT_TERM_FONT_SIZE };
+
+/** Effective font size for the terminal cell (single-instance friendly). */
+function _fontSize(): number {
+  const { fontSize } = resolveSettings(_rootEl, 'terminal', DEFAULT_SETTINGS);
+  return fontSize > 0 ? fontSize : DEFAULT_TERM_FONT_SIZE;
+}
 
 export {
   encodeInputFrame,
@@ -51,7 +74,7 @@ function _spawnSession(): TermSession | null {
   if (_sessions.size >= MAX_SESSIONS || !_sessionHost) return null;
   _seq += 1;
   const id = `ps-${_seq}`;
-  const session = new TermSession(id, sessionLabel(_seq), _renderTabs);
+  const session = new TermSession(id, sessionLabel(_seq), _renderTabs, _fontSize());
   _sessions.set(id, session);
   _order.push(id);
   _sessionHost.appendChild(session.el);
@@ -92,7 +115,7 @@ function _setActive(id: string): void {
 
 function _driveSession(session: TermSession): void {
   if (_suspended) return;
-  const token = getBearerToken();
+  const token = _token();
   if (!token) {
     session.setNoToken();
     return;
@@ -104,17 +127,22 @@ function _driveSession(session: TermSession): void {
 
 function _renderTabs(): void {
   if (!_tabStrip) return;
+  // F3: tab strip gets inset-sheen recessed-track treatment
+  _tabStrip.classList.add('fx3-tab-strip');
   _tabStrip.innerHTML = '';
   for (const id of _order) {
     const s = _sessions.get(id);
     if (!s) continue;
+    const isActive = id === _activeId;
     const tab = document.createElement('button');
-    tab.className = 'term-tab' + (id === _activeId ? ' is-active' : '');
+    // F3: active tab gets chrome-bevel lift class
+    tab.className = 'term-tab' + (isActive ? ' is-active fx3-tab-active' : '');
     tab.type = 'button';
     tab.title = `${s.label} — ${s.status}`;
 
     const dot = document.createElement('span');
-    dot.className = 'term-tab-dot';
+    // F3: connected dot gets heartbeat pulse
+    dot.className = 'term-tab-dot' + (s.connected ? ' fx3-heartbeat' : '');
     dot.style.color = s.connected ? 'var(--green)' : 'var(--faint)';
     dot.textContent = s.connected ? '●' : '○';
 
@@ -148,7 +176,7 @@ function relevance(state: SystemState): RelevanceResult {
   // Hide when gaming (don't steal focus or hold shells).
   if (state.tier === 'gaming') return { priority: 0, size: 'hidden' };
   // Unconfigured (no device token) → small connect chip, not a full cell.
-  if (!getBearerToken()) return { priority: 16, size: 'sm' };
+  if (!_token()) return { priority: 16, size: 'sm' };
   return { priority: 35, size: 'md' };
 }
 
@@ -177,6 +205,18 @@ function mount(el: HTMLElement): void {
     if (_activeId) _setActive(_activeId);
     _renderTabs();
   }
+
+  // No device Bearer on the wallpaper → prime the loopback board session-token,
+  // then connect any sessions that were waiting on a token.
+  if (!getBearerToken() && !_termToken) {
+    getBoardSessionToken().then((t) => {
+      if (t) {
+        _termToken = t;
+        for (const s of _sessions.values()) _driveSession(s);
+        _renderTabs();
+      }
+    });
+  }
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -184,7 +224,11 @@ function mount(el: HTMLElement): void {
 function update(state: SystemState, _budget: RenderBudget): void {
   if (!_rootEl || _suspended) return;
 
-  const token = getBearerToken();
+  // Apply the (possibly gear-changed) font size to every live session.
+  const fs = _fontSize();
+  for (const s of _sessions.values()) s.setFontSize(fs);
+
+  const token = _token();
   for (const s of _sessions.values()) {
     if (!token) {
       s.setNoToken();
@@ -231,6 +275,18 @@ const terminalPlugin: PanelPlugin = {
   onResize,
   suspend,
   resume,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'fontSize',
+        label: 'Font size (px)',
+        type: 'number',
+        default: DEFAULT_TERM_FONT_SIZE,
+        hint: 'xterm font size for all sessions',
+      },
+    ],
+  },
 };
 
 register(terminalPlugin);

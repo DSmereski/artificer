@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio  # noqa: F401
 
-from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig
+from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig, WikiSynthConfig
 from vault_writer.daemon import Daemon
 from vault_writer.index import VaultIndex
 
@@ -51,6 +51,8 @@ def _make_config(
             reconcile_orphans=reconcile_orphans,
         ),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
 
@@ -74,7 +76,7 @@ def _seed_orphan(db_path: Path, rel_path: str) -> None:
         idx.upsert(
             path=rel_path,
             note_type="knowledge",
-            author="terry",
+            author="hive",
             audience=["all"],
             frontmatter={"title": "Orphan"},
             body="This file was deleted from disk.",
@@ -127,7 +129,7 @@ async def test_reconcile_removes_orphan_and_keeps_live_note(
     # Seed a live note file on disk.
     live_path = vault / "knowledge" / "live.md"
     live_path.write_text(
-        "---\ntype: knowledge\nauthor: terry\naudience: [all]\n"
+        "---\ntype: knowledge\nauthor: hive\naudience: [all]\n"
         "title: Live\n---\n\nThis file still exists.\n",
         encoding="utf-8",
     )
@@ -211,7 +213,7 @@ async def test_reconcile_disabled_leaves_orphan(tmp_path: Path) -> None:
 
     live_path = vault / "knowledge" / "live.md"
     live_path.write_text(
-        "---\ntype: knowledge\nauthor: terry\naudience: [all]\n"
+        "---\ntype: knowledge\nauthor: hive\naudience: [all]\n"
         "title: Live\n---\n\nBody.\n",
         encoding="utf-8",
     )

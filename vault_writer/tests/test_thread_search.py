@@ -8,11 +8,11 @@ from vault_writer.index import VaultIndex
 def _seed(idx: VaultIndex, tid: str, title: str, content: str) -> None:
     now = int(time.time())
     idx.thread_create(
-        thread_id=tid, bot="terry", user_id=1,
+        thread_id=tid, bot="hive", user_id=1,
         title=title, created_at=now,
     )
     idx.chat_log_append(
-        thread_id=tid, turn_id=f"tk-{tid}", bot="terry",
+        thread_id=tid, turn_id=f"tk-{tid}", bot="hive",
         user_id=1, role="user", content=content,
         created_at=now,
     )
@@ -24,7 +24,7 @@ def test_thread_search_finds_by_content(tmp_path: Path) -> None:
         _seed(idx, "t-1", "Random", "we discussed the kraken at length")
         _seed(idx, "t-2", "Other", "totally unrelated weather chat")
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="kraken", limit=10,
+            bot="hive", user_id=1, query="kraken", limit=10,
         )
         ids = [h["thread"]["id"] for h in hits]
         assert "t-1" in ids
@@ -39,7 +39,7 @@ def test_thread_search_finds_by_title(tmp_path: Path) -> None:
     try:
         _seed(idx, "t-3", "Kraken project", "boring content")
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="kraken", limit=10,
+            bot="hive", user_id=1, query="kraken", limit=10,
         )
         ids = [h["thread"]["id"] for h in hits]
         assert "t-3" in ids
@@ -53,7 +53,7 @@ def test_thread_search_deduplicates(tmp_path: Path) -> None:
     try:
         _seed(idx, "t-4", "Kraken project", "we discussed the kraken deeply")
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="kraken", limit=10,
+            bot="hive", user_id=1, query="kraken", limit=10,
         )
         ids = [h["thread"]["id"] for h in hits]
         assert ids.count("t-4") == 1
@@ -66,7 +66,7 @@ def test_thread_search_empty_query_returns_empty(tmp_path: Path) -> None:
     try:
         _seed(idx, "t-5", "Some thread", "some content here")
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="", limit=10,
+            bot="hive", user_id=1, query="", limit=10,
         )
         assert hits == []
     finally:
@@ -92,17 +92,17 @@ def test_thread_search_respects_bot_and_user_scope(tmp_path: Path) -> None:
         )
         # t-8: different user_id
         idx.thread_create(
-            thread_id="t-8", bot="terry", user_id=999,
+            thread_id="t-8", bot="hive", user_id=999,
             title="Random", created_at=now,
         )
         idx.chat_log_append(
-            thread_id="t-8", turn_id="tk-t-8", bot="terry",
+            thread_id="t-8", turn_id="tk-t-8", bot="hive",
             user_id=999, role="user", content="kraken sighting",
             created_at=now,
         )
 
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="kraken", limit=10,
+            bot="hive", user_id=1, query="kraken", limit=10,
         )
         ids = [h["thread"]["id"] for h in hits]
         assert "t-6" in ids
@@ -118,7 +118,7 @@ def test_thread_search_result_shape(tmp_path: Path) -> None:
     try:
         _seed(idx, "t-9", "Random", "the kraken awakens")
         hits = idx.thread_search(
-            bot="terry", user_id=1, query="kraken", limit=10,
+            bot="hive", user_id=1, query="kraken", limit=10,
         )
         assert len(hits) == 1
         h = hits[0]

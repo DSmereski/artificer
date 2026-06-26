@@ -1,23 +1,26 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <script>
-      /* P3 theme picker — apply the persisted theme before paint (no flash),
-         and wire the ◑ cycle button. warm-black (default) / light / neutral-dark. */
+      /* C1 theme picker — 6 canonical Sample themes. No flash: theme is
+         applied synchronously before first paint. Default = holo.
+         Cycles: holo → terminal → brutalist → vector-tron → glitch-mag → hive-v2 */
       (function () {
-        var THEMES = ['warm-black', 'light', 'neutral-dark'];
+        var THEMES = ['holo', 'terminal', 'brutalist', 'vector-tron', 'glitch-mag', 'hive-v2', 'joker', 'nod', 'synthwave', 'daybreak', 'royal', 'weatherstar', 'retro-purple', 'inverted', 'zombie', 'code-fall', 'winter', 'code-red'];
         function apply(t) {
-          if (t === 'warm-black') delete document.documentElement.dataset.theme;
-          else document.documentElement.dataset.theme = t;
+          /* Always set the attribute — each theme has an explicit [data-theme] block.
+             The :root block provides fallback base values; no-flash is achieved by
+             this script running before first paint synchronously. */
+          document.documentElement.dataset.theme = t;
         }
         var cur;
-        try { cur = localStorage.getItem('hive.theme') || 'warm-black'; } catch (e) { cur = 'warm-black'; }
-        if (THEMES.indexOf(cur) < 0) cur = 'warm-black';
+        try { cur = localStorage.getItem('hive.theme') || 'holo'; } catch (e) { cur = 'holo'; }
+        if (THEMES.indexOf(cur) < 0) cur = 'holo';
         apply(cur);
         document.addEventListener('DOMContentLoaded', function () {
           var btn = document.getElementById('act-theme');
           if (!btn) return;
-          function label() { btn.textContent = '◑ ' + cur.replace('-', ' '); }
+          function label() { btn.textContent = '◑ ' + cur; }
           label();
           btn.addEventListener('click', function () {
             cur = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
@@ -41,6 +44,13 @@
     <!-- Inter + JetBrains Mono -->
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Per-theme display + mono faces (#204). Loaded once; each theme opts in
+         via --font-ui / --font-mono overrides. Robust fallbacks keep text
+         readable if a web font fails to load (e.g. offline). -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Oswald:wght@400;600;700&family=Cinzel:wght@500;700&family=Share+Tech+Mono&family=Special+Elite&display=swap"
       rel="stylesheet"
     />
 
@@ -82,34 +92,388 @@
         --hex-red:    #c44040;
         --hex-cyan:   #60c8c8;
 
+        /* Semantic surface tokens — used in CSS rules below so they theme-swap.
+           Each theme block overrides these for its palette. */
+        --panel:           oklch(0.18 0.016 59);   /* dropdown / cmd-box bg   */
+        --topbar-bg:       oklch(0.15 0.016 57 / 0.92); /* topbar translucent */
+        --overlay-bg:      oklch(0.08 0.01 55 / 0.55);  /* modal dim overlay  */
+        --viz-bg:          oklch(0.12 0.012 58);    /* suno visualizer bg     */
+        --cell-bg-top:     oklch(0.21 0.018 60);    /* cell gradient top      */
+        --cell-bg-bot:     oklch(0.175 0.016 58);   /* cell gradient bottom   */
+        --cell-hi-top:     oklch(0.45 0.02 64 / 0.18);  /* cell inset top hl  */
+        --cell-shadow:     oklch(0.06 0.01 55 / 0.45);  /* cell float shadow  */
+        --cell-border-hov: oklch(0.74 0.13 56 / 0.55);  /* cell hover border  */
+        --scrollbar-thumb: oklch(0.34 0.02 64);     /* scrollbar knob         */
+        --track-bg:        oklch(0.26 0.02 60);     /* progress bar track     */
+        --footer-bg:       oklch(0.13 0.012 55 / 0.5);  /* footer translucent */
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);  /* escalation header  */
+        --suspended-veil:  oklch(0.14 0.01 60 / 0.78);  /* ambient-mode veil  */
+        --header-sep:      oklch(0.30 0.02 64);     /* panel header border    */
+        --on-amber:        #1A0E00;                 /* text on amber bg       */
+
         /* Layout */
         --topbar-h: 56px;
         --font-ui:  'Inter', system-ui, sans-serif;
         --font-mono:'JetBrains Mono', ui-monospace, monospace;
       }
 
-      /* ── Themes (P3) — override the color tokens; layout/fonts inherit. ──── */
-      /* Light — bright, high-contrast for daytime desks. */
-      html[data-theme="light"] {
-        --bg:    oklch(0.97 0.006 80); --bg2: oklch(0.94 0.008 80);
-        --card:  oklch(0.99 0.004 80); --line: oklch(0.83 0.02 70);
-        --ink:   oklch(0.25 0.02 60);  --dim: oklch(0.42 0.02 64); --faint: oklch(0.55 0.015 66);
-        --copper:oklch(0.55 0.13 55);  --amber: oklch(0.62 0.16 70); --amber-glow: oklch(0.66 0.17 72);
-        --green: oklch(0.55 0.16 150); --red: oklch(0.55 0.19 25);  --cyan: oklch(0.55 0.12 220);
-        --hex-bg:#f5f3ee; --hex-bg2:#eeebe2; --hex-card:#ffffff; --hex-line:#d2ccbe;
-        --hex-ink:#2c2a26; --hex-dim:#6a665c; --hex-faint:#8a867c;
-        --hex-copper:#9a5a28; --hex-amber:#b07810; --hex-green:#3c9850; --hex-red:#c03030; --hex-cyan:#3088a8;
+      /* ── Themes (C1) — 6 canonical Sample themes mapped to dashboard token vocab.
+         Mapping: color-ink→bg levels, color-bone→ink, color-fog→dim,
+         color-mist→faint, color-cyan→cyan+amber, color-magenta→copper,
+         color-lime→green, standard red kept for status signals.
+         holo = default (:root already). ──────────────────────── */
+
+      /* holo — iridescent deep violet-black, cyan accent, magenta highlights. */
+      html[data-theme="holo"] {
+        --bg:        oklch(0.10 0.025 290); --bg2:  oklch(0.15 0.03 290);
+        --card:      oklch(0.22 0.035 290); --line:  oklch(0.33 0.04 290);
+        --ink:       oklch(0.96 0.008 240); --dim:   oklch(0.72 0.02 240); --faint: oklch(0.55 0.02 240);
+        --copper:    oklch(0.68 0.27 340);
+        --amber:     oklch(0.82 0.18 70);   --amber-glow: oklch(0.86 0.20 72);
+        --green:     oklch(0.88 0.22 130);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.82 0.16 200);
+        --violet:    var(--cyan);
+        --hex-bg:    #0d0b17; --hex-bg2:  #131020; --hex-card: #1a1628;
+        --hex-line:  #302845; --hex-ink:  #f5f4fa; --hex-dim:  #b0adcc;
+        --hex-faint: #8a87aa; --hex-copper:#d050a0; --hex-amber:#d4a020;
+        --hex-green: #9adc40; --hex-red:  #c44040; --hex-cyan: #60ccc8;
+        --panel:           oklch(0.20 0.04 290);
+        --topbar-bg:       oklch(0.14 0.03 290 / 0.92);
+        --overlay-bg:      oklch(0.06 0.02 290 / 0.60);
+        --viz-bg:          oklch(0.17 0.03 290);
+        --cell-bg-top:     oklch(0.24 0.04 290); --cell-bg-bot: oklch(0.20 0.035 290);
+        --cell-hi-top:     oklch(0.40 0.05 290 / 0.18);
+        --cell-shadow:     oklch(0.04 0.02 280 / 0.55);
+        --cell-border-hov: oklch(0.68 0.27 340 / 0.55);
+        --scrollbar-thumb: oklch(0.28 0.04 290);
+        --track-bg:        oklch(0.22 0.03 290);
+        --footer-bg:       oklch(0.10 0.025 290 / 0.6);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.14 0.03 290 / 0.78);
+        --header-sep:      oklch(0.33 0.04 290);
+        --on-amber:        #130800;
       }
-      /* Neutral-dark — desaturated, cool-accent for mixed environments. */
-      html[data-theme="neutral-dark"] {
-        --bg:    oklch(0.15 0.004 250); --bg2: oklch(0.18 0.005 250);
-        --card:  oklch(0.21 0.006 250); --line: oklch(0.32 0.008 250);
-        --ink:   oklch(0.94 0.004 250); --dim: oklch(0.72 0.006 250); --faint: oklch(0.60 0.008 250);
-        --copper:oklch(0.70 0.06 220);  --amber: oklch(0.78 0.12 220); --amber-glow: oklch(0.82 0.13 220);
-        --green: oklch(0.78 0.14 160);  --red: oklch(0.66 0.16 25);   --cyan: oklch(0.80 0.10 200);
-        --hex-bg:#14161a; --hex-bg2:#191c21; --hex-card:#1e2127; --hex-line:#353a42;
-        --hex-ink:#eef0f2; --hex-dim:#b4b8be; --hex-faint:#969aa0;
-        --hex-copper:#5a90c0; --hex-amber:#48a0e0; --hex-green:#5cc888; --hex-red:#c44040; --hex-cyan:#60c8c8;
+
+      /* terminal — green-on-black CRT phosphor. Lime text, near-black ground. */
+      html[data-theme="terminal"] {
+        --bg:        oklch(0.08 0.04 150); --bg2:  oklch(0.11 0.04 148);
+        --card:      oklch(0.14 0.05 145); --line:  oklch(0.25 0.07 140);
+        --ink:       oklch(0.92 0.18 130);
+        --dim:       oklch(0.78 0.16 130); --faint: oklch(0.55 0.12 130);
+        --copper:    oklch(0.78 0.20 95);
+        --amber:     oklch(0.88 0.22 130); --amber-glow: oklch(0.90 0.22 132);
+        --green:     oklch(0.88 0.22 130);
+        --red:       oklch(0.65 0.18 25);
+        --cyan:      oklch(0.80 0.18 160);
+        --violet:    var(--cyan);
+        --hex-bg:    #030d06; --hex-bg2:  #060f08; --hex-card: #091208;
+        --hex-line:  #153020; --hex-ink:  #9aee60; --hex-dim:  #70cc40;
+        --hex-faint: #4a9030; --hex-copper:#c0d840; --hex-amber:#9aee60;
+        --hex-green: #9aee60; --hex-red:  #c44040; --hex-cyan: #50c878;
+        --panel:           oklch(0.12 0.05 145);
+        --topbar-bg:       oklch(0.09 0.04 150 / 0.92);
+        --overlay-bg:      oklch(0.04 0.03 150 / 0.65);
+        --viz-bg:          oklch(0.10 0.04 148);
+        --cell-bg-top:     oklch(0.16 0.055 145); --cell-bg-bot: oklch(0.13 0.05 146);
+        --cell-hi-top:     oklch(0.40 0.10 130 / 0.15);
+        --cell-shadow:     oklch(0.02 0.02 150 / 0.55);
+        --cell-border-hov: oklch(0.78 0.20 95 / 0.55);
+        --scrollbar-thumb: oklch(0.22 0.06 140);
+        --track-bg:        oklch(0.18 0.05 145);
+        --footer-bg:       oklch(0.08 0.04 150 / 0.6);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.12 0.04 148 / 0.78);
+        --header-sep:      oklch(0.25 0.07 140);
+        --on-amber:        #030d06;
+      }
+
+      /* brutalist — stark near-monochrome, no glow, RGB-split titles. */
+      html[data-theme="brutalist"] {
+        --bg:        oklch(0.06 0 0); --bg2:  oklch(0.10 0 0);
+        --card:      oklch(0.14 0 0); --line:  oklch(0.28 0 0);
+        --ink:       oklch(0.98 0 0); --dim:   oklch(0.75 0 0); --faint: oklch(0.55 0 0);
+        --copper:    oklch(0.92 0.005 240);
+        --amber:     oklch(0.98 0 0);       --amber-glow: oklch(1 0 0);
+        --green:     oklch(0.85 0.005 240);
+        --red:       oklch(0.70 0 0);
+        --cyan:      oklch(0.92 0.005 240);
+        --violet:    var(--cyan);
+        --hex-bg:    #0f0f0f; --hex-bg2:  #1a1a1a; --hex-card: #222222;
+        --hex-line:  #404040; --hex-ink:  #fafafa; --hex-dim:  #c0c0c0;
+        --hex-faint: #808080; --hex-copper:#e8e8f0; --hex-amber:#ffffff;
+        --hex-green: #d0d0d8; --hex-red:  #909090; --hex-cyan: #e8e8f0;
+        --panel:           oklch(0.12 0 0);
+        --topbar-bg:       oklch(0.08 0 0 / 0.95);
+        --overlay-bg:      oklch(0.04 0 0 / 0.70);
+        --viz-bg:          oklch(0.10 0 0);
+        --cell-bg-top:     oklch(0.16 0 0); --cell-bg-bot: oklch(0.13 0 0);
+        --cell-hi-top:     oklch(0.50 0 0 / 0.12);
+        --cell-shadow:     oklch(0.02 0 0 / 0.70);
+        --cell-border-hov: oklch(0.60 0 0 / 0.55);
+        --scrollbar-thumb: oklch(0.28 0 0);
+        --track-bg:        oklch(0.20 0 0);
+        --footer-bg:       oklch(0.06 0 0 / 0.7);
+        --esc-bg:          oklch(0.14 0 0 / 0.6);
+        --suspended-veil:  oklch(0.12 0 0 / 0.80);
+        --header-sep:      oklch(0.28 0 0);
+        --on-amber:        #0f0f0f;
+      }
+
+      /* vector-tron — neon electric blue/violet on near-black. */
+      html[data-theme="vector-tron"] {
+        --bg:        oklch(0.06 0.05 280); --bg2:  oklch(0.10 0.05 280);
+        --card:      oklch(0.14 0.06 278); --line:  oklch(0.26 0.08 270);
+        --ink:       oklch(0.95 0.04 250); --dim:   oklch(0.70 0.10 250); --faint: oklch(0.50 0.08 250);
+        --copper:    oklch(0.65 0.30 320);
+        --amber:     oklch(0.85 0.20 220); --amber-glow: oklch(0.88 0.22 222);
+        --green:     oklch(0.78 0.18 160);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.85 0.20 220);
+        --violet:    var(--cyan);
+        --hex-bg:    #050612; --hex-bg2:  #0a0c1e; --hex-card: #101228;
+        --hex-line:  #1e2450; --hex-ink:  #eef2ff; --hex-dim:  #8090d8;
+        --hex-faint: #5060a0; --hex-copper:#c030c0; --hex-amber:#3090f8;
+        --hex-green: #30d8a0; --hex-red:  #c44040; --hex-cyan: #3090f8;
+        --panel:           oklch(0.12 0.06 278);
+        --topbar-bg:       oklch(0.08 0.05 280 / 0.92);
+        --overlay-bg:      oklch(0.04 0.04 280 / 0.65);
+        --viz-bg:          oklch(0.10 0.055 278);
+        --cell-bg-top:     oklch(0.16 0.07 278); --cell-bg-bot: oklch(0.13 0.06 278);
+        --cell-hi-top:     oklch(0.50 0.12 270 / 0.15);
+        --cell-shadow:     oklch(0.03 0.03 280 / 0.65);
+        --cell-border-hov: oklch(0.65 0.30 320 / 0.55);
+        --scrollbar-thumb: oklch(0.22 0.07 278);
+        --track-bg:        oklch(0.18 0.06 278);
+        --footer-bg:       oklch(0.06 0.05 280 / 0.65);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.12 0.05 280 / 0.80);
+        --header-sep:      oklch(0.26 0.08 270);
+        --on-amber:        #050612;
+      }
+
+      /* glitch-mag — editorial warm-toned ink, cyan/magenta glitch accents. */
+      html[data-theme="glitch-mag"] {
+        --bg:        oklch(0.08 0.015 60); --bg2:  oklch(0.11 0.015 58);
+        --card:      oklch(0.15 0.018 60); --line:  oklch(0.27 0.02 60);
+        --ink:       oklch(0.97 0.005 60); --dim:   oklch(0.65 0.02 240); --faint: oklch(0.45 0.02 240);
+        --copper:    oklch(0.68 0.27 340);
+        --amber:     oklch(0.82 0.16 200); --amber-glow: oklch(0.86 0.18 202);
+        --green:     oklch(0.72 0.18 150);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.82 0.16 200);
+        --violet:    var(--cyan);
+        --hex-bg:    #100d08; --hex-bg2:  #16120c; --hex-card: #1e1810;
+        --hex-line:  #342e24; --hex-ink:  #faf8f4; --hex-dim:  #8898b0;
+        --hex-faint: #606878; --hex-copper:#d020a0; --hex-amber:#40c8d0;
+        --hex-green: #40c870; --hex-red:  #c44040; --hex-cyan: #40c8d0;
+        --panel:           oklch(0.13 0.018 60);
+        --topbar-bg:       oklch(0.10 0.015 60 / 0.92);
+        --overlay-bg:      oklch(0.06 0.01 60 / 0.65);
+        --viz-bg:          oklch(0.12 0.016 58);
+        --cell-bg-top:     oklch(0.17 0.020 60); --cell-bg-bot: oklch(0.14 0.018 59);
+        --cell-hi-top:     oklch(0.45 0.04 60 / 0.15);
+        --cell-shadow:     oklch(0.04 0.01 60 / 0.60);
+        --cell-border-hov: oklch(0.68 0.27 340 / 0.55);
+        --scrollbar-thumb: oklch(0.24 0.02 60);
+        --track-bg:        oklch(0.18 0.016 60);
+        --footer-bg:       oklch(0.08 0.015 60 / 0.65);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.12 0.015 60 / 0.80);
+        --header-sep:      oklch(0.27 0.02 60);
+        --on-amber:        #050b0b;
+      }
+
+      /* hive-v2 — warm-black command center, amber honeycomb brand. 1:1 from hive-v2 tokens. */
+      html[data-theme="hive-v2"] {
+        --bg:        oklch(0.14 0.014 55); --bg2:  oklch(0.17 0.016 58);
+        --card:      oklch(0.20 0.018 60); --line:  oklch(0.30 0.02 64);
+        --ink:       oklch(0.95 0.012 72); --dim:   oklch(0.74 0.014 72); --faint: oklch(0.64 0.014 70);
+        --copper:    oklch(0.74 0.13 56);
+        --amber:     oklch(0.83 0.15 78);  --amber-glow: oklch(0.85 0.17 80);
+        --green:     oklch(0.80 0.16 150);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.80 0.10 200);
+        --violet:    var(--cyan);
+        --hex-bg:    #121610; --hex-bg2:  #161a13; --hex-card: #1c201a;
+        --hex-line:  #363c30; --hex-ink:  #f2f0ec; --hex-dim:  #b8b4a8;
+        --hex-faint: #9c9890; --hex-copper:#c07840; --hex-amber:#e0a030;
+        --hex-green: #5cc870; --hex-red:  #c44040; --hex-cyan: #60c8c8;
+        --panel:           oklch(0.18 0.016 59);
+        --topbar-bg:       oklch(0.15 0.016 57 / 0.92);
+        --overlay-bg:      oklch(0.08 0.01 55 / 0.55);
+        --viz-bg:          oklch(0.12 0.012 58);
+        --cell-bg-top:     oklch(0.21 0.018 60); --cell-bg-bot: oklch(0.175 0.016 58);
+        --cell-hi-top:     oklch(0.45 0.02 64 / 0.18);
+        --cell-shadow:     oklch(0.06 0.01 55 / 0.45);
+        --cell-border-hov: oklch(0.74 0.13 56 / 0.55);
+        --scrollbar-thumb: oklch(0.34 0.02 64);
+        --track-bg:        oklch(0.26 0.02 60);
+        --footer-bg:       oklch(0.13 0.012 55 / 0.5);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.14 0.01 60 / 0.78);
+        --header-sep:      oklch(0.30 0.02 64);
+        --on-amber:        #1A0E00;
+      }
+
+      /* joker — deep purple ground, acid-green accents. Batman Joker palette. */
+      html[data-theme="joker"] {
+        --bg:        oklch(0.12 0.05 300); --bg2:  oklch(0.17 0.06 300);
+        --card:      oklch(0.24 0.07 300); --line:  oklch(0.35 0.09 300);
+        --ink:       oklch(0.95 0.03 135); --dim:   oklch(0.74 0.06 300); --faint: oklch(0.56 0.07 300);
+        --copper:    oklch(0.55 0.27 300);
+        --amber:     oklch(0.82 0.22 142); --amber-glow: oklch(0.86 0.24 140);
+        --green:     oklch(0.86 0.24 140);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.82 0.22 142);
+        --violet:    var(--cyan);
+        --hex-bg:    #130b1f; --hex-bg2:  #1c1130; --hex-card: #271840;
+        --hex-line:  #3d2660; --hex-ink:  #f0fae8; --hex-dim:  #a888c8;
+        --hex-faint: #7a5898; --hex-copper:#9020d0; --hex-amber:#70e030;
+        --hex-green: #70e030; --hex-red:  #e03040; --hex-cyan: #70e030;
+        --panel:           oklch(0.22 0.07 300);
+        --topbar-bg:       oklch(0.15 0.06 300 / 0.92);
+        --overlay-bg:      oklch(0.07 0.04 300 / 0.65);
+        --viz-bg:          oklch(0.18 0.06 300);
+        --cell-bg-top:     oklch(0.26 0.08 300); --cell-bg-bot: oklch(0.21 0.07 300);
+        --cell-hi-top:     oklch(0.50 0.12 300 / 0.18);
+        --cell-shadow:     oklch(0.04 0.03 300 / 0.60);
+        --cell-border-hov: oklch(0.82 0.22 142 / 0.55);
+        --scrollbar-thumb: oklch(0.30 0.08 300);
+        --track-bg:        oklch(0.24 0.07 300);
+        --footer-bg:       oklch(0.12 0.05 300 / 0.65);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.16 0.06 300 / 0.80);
+        --header-sep:      oklch(0.35 0.09 300);
+        --on-amber:        #0a1800;
+      }
+
+      /* nod — C&C Brotherhood of Nod. Near-black, crimson red accent, dim green ok-status. */
+      html[data-theme="nod"] {
+        --bg:        oklch(0.05 0.006 25); --bg2:  oklch(0.12 0.022 25);
+        --card:      oklch(0.20 0.045 25); --line:  oklch(0.30 0.07 22);
+        --ink:       oklch(0.93 0.02 30); --dim:   oklch(0.66 0.06 28); --faint: oklch(0.50 0.10 27);
+        --copper:    oklch(0.50 0.25 16);
+        --amber:     oklch(0.58 0.23 25); --amber-glow: oklch(0.62 0.25 24);
+        --green:     oklch(0.70 0.13 145);
+        --red:       oklch(0.62 0.26 24);
+        --cyan:      oklch(0.58 0.23 25);
+        --violet:    var(--cyan);
+        --hex-bg:    #0e0505; --hex-bg2:  #190808; --hex-card: #280d0d;
+        --hex-line:  #3d1212; --hex-ink:  #f0e8e8; --hex-dim:  #a87878;
+        --hex-faint: #784848; --hex-copper:#c02020; --hex-amber:#d02828;
+        --hex-green: #50b050; --hex-red:  #e02020; --hex-cyan: #d02828;
+        --panel:           oklch(0.18 0.04 24);
+        --topbar-bg:       oklch(0.10 0.02 25 / 0.92);
+        --overlay-bg:      oklch(0.05 0.01 25 / 0.65);
+        --viz-bg:          oklch(0.11 0.022 24);
+        --cell-bg-top:     oklch(0.22 0.048 25); --cell-bg-bot: oklch(0.18 0.038 24);
+        --cell-hi-top:     oklch(0.40 0.08 22 / 0.18);
+        --cell-shadow:     oklch(0.03 0.01 25 / 0.70);
+        --cell-border-hov: oklch(0.62 0.26 24 / 0.55);
+        --scrollbar-thumb: oklch(0.26 0.06 24);
+        --track-bg:        oklch(0.20 0.04 24);
+        --footer-bg:       oklch(0.08 0.012 25 / 0.65);
+        --esc-bg:          oklch(0.20 0.10 24 / 0.5);
+        --suspended-veil:  oklch(0.12 0.02 25 / 0.82);
+        --header-sep:      oklch(0.30 0.07 22);
+        --on-amber:        #0e0505;
+      }
+
+      /* synthwave — 80s retro sunset. Deep indigo ground, hot-magenta primary, cyan secondary. */
+      html[data-theme="synthwave"] {
+        --bg:        oklch(0.10 0.04 295); --bg2:  oklch(0.15 0.05 295);
+        --card:      oklch(0.22 0.06 295); --line:  oklch(0.33 0.08 295);
+        --ink:       oklch(0.94 0.02 300); --dim:   oklch(0.72 0.04 295); --faint: oklch(0.54 0.06 295);
+        --copper:    oklch(0.68 0.30 335);
+        --amber:     oklch(0.80 0.20 205); --amber-glow: oklch(0.84 0.22 205);
+        --green:     oklch(0.84 0.18 145);
+        --red:       oklch(0.66 0.17 25);
+        --cyan:      oklch(0.80 0.20 205);
+        --violet:    oklch(0.58 0.28 300);
+        --hex-bg:    #0e0a1c; --hex-bg2:  #160e2a; --hex-card: #1e1438;
+        --hex-line:  #301c54; --hex-ink:  #eed8f8; --hex-dim:  #b090c8;
+        --hex-faint: #806898; --hex-copper:#f040c0; --hex-amber:#20d0f0;
+        --hex-green: #80e870; --hex-red:  #e04060; --hex-cyan: #20d0f0;
+        --panel:           oklch(0.20 0.06 295);
+        --topbar-bg:       oklch(0.13 0.05 295 / 0.92);
+        --overlay-bg:      oklch(0.06 0.03 295 / 0.65);
+        --viz-bg:          oklch(0.17 0.05 295);
+        --cell-bg-top:     oklch(0.24 0.07 295); --cell-bg-bot: oklch(0.20 0.06 295);
+        --cell-hi-top:     oklch(0.46 0.10 295 / 0.18);
+        --cell-shadow:     oklch(0.04 0.02 295 / 0.60);
+        --cell-border-hov: oklch(0.68 0.30 335 / 0.55);
+        --scrollbar-thumb: oklch(0.28 0.07 295);
+        --track-bg:        oklch(0.22 0.06 295);
+        --footer-bg:       oklch(0.10 0.04 295 / 0.65);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.14 0.05 295 / 0.80);
+        --header-sep:      oklch(0.33 0.08 295);
+        --on-amber:        #00080e;
+      }
+
+      /* daybreak — warm paper light theme. Off-white/paper bg, near-black ink, deep teal accent. */
+      html[data-theme="daybreak"] {
+        --bg:        oklch(0.97 0.008 80); --bg2:  oklch(0.94 0.010 78);
+        --card:      oklch(0.90 0.012 76); --line:  oklch(0.82 0.014 74);
+        --ink:       oklch(0.18 0.030 220); --dim:   oklch(0.36 0.025 220); --faint: oklch(0.52 0.020 220);
+        --copper:    oklch(0.52 0.14 192);
+        --amber:     oklch(0.46 0.12 192); --amber-glow: oklch(0.50 0.14 192);
+        --green:     oklch(0.45 0.10 150);
+        --red:       oklch(0.50 0.20 25);
+        --cyan:      oklch(0.46 0.12 192);
+        --violet:    oklch(0.42 0.10 250);
+        --hex-bg:    #f5f0e8; --hex-bg2:  #ece6da; --hex-card: #e2ddd0;
+        --hex-line:  #c8c2b4; --hex-ink:  #1c1a14; --hex-dim:  #4a5060;
+        --hex-faint: #7880a0; --hex-copper:#1a7878; --hex-amber:#1a7878;
+        --hex-green: #2a6830; --hex-red:  #8c2020; --hex-cyan: #1a7878;
+        --panel:           oklch(0.92 0.010 78);
+        --topbar-bg:       oklch(0.93 0.010 78 / 0.94);
+        --overlay-bg:      oklch(0.80 0.010 78 / 0.55);
+        --viz-bg:          oklch(0.94 0.010 80);
+        --cell-bg-top:     oklch(0.88 0.012 76); --cell-bg-bot: oklch(0.92 0.010 78);
+        --cell-hi-top:     oklch(0.60 0.04 80 / 0.12);
+        --cell-shadow:     oklch(0.30 0.02 220 / 0.18);
+        --cell-border-hov: oklch(0.46 0.12 192 / 0.55);
+        --scrollbar-thumb: oklch(0.76 0.016 76);
+        --track-bg:        oklch(0.85 0.012 78);
+        --footer-bg:       oklch(0.93 0.008 80 / 0.7);
+        --esc-bg:          oklch(0.85 0.02 192 / 0.4);
+        --suspended-veil:  oklch(0.90 0.010 78 / 0.82);
+        --header-sep:      oklch(0.80 0.014 74);
+        --on-amber:        #f5f0e8;
+      }
+
+      /* royal — deep navy ground, warm gold accent, ivory text. Classic office-stunning. */
+      html[data-theme="royal"] {
+        --bg:        oklch(0.12 0.04 250); --bg2:  oklch(0.17 0.05 250);
+        --card:      oklch(0.24 0.06 250); --line:  oklch(0.34 0.07 250);
+        --ink:       oklch(0.95 0.012 80); --dim:   oklch(0.76 0.025 250); --faint: oklch(0.58 0.035 250);
+        --copper:    oklch(0.68 0.20 82);
+        --amber:     oklch(0.80 0.18 82); --amber-glow: oklch(0.84 0.20 84);
+        --green:     oklch(0.76 0.14 150);
+        --red:       oklch(0.62 0.18 25);
+        --cyan:      oklch(0.80 0.18 82);
+        --violet:    oklch(0.54 0.18 270);
+        --hex-bg:    #080c1a; --hex-bg2:  #0e1428; --hex-card: #141e38;
+        --hex-line:  #1e2c52; --hex-ink:  #f2eddc; --hex-dim:  #a8a090;
+        --hex-faint: #787060; --hex-copper:#c89020; --hex-amber:#d4a820;
+        --hex-green: #58a858; --hex-red:  #c04040; --hex-cyan: #d4a820;
+        --panel:           oklch(0.22 0.06 250);
+        --topbar-bg:       oklch(0.15 0.05 250 / 0.92);
+        --overlay-bg:      oklch(0.07 0.03 250 / 0.65);
+        --viz-bg:          oklch(0.18 0.05 250);
+        --cell-bg-top:     oklch(0.26 0.07 250); --cell-bg-bot: oklch(0.22 0.06 250);
+        --cell-hi-top:     oklch(0.48 0.10 250 / 0.18);
+        --cell-shadow:     oklch(0.04 0.02 250 / 0.65);
+        --cell-border-hov: oklch(0.80 0.18 82 / 0.55);
+        --scrollbar-thumb: oklch(0.30 0.07 250);
+        --track-bg:        oklch(0.24 0.06 250);
+        --footer-bg:       oklch(0.12 0.04 250 / 0.65);
+        --esc-bg:          oklch(0.14 0.014 25 / 0.4);
+        --suspended-veil:  oklch(0.16 0.05 250 / 0.82);
+        --header-sep:      oklch(0.34 0.07 250);
+        --on-amber:        #060810;
       }
 
       html, body {
@@ -119,14 +483,144 @@
         background: var(--bg);
         background-image: radial-gradient(
           120% 80% at 50% -10%,
-          oklch(0.17 0.03 60),
-          oklch(0.10 0.01 55)
+          var(--cell-bg-top),
+          var(--bg)
         );
         color: var(--ink);
         font-family: var(--font-ui);
         font-size: 14px;
         line-height: 1.4;
         -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Per-theme signature wallpapers ────────────────────────────────
+         Each theme's body background mirrors Sample.com's visual identity,
+         muted so panels + text stay readable on a dense dashboard.
+         All treatments are CSS-only (gradients, pseudo-elements, SVG data-URIs)
+         — no heavy animations that tax Lively WebView2.
+      ─────────────────────────────────────────────────────────────────── */
+
+      /* holo — iridescent radial: magenta + cyan corner glows on deep violet-black. */
+      html[data-theme="holo"] body {
+        background:
+          radial-gradient(ellipse 60% 45% at 28% 12%,
+            oklch(0.30 0.18 340 / 0.22), transparent 55%),
+          radial-gradient(ellipse 55% 40% at 78% 88%,
+            oklch(0.30 0.18 200 / 0.20), transparent 55%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* terminal — CRT phosphor: single centred green radial, scanline overlay via ::after. */
+      html[data-theme="terminal"] body {
+        background:
+          radial-gradient(ellipse 70% 55% at 50% 50%,
+            oklch(0.20 0.10 140 / 0.28), transparent 62%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+      /* Scanline raster — static, GPU-cheap. */
+      html[data-theme="terminal"] body::after {
+        content: '';
+        position: fixed; inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0, transparent 2px,
+          oklch(0.88 0.22 130 / 0.05) 2px, oklch(0.88 0.22 130 / 0.05) 3px
+        );
+      }
+
+      /* brutalist — stark solid: no gradient, no glow. Black only. */
+      html[data-theme="brutalist"] body {
+        background: var(--bg);
+        background-image: none;
+      }
+
+      /* vector-tron — perspective grid: electric-blue vertical + purple horizontal lines. */
+      html[data-theme="vector-tron"] body {
+        background:
+          linear-gradient(to bottom, transparent 60%, oklch(0.85 0.20 220 / 0.04) 100%),
+          repeating-linear-gradient(
+            to right,
+            oklch(0.85 0.20 220 / 0.08) 0, oklch(0.85 0.20 220 / 0.08) 1px,
+            transparent 1px, transparent 64px),
+          repeating-linear-gradient(
+            to bottom,
+            oklch(0.65 0.30 320 / 0.06) 0, oklch(0.65 0.30 320 / 0.06) 1px,
+            transparent 1px, transparent 64px),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* glitch-mag — warm editorial: amber corner bloom top-right. */
+      html[data-theme="glitch-mag"] body {
+        background:
+          radial-gradient(ellipse 50% 35% at 98% 2%,
+            oklch(0.30 0.18 60 / 0.18), transparent 52%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* hive-v2 — amber honeycomb glow: soft top bloom (canonical hive look). */
+      html[data-theme="hive-v2"] body {
+        background:
+          radial-gradient(120% 80% at 50% -10%,
+            oklch(0.17 0.03 60), transparent 60%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* joker — purple haze: diffuse violet bloom left + acid-green glint right,
+         muted enough for dense panel grid. */
+      html[data-theme="joker"] body {
+        background:
+          radial-gradient(ellipse 65% 55% at 15% 20%,
+            oklch(0.22 0.18 300 / 0.30), transparent 60%),
+          radial-gradient(ellipse 45% 40% at 88% 75%,
+            oklch(0.26 0.18 142 / 0.14), transparent 55%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* nod — Brotherhood of Nod: plain black backdrop, no hive-style bloom
+         (David: "just a black background for this one"). */
+      html[data-theme="nod"] body {
+        background: var(--bg);
+        background-image: none;
+        background-attachment: fixed;
+      }
+
+      /* synthwave — sunset gradient: magenta bloom from bottom, cyan top-right glow. */
+      html[data-theme="synthwave"] body {
+        background:
+          radial-gradient(ellipse 70% 50% at 50% 110%,
+            oklch(0.40 0.28 335 / 0.30), transparent 60%),
+          radial-gradient(ellipse 55% 40% at 88% 5%,
+            oklch(0.35 0.22 205 / 0.22), transparent 55%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* daybreak — soft warm bloom top-centre on a light paper ground. */
+      html[data-theme="daybreak"] body {
+        background:
+          radial-gradient(ellipse 80% 50% at 50% -10%,
+            oklch(0.88 0.06 80 / 0.55), transparent 62%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+
+      /* royal — deep cobalt-to-midnight gradient, gold glint top-right. */
+      html[data-theme="royal"] body {
+        background:
+          radial-gradient(ellipse 55% 40% at 90% 5%,
+            oklch(0.42 0.18 82 / 0.20), transparent 55%),
+          radial-gradient(ellipse 75% 55% at 50% 50%,
+            transparent 45%, oklch(0.06 0.02 250 / 0.50) 100%),
+          var(--bg);
+        background-attachment: fixed;
       }
 
       /* it12 — keyboard a11y: a consistent amber focus ring on every
@@ -141,6 +635,10 @@
         outline: 2px solid var(--amber); outline-offset: 1px;
       }
 
+      /* Weather-fx toggles (🌧 / ❄): dim until active, amber when on. */
+      .act-fx { opacity: 0.55; }
+      .act-fx.fx-on { opacity: 1; color: var(--amber); border-color: var(--amber); }
+
       /* ── Ambient glow layer (sexy depth, GPU-cheap) ─────────────────── */
       body::before {
         content: '';
@@ -148,9 +646,9 @@
         z-index: 0;
         pointer-events: none;
         background:
-          radial-gradient(38% 30% at 22% 18%, oklch(0.74 0.13 56 / 0.10), transparent 70%),
-          radial-gradient(42% 34% at 82% 78%, oklch(0.83 0.15 78 / 0.07), transparent 72%),
-          radial-gradient(30% 26% at 60% 50%, oklch(0.80 0.10 200 / 0.05), transparent 75%);
+          radial-gradient(38% 30% at 22% 18%, color-mix(in oklch, var(--copper) 10%, transparent), transparent 70%),
+          radial-gradient(42% 34% at 82% 78%, color-mix(in oklch, var(--amber) 7%, transparent), transparent 72%),
+          radial-gradient(30% 26% at 60% 50%, color-mix(in oklch, var(--cyan) 5%, transparent), transparent 75%);
         animation: ambientDrift 38s ease-in-out infinite alternate;
       }
       @keyframes ambientDrift {
@@ -180,10 +678,44 @@
         height: var(--topbar-h);
         flex-shrink: 0;
         border-bottom: 1px solid var(--line);
-        background: oklch(0.15 0.016 57 / 0.92);
+        background: var(--topbar-bg);
         backdrop-filter: blur(8px);
         z-index: 10;
+        flex-wrap: nowrap;
+        /* Clip horizontal spill only; keep vertical VISIBLE so the ⋯ dropdown
+           can extend below the bar (overflow:hidden clipped it under the grid). */
+        overflow-x: clip;
+        overflow-y: visible;
       }
+
+      /* F2 top-bar groups: each group is a SINGLE horizontal row. Without this
+         the group divs were unstyled blocks and their buttons wrapped, growing
+         the bar to two lines. */
+      .tb-group { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; flex-shrink: 0; }
+      .tb-health { gap: 8px; }
+      .tb-view, .tb-mutate { gap: 6px; }
+      #topbar-board-switcher { display: flex; align-items: center; }
+
+      /* ⋯ More: a tidy dropdown card anchored under the trigger (the classes had
+         no CSS, so opening it dumped the buttons into the document flow). */
+      .tb-more-wrap { position: relative; display: flex; align-items: center; }
+      .tb-more-popover {
+        position: fixed; top: var(--topbar-h, 56px); right: 12px; z-index: 9999;
+        display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: 134px;
+        background: color-mix(in oklch, var(--panel, var(--bg)) 94%, transparent);
+        border: 1px solid var(--line); border-radius: 8px;
+        box-shadow: 0 10px 28px oklch(0.05 0.01 60 / 0.45);
+        backdrop-filter: blur(12px) saturate(1.3);
+        transform-origin: top right;
+        animation: tbMoreIn 120ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .tb-more-popover[hidden] { display: none; }
+      .tb-more-item { width: 100%; justify-content: flex-start; text-align: left; }
+      @keyframes tbMoreIn {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to   { opacity: 1; transform: none; }
+      }
+      html[data-motion="off"] .tb-more-popover { animation: none; }
 
       /* Brand mark: the Material `hive_outlined` honeycomb glyph (amber),
          per DESIGN.md. Rendered as a Material Icons Outlined ligature so it
@@ -192,13 +724,17 @@
         font-family: 'Material Icons Outlined';
         font-size: 22px;
         color: var(--amber);
-        text-shadow: 0 0 12px oklch(0.85 0.17 80 / 0.6);
+        text-shadow: 0 0 12px color-mix(in oklch, var(--amber-glow) 60%, transparent);
         line-height: 1;
         user-select: none;
         flex-shrink: 0;
         -webkit-font-feature-settings: 'liga';
         font-feature-settings: 'liga';
       }
+
+      /* Health pill: dot + status word inline + adjacent (the class had no CSS,
+         so the dot div stacked above the word). */
+      .topbar-health-pill { display: inline-flex; align-items: center; gap: 6px; }
 
       .topbar-title {
         font-size: 12px;
@@ -296,6 +832,23 @@
         flex-shrink: 0;
       }
 
+      /* Swarm pulse word in the topbar (replaces kpi top band). */
+      .topbar-pulse {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--amber);
+        flex-shrink: 0;
+      }
+
+      /* Activity feed source tags ([git] / [hive]) */
+      .afeed-src-tag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+        padding: 1px 4px; border-radius: 3px; flex-shrink: 0;
+      }
+      .afeed-src-git    { color: var(--green); background: color-mix(in oklch, var(--green) 10%, transparent); }
+      .afeed-src-action { color: var(--cyan);  background: color-mix(in oklch, var(--cyan)  10%, transparent); }
+
       .topbar-sep {
         width: 1px;
         height: 18px;
@@ -319,7 +872,7 @@
         background: transparent; border: 0; border-radius: 50%;
         cursor: pointer; transition: color 100ms, background 100ms;
       }
-      .suno-mini-btn:hover { color: var(--amber); background: oklch(0.83 0.15 78 / 0.12); }
+      .suno-mini-btn:hover { color: var(--amber); background: color-mix(in oklch, var(--amber) 12%, transparent); }
       .suno-mini-play { color: var(--amber); font-size: 13px; }
       .suno-mini-title {
         max-width: 200px; overflow: hidden; text-overflow: ellipsis;
@@ -336,7 +889,7 @@
         display: flex; flex-direction: column; gap: 8px;
         padding: 12px; border: 1px solid var(--line); border-radius: 12px;
         background: var(--panel);
-        box-shadow: 0 14px 40px oklch(0.08 0.01 55 / 0.6);
+        box-shadow: 0 14px 40px var(--cell-shadow);
         animation: sunoDdIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
       }
       .suno-dropdown[hidden] { display: none; }
@@ -354,7 +907,7 @@
       }
       .suno-viz {
         width: 100%; height: 40px; display: block;
-        border-radius: 6px; background: oklch(0.12 0.012 58);
+        border-radius: 6px; background: var(--viz-bg);
         border: 1px solid var(--line);
       }
 
@@ -376,14 +929,14 @@
       .cmd-overlay {
         position: fixed; inset: 0; z-index: 100;
         display: flex; align-items: flex-start; justify-content: center;
-        padding-top: 14vh; background: oklch(0.08 0.01 55 / 0.55);
+        padding-top: 14vh; background: var(--overlay-bg);
       }
       .cmd-overlay[hidden] { display: none; }
       .cmd-box {
         width: 540px; max-width: 92vw;
         display: flex; flex-direction: column; gap: 8px;
         padding: 12px; border: 1px solid var(--line); border-radius: 12px;
-        background: var(--panel); box-shadow: 0 18px 50px oklch(0.08 0.01 55 / 0.7);
+        background: var(--panel); box-shadow: 0 18px 50px var(--cell-shadow);
         animation: sunoDdIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
       }
       .cmd-input {
@@ -453,28 +1006,28 @@
         width: 100%; aspect-ratio: 1; border-radius: 7px;
         border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center;
         font-size: 10px; font-family: var(--font-mono); color: var(--amber);
-        background: oklch(0.83 0.15 78 / 0.05); text-align: center;
+        background: color-mix(in oklch, var(--amber) 5%, transparent); text-align: center;
       }
-      .cg-pending.cg-failed { color: var(--red, oklch(0.66 0.17 25)); border-color: oklch(0.66 0.17 25 / 0.4); }
+      .cg-pending.cg-failed { color: var(--red, oklch(0.66 0.17 25)); border-color: color-mix(in oklch, var(--red) 40%, transparent); }
       .cg-meta { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
       .cg-type { font-size: 10px; color: var(--amber); flex-shrink: 0; }
       .cg-prompt { font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .cg-lightbox {
         position: fixed; inset: 0; z-index: 120; cursor: zoom-out;
         display: flex; align-items: center; justify-content: center;
-        background: oklch(0.06 0.01 55 / 0.85); padding: 4vh;
+        background: color-mix(in oklch, var(--bg) 85%, transparent); padding: 4vh;
       }
       .cg-lightbox[hidden] { display: none; }
       .cg-lightbox img {
         max-width: 92vw; max-height: 92vh; border-radius: 10px;
-        border: 1px solid var(--line); box-shadow: 0 20px 60px oklch(0.05 0.01 55 / 0.7);
+        border: 1px solid var(--line); box-shadow: 0 20px 60px color-mix(in oklch, var(--bg) 70%, transparent);
       }
 
       /* ── Git activity (it10) ─────────────────────────────────────────── */
       .git-count { font-size: 10px; font-family: var(--font-mono); color: var(--faint); }
       .git-list { padding: 5px 7px; overflow-y: auto; height: calc(100% - 40px); display: flex; flex-direction: column; gap: 2px; }
       .git-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border-radius: 6px; }
-      .git-row:hover { background: oklch(0.80 0.16 150 / 0.06); }
+      .git-row:hover { background: color-mix(in oklch, var(--green) 6%, transparent); }
       .git-hash { font-family: var(--font-mono); font-size: 10px; color: var(--green, oklch(0.80 0.16 150)); flex-shrink: 0; }
       .git-info { display: flex; flex-direction: column; min-width: 0; }
       .git-subject { font-size: 11px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -500,7 +1053,7 @@
       .hero-ring-bg { fill: none; stroke: var(--line); stroke-width: 4; }
       .hero-ring-fg {
         fill: none; stroke: var(--amber); stroke-width: 4; stroke-linecap: round;
-        filter: drop-shadow(0 0 4px oklch(0.83 0.15 78 / 0.5));
+        filter: drop-shadow(0 0 4px color-mix(in oklch, var(--amber) 50%, transparent));
         transition: stroke-dashoffset 0.6s cubic-bezier(0.16,1,0.3,1);
       }
       .hero-ring-txt {
@@ -547,7 +1100,7 @@
         font-size: 9.5px; font-family: var(--font-mono); color: var(--dim);
         text-transform: uppercase; letter-spacing: 0.04em;
       }
-      .hero-vital.is-warn { border-color: oklch(0.66 0.17 25 / 0.5); color: var(--red); }
+      .hero-vital.is-warn { border-color: color-mix(in oklch, var(--red) 50%, transparent); color: var(--red); }
       .hero-vital-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
       .hero-lanes-wrap { justify-content: flex-start; gap: 4px; border-right: 1px solid var(--line); overflow-y: auto; }
@@ -564,7 +1117,7 @@
         font-size: 10.5px; color: var(--dim);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      .hero-lane-bar { height: 3px; border-radius: 2px; background: oklch(0.5 0.03 64 / 0.18); overflow: hidden; }
+      .hero-lane-bar { height: 3px; border-radius: 2px; background: color-mix(in oklch, var(--line) 50%, transparent); overflow: hidden; }
       .hero-lane-bar > span { display: block; height: 100%; background: var(--amber); border-radius: 2px; transition: width 600ms cubic-bezier(0.16,1,0.3,1); }
       .hero-lane.is-stalled .hero-lane-bar > span { background: var(--red); }
       .hero-lanes-empty, .hero-lanes-more { font-size: 11px; color: var(--faint); padding: 4px 0; }
@@ -587,7 +1140,7 @@
         display: flex; align-items: center; gap: 8px;
         margin: 8px; padding: 7px 11px;
         border: 1px dashed var(--line); border-radius: 8px;
-        background: oklch(0.74 0.13 56 / 0.04);
+        background: color-mix(in oklch, var(--copper) 4%, transparent);
         font-size: 11px; color: var(--dim); width: fit-content;
       }
       .cfg-dot {
@@ -596,53 +1149,6 @@
       }
       .cfg-label { color: var(--ink); font-weight: 600; }
       .cfg-hint { color: var(--faint); font-size: 10px; }
-      /* ── Terminal: multi-session tabs (P3) ───────────────────────────── */
-      .term-header { gap: 8px; }
-      .term-tabs {
-        display: flex; align-items: center; gap: 4px;
-        flex: 1; min-width: 0; overflow-x: auto;
-      }
-      .term-tabs::-webkit-scrollbar { height: 0; }
-      .term-tab {
-        display: inline-flex; align-items: center; gap: 5px;
-        padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px;
-        background: transparent; color: var(--dim);
-        font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.02em;
-        cursor: pointer; white-space: nowrap; transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
-      }
-      .term-tab:hover { border-color: oklch(0.74 0.13 56 / 0.5); color: var(--ink); }
-      .term-tab.is-active {
-        border-color: var(--amber); color: var(--amber);
-        background: oklch(0.74 0.13 56 / 0.08);
-      }
-      .term-tab-dot { font-size: 8px; line-height: 1; }
-      .term-tab-close {
-        margin-left: 2px; padding: 0 3px; border-radius: 4px;
-        color: var(--faint); font-size: 12px; line-height: 1;
-      }
-      .term-tab-close:hover { color: var(--red); background: oklch(0.6 0.2 25 / 0.14); }
-      .term-add {
-        flex-shrink: 0; width: 22px; height: 22px;
-        border: 1px solid var(--line); border-radius: 6px;
-        background: transparent; color: var(--dim);
-        font-size: 14px; line-height: 1; cursor: pointer;
-        transition: color 140ms ease, border-color 140ms ease;
-      }
-      .term-add:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
-      .term-add:disabled { opacity: 0.3; cursor: not-allowed; }
-      .term-sessions { position: relative; height: calc(100% - 40px); }
-      .term-session { position: absolute; inset: 0; display: flex; flex-direction: column; }
-      .term-session .term-container { flex: 1; min-height: 0; padding: 4px 6px; }
-      /* Status chip — shown for any non-connected state, hidden when connected. */
-      .term-status {
-        display: flex; align-items: center;
-        margin: 8px; padding: 7px 11px; width: fit-content;
-        border: 1px dashed var(--line); border-radius: 8px;
-        background: oklch(0.74 0.13 56 / 0.04);
-        color: var(--dim); font-size: 11px;
-      }
-      .term-status-connected { display: none; }
-
       /* ── Actions Log (it1) ───────────────────────────────────────────── */
       .alog-count { font-size: 10px; font-family: var(--font-mono); color: var(--faint); }
       .alog-list { padding: 4px 6px; overflow-y: auto; height: calc(100% - 40px); display: flex; flex-direction: column; gap: 1px; }
@@ -651,7 +1157,7 @@
         padding: 3px 7px; border-radius: 5px; font-size: 11px; line-height: 1.45;
         animation: alogIn 260ms cubic-bezier(0.16,1,0.3,1) both;
       }
-      .alog-row:hover { background: oklch(0.74 0.13 56 / 0.06); }
+      .alog-row:hover { background: color-mix(in oklch, var(--copper) 6%, transparent); }
       @keyframes alogIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
       @media (prefers-reduced-motion: reduce) { .alog-row { animation: none; } }
       .alog-time { font-family: var(--font-mono); font-size: 10px; color: var(--faint); flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -665,6 +1171,34 @@
       .alog-action .alog-label { color: var(--ink); }
       .alog-info   .alog-icon { color: var(--faint); }
 
+      /* ── Needs-you rows folded into the Activity feed (P5 v-Next) ─────── */
+      /* Priority-flagged, clickable rows pinned at the top of the feed.
+         Reuses the needs-you rail's visual language (ESC red / REVIEW amber). */
+      .afeed-needs {
+        align-items: center; gap: 8px;
+        padding: 6px 8px; margin-bottom: 3px; border-radius: 7px;
+        background: var(--card); border: 1px solid var(--line); cursor: pointer;
+      }
+      .afeed-needs:hover { background: color-mix(in oklch, var(--copper) 7%, transparent); }
+      .afeed-needs-esc { border-color: color-mix(in oklch, var(--red) 50%, transparent); }
+      .afeed-needs-tag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+        padding: 2px 6px; border-radius: 5px; flex-shrink: 0;
+      }
+      .afeed-needs-tag-esc    { color: var(--red, oklch(0.66 0.17 25)); background: color-mix(in oklch, var(--red) 16%, transparent); }
+      .afeed-needs-tag-review { color: var(--amber); background: color-mix(in oklch, var(--amber) 14%, transparent); }
+      .afeed-needs-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+      .afeed-needs-title { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .afeed-needs-sub { font-size: 10px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .afeed-needs-approve {
+        flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
+        font-size: 13px; color: var(--green, oklch(0.80 0.16 150));
+        background: transparent; border: 1px solid var(--line); cursor: pointer;
+        transition: background 100ms, border-color 100ms;
+      }
+      .afeed-needs-approve:hover { background: color-mix(in oklch, var(--green) 14%, transparent); border-color: var(--green, oklch(0.80 0.16 150)); }
+      .afeed-needs-approve[disabled] { opacity: 0.5; cursor: default; }
+
       /* ── Alert flash on the top bar (CC2) ────────────────────────────── */
       #topbar.alerting {
         animation: topbarAlert 1.1s ease-in-out infinite;
@@ -672,9 +1206,9 @@
       }
       @keyframes topbarAlert {
         0%, 100% { background: transparent; }
-        50%      { background: oklch(0.66 0.17 25 / 0.16); }
+        50%      { background: color-mix(in oklch, var(--red) 16%, transparent); }
       }
-      @media (prefers-reduced-motion: reduce) { #topbar.alerting { animation: none; background: oklch(0.66 0.17 25 / 0.12); } }
+      @media (prefers-reduced-motion: reduce) { #topbar.alerting { animation: none; background: color-mix(in oklch, var(--red) 12%, transparent); } }
 
       /* ── Needs-you rail (CC2) ────────────────────────────────────────── */
       .needs-count {
@@ -688,13 +1222,13 @@
         padding: 6px 8px; border-radius: 7px;
         background: var(--card); border: 1px solid var(--line);
       }
-      .needs-esc { border-color: oklch(0.66 0.17 25 / 0.5); }
+      .needs-esc { border-color: color-mix(in oklch, var(--red) 50%, transparent); }
       .needs-tag {
         font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
         padding: 2px 6px; border-radius: 5px; flex-shrink: 0;
       }
-      .needs-tag-esc    { color: var(--red, oklch(0.66 0.17 25)); background: oklch(0.66 0.17 25 / 0.16); }
-      .needs-tag-review { color: var(--amber); background: oklch(0.83 0.15 78 / 0.14); }
+      .needs-tag-esc    { color: var(--red, oklch(0.66 0.17 25)); background: color-mix(in oklch, var(--red) 16%, transparent); }
+      .needs-tag-review { color: var(--amber); background: color-mix(in oklch, var(--amber) 14%, transparent); }
       .needs-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
       .needs-title { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .needs-sub { font-size: 10px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -704,7 +1238,7 @@
         background: transparent; border: 1px solid var(--line); cursor: pointer;
         transition: background 100ms, border-color 100ms;
       }
-      .needs-approve:hover { background: oklch(0.80 0.16 150 / 0.14); border-color: var(--green, oklch(0.80 0.16 150)); }
+      .needs-approve:hover { background: color-mix(in oklch, var(--green) 14%, transparent); border-color: var(--green, oklch(0.80 0.16 150)); }
       .needs-approve[disabled] { opacity: 0.5; cursor: default; }
 
       .paused-badge {
@@ -716,7 +1250,7 @@
         border: 1px solid var(--amber);
         padding: 2px 8px;
         border-radius: 4px;
-        background: oklch(0.83 0.15 78 / 0.08);
+        background: color-mix(in oklch, var(--amber) 8%, transparent);
         text-transform: uppercase;
         flex-shrink: 0;
       }
@@ -734,7 +1268,7 @@
         /* Grid child — no absolute positioning needed */
         position: relative;
         background:
-          linear-gradient(180deg, oklch(0.21 0.018 60) 0%, oklch(0.175 0.016 58) 100%);
+          linear-gradient(180deg, var(--cell-bg-top) 0%, var(--cell-bg-bot) 100%);
         border: 1px solid var(--line);
         border-radius: 9px;
         overflow: hidden;
@@ -743,8 +1277,8 @@
         display: flex;
         flex-direction: column;
         box-shadow:
-          0 1px 0 oklch(0.45 0.02 64 / 0.18) inset,   /* top highlight */
-          0 8px 22px oklch(0.06 0.01 55 / 0.45);        /* soft float */
+          0 1px 0 var(--cell-hi-top) inset,   /* top highlight */
+          0 8px 22px var(--cell-shadow);        /* soft float */
         transition: border-color 160ms ease, box-shadow 220ms ease, transform 220ms cubic-bezier(0.16,1,0.3,1);
         animation: cellIn 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
       }
@@ -752,15 +1286,15 @@
       .dashboard-cell::before {
         content: '';
         position: absolute; inset: 0 0 auto 0; height: 1px;
-        background: linear-gradient(90deg, transparent, oklch(0.74 0.13 56 / 0.35), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--copper) 35%, transparent), transparent);
         opacity: 0.6; pointer-events: none;
       }
       .dashboard-cell:hover {
-        border-color: oklch(0.74 0.13 56 / 0.55);
+        border-color: var(--cell-border-hov);
         box-shadow:
-          0 1px 0 oklch(0.5 0.03 64 / 0.22) inset,
-          0 10px 30px oklch(0.06 0.01 55 / 0.55),
-          0 0 0 1px oklch(0.74 0.13 56 / 0.12);
+          0 1px 0 var(--cell-hi-top) inset,
+          0 10px 30px var(--cell-shadow),
+          0 0 0 1px color-mix(in oklch, var(--copper) 12%, transparent);
         transform: translateY(-1px);
       }
       @keyframes cellIn {
@@ -793,14 +1327,25 @@
         gap: 9px;
         padding: 8px 14px;
         border-bottom: 1px solid transparent;
-        border-image: linear-gradient(90deg, oklch(0.30 0.02 64), transparent 85%) 1;
+        border-image: linear-gradient(90deg, var(--header-sep), transparent 85%) 1;
         flex-shrink: 0;
         cursor: pointer; /* CC5: click header to focus/expand this panel */
         transition: background 160ms ease;
       }
-      .panel-header:hover { background: oklch(0.74 0.13 56 / 0.05); }
+      .panel-header:hover { background: color-mix(in oklch, var(--copper) 5%, transparent); }
       .panel-header:hover .panel-label { color: var(--amber); }
       .panel-header:hover .panel-label::before { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
+      /* #211: per-module action bar (Pause / Task / Goal) inside a panel header. */
+      .panel-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+      .panel-act-btn {
+        font-family: var(--font-mono, monospace); font-size: 10px;
+        color: var(--txt-dim, #aaa); background: var(--card-hi, #222);
+        border: 1px solid var(--line, #363c30); border-radius: 5px;
+        padding: 2px 7px; cursor: pointer; white-space: nowrap;
+        transition: border-color 120ms, color 120ms;
+      }
+      .panel-act-btn:hover { border-color: var(--amber, #c07840); color: var(--amber, #c07840); }
 
       .panel-label {
         position: relative;
@@ -824,10 +1369,10 @@
       [data-plugin-id="escalations"], [data-plugin-id="needs-you"] { --accent-panel: var(--red, oklch(0.66 0.17 25)); }
       [data-plugin-id="crew-board"], [data-plugin-id="crew-board-full"], [data-plugin-id="kpi"] { --accent-panel: var(--amber); }
       [data-plugin-id="gpu"], [data-plugin-id="system"], [data-plugin-id="terminal"] { --accent-panel: var(--copper); }
-      [data-plugin-id="telemetry"], [data-plugin-id="tokens-day"], [data-plugin-id="actions-log"] { --accent-panel: var(--cyan, oklch(0.80 0.10 200)); }
+      [data-plugin-id="telemetry"], [data-plugin-id="tokens-day"], [data-plugin-id="actions-log"], [data-plugin-id="activity-feed"] { --accent-panel: var(--cyan, oklch(0.80 0.10 200)); }
       [data-plugin-id="graph"], [data-plugin-id="git-activity"] { --accent-panel: var(--green, oklch(0.80 0.16 150)); }
-      [data-plugin-id="docker"] { --accent-panel: oklch(0.72 0.10 235); }
-      [data-plugin-id="content-gallery"] { --accent-panel: oklch(0.74 0.16 330); }
+      [data-plugin-id="docker"] { --accent-panel: var(--cyan, oklch(0.72 0.10 235)); }
+      [data-plugin-id="content-gallery"] { --accent-panel: var(--copper, oklch(0.74 0.16 330)); }
       [data-plugin-id="agenda"], [data-plugin-id="clock"] { --accent-panel: var(--faint); }
 
       /* ── P4 hybrid mode ────────────────────────────────────────────────── */
@@ -838,8 +1383,8 @@
         background: var(--amber);
         border-color: var(--amber);
       }
-      /* Ambient = read-only: hide the mutating controls (pause/task/goal). */
-      body.mode-ambient .act-mutate { display: none; }
+      /* DL1: one mode — the mutating controls (pause/task/goal) are ALWAYS
+         visible/usable (the ambient/focus split was removed). */
       /* Ambient = calm: stop only INFINITE/looping pulses (the 24/7 cost). We
          must NOT touch one-shot entry/fade-in animations — pausing those freezes
          the panel at its opacity:0 start frame and the whole cell renders black.
@@ -859,16 +1404,10 @@
         align-items: flex-end; justify-content: center; padding-bottom: 10px;
         font: 11px/1.2 ui-monospace, monospace; letter-spacing: 0.04em;
         color: var(--faint, oklch(0.62 0.02 70));
-        background: linear-gradient(to bottom, transparent 55%, oklch(0.14 0.01 60 / 0.78));
+        background: linear-gradient(to bottom, transparent 55%, var(--suspended-veil));
         pointer-events: none;
       }
-      /* Focus chrome: a hairline amber frame + corner pill so the mode reads at a glance. */
-      body.mode-focus #app::after {
-        content: "FOCUS";
-        position: fixed; top: 6px; right: 12px; z-index: 60;
-        font: 10px/1 ui-monospace, monospace; letter-spacing: 0.18em;
-        color: var(--amber); opacity: 0.85; pointer-events: none;
-      }
+      /* Focus chrome: a hairline amber frame (the top-right "FOCUS" pill was removed). */
       body.mode-focus #dashboard-grid {
         outline: 1px solid var(--amber); outline-offset: -1px;
       }
@@ -879,18 +1418,18 @@
       *::-webkit-scrollbar { width: 7px; height: 7px; }
       *::-webkit-scrollbar-track { background: transparent; }
       *::-webkit-scrollbar-thumb {
-        background: oklch(0.34 0.02 64); border-radius: 4px;
+        background: var(--scrollbar-thumb); border-radius: 4px;
         border: 1px solid transparent; background-clip: padding-box;
       }
-      *::-webkit-scrollbar-thumb:hover { background: oklch(0.74 0.13 56 / 0.6); }
-      * { scrollbar-width: thin; scrollbar-color: oklch(0.34 0.02 64) transparent; }
+      *::-webkit-scrollbar-thumb:hover { background: color-mix(in oklch, var(--copper) 60%, transparent); }
+      * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
 
       /* Crew board v2 */
       .hero-progress-bar {
         position: relative;
         width: 100%;
         height: 5px;
-        background: oklch(0.26 0.02 60);
+        background: var(--track-bg);
         border-radius: 3px;
         margin: 8px 0;
         overflow: hidden;
@@ -900,7 +1439,7 @@
         height: 100%;
         background: linear-gradient(90deg, var(--copper), var(--amber));
         border-radius: 3px;
-        box-shadow: 0 0 10px oklch(0.83 0.15 78 / 0.55);
+        box-shadow: 0 0 10px color-mix(in oklch, var(--amber) 55%, transparent);
         transition: width 0.5s cubic-bezier(0.16,1,0.3,1);
         overflow: hidden;
       }
@@ -908,7 +1447,7 @@
       .hero-progress-fill::after {
         content: '';
         position: absolute; inset: 0;
-        background: linear-gradient(90deg, transparent, oklch(0.98 0.02 90 / 0.45), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--ink) 45%, transparent), transparent);
         transform: translateX(-100%);
         animation: progressSheen 1.9s ease-in-out infinite;
       }
@@ -949,14 +1488,29 @@
         font-size: 8px; font-weight: 700; letter-spacing: 0.08em;
         padding: 1px 5px; border-radius: 4px;
       }
-      .gpu-role-ai     { color: var(--green, oklch(0.80 0.16 150)); background: oklch(0.80 0.16 150 / 0.14); }
-      .gpu-role-gaming { color: var(--copper); background: oklch(0.74 0.13 56 / 0.16); }
+      .gpu-role-ai     { color: var(--green, oklch(0.80 0.16 150)); background: color-mix(in oklch, var(--green) 14%, transparent); }
+      .gpu-role-gaming { color: var(--copper); background: color-mix(in oklch, var(--copper) 16%, transparent); }
       .gpu-game-tag { font-size: 9px; color: var(--amber); font-family: var(--font-mono); }
       .gpu-card-top .gpu-temp { margin-left: auto; font-size: 11px; font-family: var(--font-mono); }
       .gpu-metric { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
       .gpu-metric-lbl { font-size: 9px; color: var(--faint); width: 26px; text-transform: uppercase; letter-spacing: 0.05em; }
       .gpu-metric .gpu-bar-track { flex: 1; margin: 0; }
       .gpu-metric-val { font-size: 10px; font-family: var(--font-mono); color: var(--dim); width: 54px; text-align: right; }
+      .gpu-procs {
+        display: flex; flex-wrap: wrap; gap: 4px;
+        margin-top: 6px; padding-top: 6px;
+        border-top: 1px solid color-mix(in oklch, var(--line) 60%, transparent);
+      }
+      .gpu-proc-chip {
+        font-size: 9px; font-family: var(--font-mono);
+        color: var(--dim); background: var(--bg2);
+        padding: 1px 6px; border-radius: 4px;
+        white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+      }
+      .gpu-proc-mem { color: var(--cyan, var(--copper)); }
+      .gpu-proc-more { color: var(--faint); }
+      .gpu-procs-idle { border-top-color: transparent; }
+      .gpu-proc-empty { font-size: 9px; font-family: var(--font-mono); color: var(--faint); font-style: italic; }
       .gpu-card-meta { display: flex; gap: 10px; font-size: 11px; font-family: var(--font-mono); }
       .gpu-gaming-strip {
         display: flex; align-items: center; gap: 10px;
@@ -989,11 +1543,67 @@
         0%, 100% { opacity: 1; }
         50%       { opacity: 0.6; }
       }
-      .escalation-header { background: oklch(0.14 0.014 25 / 0.4); }
+      .escalation-header { background: var(--esc-bg); }
       .esc-summary { padding: 10px 14px; }
       .esc-open-count { font-size: 18px; font-weight: 700; color: var(--red); font-family: var(--font-mono); }
       .esc-top-reason { font-size: 11px; color: var(--dim); display: block; margin-top: 4px; }
       .esc-auth-note { padding: 10px 14px; }
+
+      /* Wiki Review panel (C4) */
+      .wiki-review-header { display: flex; align-items: center; gap: 7px; }
+      .wiki-review-badge {
+        font-size: 10px; font-weight: 700; color: var(--faint);
+        min-width: 16px; text-align: center; padding: 1px 5px;
+        transition: color 0.3s;
+      }
+      .wiki-review-badge.active { color: var(--amber); }
+      .wiki-review-list {
+        display: flex; flex-direction: column; gap: 4px;
+        padding: 6px 8px; overflow-y: auto; height: calc(100% - 40px);
+      }
+      .wiki-review-row {
+        display: flex; align-items: center; gap: 7px;
+        padding: 5px 7px; border-radius: 6px;
+        border: 1px solid var(--line);
+        background: color-mix(in oklch, var(--card) 60%, transparent);
+      }
+      .wiki-kind-tag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.07em;
+        padding: 1px 5px; border-radius: 4px; flex-shrink: 0; white-space: nowrap;
+      }
+      .wiki-kind-conflict {
+        color: var(--red); background: color-mix(in oklch, var(--red) 10%, transparent);
+        border: 1px solid color-mix(in oklch, var(--red) 30%, transparent);
+      }
+      .wiki-kind-gap {
+        color: var(--amber); background: color-mix(in oklch, var(--amber) 10%, transparent);
+        border: 1px solid color-mix(in oklch, var(--amber) 30%, transparent);
+      }
+      .wiki-kind-stale {
+        color: var(--dim); background: color-mix(in oklch, var(--dim) 8%, transparent);
+        border: 1px solid color-mix(in oklch, var(--line) 60%, transparent);
+      }
+      .wiki-review-info {
+        display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px;
+      }
+      .wiki-review-slug {
+        font-size: 10px; font-family: var(--font-mono); color: var(--copper);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .wiki-review-summary {
+        font-size: 10px; color: var(--dim);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .wiki-review-actions { display: flex; gap: 3px; flex-shrink: 0; }
+      .wiki-btn {
+        font-family: inherit; font-size: 11px; color: var(--dim);
+        background: transparent; border: 1px solid var(--line);
+        border-radius: 5px; padding: 2px 6px; cursor: pointer;
+        transition: color 100ms, border-color 100ms;
+      }
+      .wiki-btn:hover { color: var(--amber); border-color: var(--amber); }
+      .wiki-resolve:hover { color: var(--green); border-color: var(--green); }
+      .wiki-dismiss:hover { color: var(--faint); border-color: var(--faint); }
 
       /* Telemetry v2 */
       .telemetry-charts-wrap { padding: 8px; overflow-y: auto; }
@@ -1126,21 +1736,21 @@
         flex-shrink: 0;
       }
       .hero-card.building {
-        border-color: oklch(0.74 0.13 56 / 0.7);
+        border-color: color-mix(in oklch, var(--copper) 70%, transparent);
         background:
-          linear-gradient(180deg, oklch(0.23 0.03 62) 0%, oklch(0.185 0.018 58) 100%);
+          linear-gradient(180deg, var(--cell-bg-top) 0%, var(--cell-bg-bot) 100%);
         animation: hero-glow 2.6s ease-in-out infinite;
       }
       @keyframes hero-glow {
-        0%, 100% { box-shadow: 0 0 0 0 oklch(0.74 0.13 56 / 0); }
-        50%       { box-shadow: 0 0 26px 5px oklch(0.74 0.13 56 / 0.38); }
+        0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--copper) 0%, transparent); }
+        50%       { box-shadow: 0 0 26px 5px color-mix(in oklch, var(--copper) 38%, transparent); }
       }
       .hero-card.building::after {
         content: '';
         position: absolute;
         top: 0; left: 0;
         width: 45%; height: 100%;
-        background: linear-gradient(90deg, transparent, oklch(0.83 0.15 78 / 0.10), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--amber) 10%, transparent), transparent);
         transform: translateX(-130%);
         animation: card-sweep 2.8s ease-in-out infinite;
       }
@@ -1159,10 +1769,15 @@
       .hero-title {
         font-size: 17px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em;
         margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        text-shadow: 0 0 18px oklch(0.83 0.15 78 / 0.12);
+        text-shadow: 0 0 18px color-mix(in oklch, var(--amber) 12%, transparent);
       }
       .hero-slug {
-        font-family: var(--font-mono); font-size: 10px; color: var(--faint); margin-bottom: 8px;
+        /* Ticket id is an identifier — use --dim (secondary), not --faint
+           (tertiary). On code-fall, --faint is the theme green and rendered the
+           id green-on-green; --dim is the neutral grey so it stays readable on
+           every theme. font-weight 500 helps the thin mono faces (Share Tech). */
+        font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+        color: var(--dim); margin-bottom: 8px;
       }
       .hero-meta { display: flex; gap: 14px; flex-wrap: wrap; }
       .hero-stat {
@@ -1331,7 +1946,7 @@
         display: flex; align-items: center; justify-content: center;
       }
       .graph-ph-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-      .graph-ph-glyph { font-size: 48px; color: oklch(0.74 0.13 56 / 0.3); line-height: 1; }
+      .graph-ph-glyph { font-size: 48px; color: color-mix(in oklch, var(--copper) 30%, transparent); line-height: 1; }
       .graph-ph-label {
         font-size: 12px; font-weight: 700; letter-spacing: 0.14em;
         text-transform: uppercase; color: var(--faint);
@@ -1353,7 +1968,7 @@
       .esc-row {
         display: flex; align-items: flex-start; gap: 6px;
         padding: 5px 8px; background: var(--card);
-        border: 1px solid oklch(0.66 0.17 25 / 0.45); border-radius: 6px;
+        border: 1px solid color-mix(in oklch, var(--red) 45%, transparent); border-radius: 6px;
       }
       .esc-dot {
         width: 6px; height: 6px; border-radius: 50%; background: var(--red);
@@ -1484,16 +2099,16 @@
         padding: 4px 6px; border-radius: 4px;
         transition: color 80ms, background 80ms;
       }
-      .suno-btn:hover  { color: var(--amber); background: oklch(0.83 0.15 78 / 0.08); }
+      .suno-btn:hover  { color: var(--amber); background: color-mix(in oklch, var(--amber) 8%, transparent); }
       .suno-btn.active { color: var(--copper); }
       #suno-btn-play {
         font-size: 20px; color: var(--amber);
         width: 36px; height: 36px;
         display: flex; align-items: center; justify-content: center;
         border: 1px solid var(--copper); border-radius: 50%;
-        background: oklch(0.74 0.13 56 / 0.08);
+        background: color-mix(in oklch, var(--copper) 8%, transparent);
       }
-      #suno-btn-play:hover { background: oklch(0.74 0.13 56 / 0.18); }
+      #suno-btn-play:hover { background: color-mix(in oklch, var(--copper) 18%, transparent); }
 
       /* Volume */
       .suno-vol-row {
@@ -1548,7 +2163,10 @@
       .suno-track-row:hover          { border-color: var(--amber); }
       .suno-track-row.suno-track-active {
         border-color: var(--copper);
-        background: oklch(0.74 0.13 56 / 0.07);
+        background: color-mix(in oklch, var(--copper) 7%, transparent);
+        box-shadow:
+          0 0 6px  color-mix(in oklch, var(--copper) 30%, transparent),
+          0 0 14px color-mix(in oklch, var(--copper) 14%, transparent);
       }
       .suno-track-play-indicator {
         font-size: 9px; color: var(--copper); flex-shrink: 0; width: 10px;
@@ -1571,15 +2189,94 @@
       }
       .offline-state::before { content: '⬡ '; color: var(--amber); font-style: normal; }
 
+      /* ── F4 Music player: source switcher ───────────────────────────── */
+      .music-source-switcher {
+        display: flex; gap: 6px; padding-bottom: 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .music-src-btn {
+        flex: 1; font-size: 11px; padding: 4px 8px;
+        border-radius: 6px; cursor: pointer;
+      }
+      .music-src-btn.active {
+        background: color-mix(in oklch, var(--copper) 18%, transparent);
+        border-color: var(--copper); color: var(--copper);
+      }
+
+      /* ── F4 Music player: repeat button ─────────────────────────────── */
+      #music-btn-repeat { font-size: 12px; min-width: 60px; }
+
+      /* ── F4 Music player: folder browser ────────────────────────────── */
+      .music-browser-area {
+        display: flex; flex-direction: column; gap: 2px;
+        max-height: 240px; overflow-y: auto;
+      }
+      .music-browser-section-label {
+        font-size: 10px; color: var(--faint); font-variant-caps: small-caps;
+        letter-spacing: 0.06em; padding: 4px 0 2px; text-transform: uppercase;
+      }
+      .music-browser-back {
+        background: none; border: none; color: var(--copper); cursor: pointer;
+        font-size: 11px; padding: 2px 0 4px; text-align: left;
+      }
+      .music-browser-back:hover { color: var(--amber); }
+      .music-browser-entry {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 6px; border-radius: 5px; cursor: pointer;
+        border: 1px solid transparent;
+        transition: background 80ms, border-color 80ms;
+      }
+      .music-browser-entry:hover {
+        background: color-mix(in oklch, var(--amber) 7%, transparent);
+        border-color: color-mix(in oklch, var(--amber) 30%, transparent);
+      }
+      .music-browser-icon { font-size: 13px; flex-shrink: 0; }
+      .music-browser-name { font-size: 11px; color: var(--ink); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .music-browser-use {
+        background: color-mix(in oklch, var(--copper) 12%, transparent);
+        border: 1px solid var(--copper); color: var(--copper);
+        border-radius: 4px; font-size: 10px; padding: 2px 6px; cursor: pointer;
+        flex-shrink: 0; white-space: nowrap;
+      }
+      .music-browser-use:hover { background: color-mix(in oklch, var(--amber) 18%, transparent); border-color: var(--amber); color: var(--amber); }
+      .music-browser-empty { font-size: 11px; color: var(--faint); padding: 8px 4px; line-height: 1.5; }
+      .music-browser-loading { font-size: 11px; color: var(--faint); padding: 8px 4px; }
+
+      /* ── F4 Music player: queue track rows ──────────────────────────── */
+      .music-track-row {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 6px; border-radius: 5px; cursor: pointer;
+        border: 1px solid transparent; min-height: 28px;
+        transition: background 80ms, border-color 80ms;
+      }
+      .music-track-row:hover { background: color-mix(in oklch, var(--amber) 7%, transparent); border-color: color-mix(in oklch, var(--amber) 30%, transparent); }
+      .music-track-active { border-color: color-mix(in oklch, var(--copper) 55%, transparent) !important; }
+      .music-track-indicator { font-size: 9px; color: var(--copper); width: 10px; text-align: center; flex-shrink: 0; }
+      .music-track-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+      .music-track-title { font-size: 11px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .music-track-artist { font-size: 9px; color: var(--faint); }
+      .music-track-dur { font-family: var(--font-mono); font-size: 10px; color: var(--dim); flex-shrink: 0; }
+
+      /* ── F4: change-folder button ────────────────────────────────────── */
+      .music-change-folder-btn { font-size: 10px; margin-bottom: 6px; width: 100%; }
+
+      /* ── F4.4: fx-glow on the active track (copper hue) ─────────────── */
+      .music-track-active.fx-glow {
+        box-shadow:
+          0 0 6px  color-mix(in oklch, var(--copper) 35%, transparent),
+          0 0 16px color-mix(in oklch, var(--copper) 18%, transparent);
+        border-color: color-mix(in oklch, var(--copper) 55%, transparent) !important;
+      }
+
       /* ── Footer ─────────────────────────────────────────────────────── */
       #footer {
         height: 28px;
         display: flex; align-items: center; justify-content: center; gap: 8px;
         border-top: 1px solid var(--line); flex-shrink: 0;
-        background: oklch(0.13 0.012 55 / 0.5);
+        background: var(--footer-bg);
       }
       .footer-hex {
-        font-family: var(--font-mono); color: oklch(0.56 0.014 68 / 0.5);
+        font-family: var(--font-mono); color: color-mix(in oklch, var(--faint) 50%, transparent);
         font-size: 13px; letter-spacing: 2px; user-select: none;
       }
       .footer-text {
@@ -1598,8 +2295,8 @@
         transition: background 120ms, box-shadow 120ms;
       }
       .probe-btn:hover {
-        background: oklch(0.83 0.15 78 / 0.08);
-        box-shadow: 0 0 14px oklch(0.83 0.15 78 / 0.22);
+        background: color-mix(in oklch, var(--amber) 8%, transparent);
+        box-shadow: 0 0 14px color-mix(in oklch, var(--amber) 22%, transparent);
       }
       .probe-counter {
         font-family: var(--font-mono); font-size: 40px; font-weight: 700;
@@ -1617,61 +2314,325 @@
         flex-shrink: 0; font-family: var(--font-mono); line-height: 1.7;
       }
       .probe-info strong { color: var(--amber); font-weight: 600; }
+      /* GEN:DASHBOARD-FX START — generated from themes.json; do not hand-edit */
+      html[data-theme="holo"] {
+        --fx-rain: #00e2ed; --fx-rain-2: #00e2ed;
+        --fx-snow: #edf3f7; --fx-snow-2: #edf3f7;
+        --fx-snow-glow: #fa30cb; --fx-snow-glow-2: #fa30cb;
+        --fx-style: drops;
+      }
+      html[data-theme="terminal"] {
+        --fx-rain: #a6f236; --fx-rain-2: #a6f236;
+        --fx-snow: #bcfc73; --fx-snow-2: #bcfc73;
+        --fx-snow-glow: #e0b300; --fx-snow-glow-2: #e0b300;
+        --fx-style: drops;
+      }
+      html[data-theme="brutalist"] {
+        --fx-rain: #e2e5e8; --fx-rain-2: #e2e5e8;
+        --fx-snow: #f8f8f8; --fx-snow-2: #f8f8f8;
+        --fx-snow-glow: #f8f8f8; --fx-snow-glow-2: #f8f8f8;
+        --fx-style: drops;
+      }
+      html[data-theme="vector-tron"] {
+        --fx-rain: #00e9ff; --fx-rain-2: #00e9ff;
+        --fx-snow: #dbf1ff; --fx-snow-2: #dbf1ff;
+        --fx-snow-glow: #d91dfc; --fx-snow-glow-2: #d91dfc;
+        --fx-style: drops;
+      }
+      html[data-theme="glitch-mag"] {
+        --fx-rain: #00e2ed; --fx-rain-2: #00e2ed;
+        --fx-snow: #f8f4f2; --fx-snow-2: #f8f4f2;
+        --fx-snow-glow: #fa30cb; --fx-snow-glow-2: #fa30cb;
+        --fx-style: drops;
+      }
+      html[data-theme="hive-v2"] {
+        --fx-rain: #fcba43; --fx-rain-2: #fcba43;
+        --fx-snow: #f4ede6; --fx-snow-2: #f4ede6;
+        --fx-snow-glow: #e99454; --fx-snow-glow-2: #e99454;
+        --fx-style: drops;
+      }
+      html[data-theme="joker"] {
+        --fx-rain: #60e654; --fx-rain-2: #60e654;
+        --fx-snow: #e6f3df; --fx-snow-2: #e6f3df;
+        --fx-snow-glow: #8f26f3; --fx-snow-glow-2: #8f26f3;
+        --fx-style: drops;
+      }
+      html[data-theme="nod"] {
+        --fx-rain: #e31029; --fx-rain-2: #e31029;
+        --fx-snow: #f5e3e0; --fx-snow-2: #f5e3e0;
+        --fx-snow-glow: #cb002e; --fx-snow-glow-2: #cb002e;
+        --fx-style: drops;
+      }
+      html[data-theme="synthwave"] {
+        --fx-rain: #00dffa; --fx-rain-2: #00dffa;
+        --fx-snow: #ede8f7; --fx-snow-2: #ede8f7;
+        --fx-snow-glow: #fc09df; --fx-snow-glow-2: #fc09df;
+        --fx-style: drops;
+      }
+      html[data-theme="daybreak"] {
+        --fx-rain: #006b69; --fx-rain-2: #006b69;
+        --fx-snow: #04191f; --fx-snow-2: #04191f;
+        --fx-snow-glow: #00807e; --fx-snow-glow-2: #00807e;
+        --fx-style: drops;
+      }
+      html[data-theme="royal"] {
+        --fx-rain: #f6af00; --fx-rain-2: #f6af00;
+        --fx-snow: #f3eee6; --fx-snow-2: #f3eee6;
+        --fx-snow-glow: #d48600; --fx-snow-glow-2: #d48600;
+        --fx-style: drops;
+      }
+      html[data-theme="weatherstar"] {
+        --bg: oklch(0.18 0.035 258.3); --bg2: oklch(0.29 0.055 254); --card: oklch(0.37 0.065 251); --line: oklch(0.7 0.19 50);
+        --ink: oklch(1 0 0); --dim: oklch(0.82 0.02 250); --faint: oklch(0.7 0.19 50);
+        --copper: oklch(0.9 0.17 92); --amber: oklch(0.91 0.18 96); --amber-glow: oklch(0.91 0.18 96);
+        --green: oklch(0.8 0.17 62); --red: oklch(0.66 0.17 25); --cyan: oklch(0.78 0.18 55); --violet: var(--cyan);
+        --hex-bg: #081221; --hex-bg2: #172c46; --hex-card: #244261; --hex-line: #f77200;
+        --hex-ink: #ffffff; --hex-dim: #bbc5d1; --hex-faint: #f77200;
+        --hex-copper: #ffd939; --hex-amber: #ffdf28; --hex-green: #ffa12f; --hex-red: #e8605b; --hex-cyan: #ff932a;
+        --panel: oklch(0.29 0.055 254); --topbar-bg: oklch(0.18 0.035 258.3 / 0.92); --overlay-bg: oklch(0.18 0.035 258.3 / 0.6);
+        --viz-bg: oklch(0.29 0.055 254); --cell-bg-top: oklch(0.37 0.065 251); --cell-bg-bot: oklch(0.29 0.055 254);
+        --cell-hi-top: oklch(0.7 0.19 50 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.9 0.17 92 / 0.55); --scrollbar-thumb: oklch(0.7 0.19 50); --track-bg: oklch(0.37 0.065 251);
+        --footer-bg: oklch(0.18 0.035 258.3 / 0.5); --suspended-veil: oklch(0.18 0.035 258.3 / 0.78); --header-sep: oklch(0.7 0.19 50);
+      }
+      html[data-theme="weatherstar"] {
+        --fx-rain: #add8e6; --fx-rain-2: #add8e6;
+        --fx-snow: #ffffff; --fx-snow-2: #ffffff;
+        --fx-snow-glow: #e0ffff; --fx-snow-glow-2: #e0ffff;
+        --fx-style: drops;
+      }
+      html[data-theme="retro-purple"] {
+        --bg: oklch(0.142 0.066 295.8); --bg2: oklch(0.276 0.09 296.3); --card: oklch(0.374 0.127 297.6); --line: oklch(0.593 0.273 328.4);
+        --ink: oklch(1 0 0); --dim: oklch(0.757 0 0); --faint: oklch(0.593 0.273 328.4);
+        --copper: oklch(0.905 0.155 194.8); --amber: oklch(0.919 0.129 195.2); --amber-glow: oklch(0.919 0.129 195.2);
+        --green: oklch(0.757 0.251 327.7); --red: oklch(0.66 0.17 25); --cyan: oklch(0.702 0.322 328.4); --violet: var(--cyan);
+        --hex-bg: #0d0221; --hex-bg2: #2d1b4e; --hex-card: #4a2c7a; --hex-line: #cc00cc;
+        --hex-ink: #ffffff; --hex-dim: #b0b0b0; --hex-faint: #cc00cc;
+        --hex-copper: #00ffff; --hex-amber: #65ffff; --hex-green: #ff66ff; --hex-red: #e8605b; --hex-cyan: #ff02ff;
+        --panel: oklch(0.276 0.09 296.3); --topbar-bg: oklch(0.142 0.066 295.8 / 0.92); --overlay-bg: oklch(0.142 0.066 295.8 / 0.6);
+        --viz-bg: oklch(0.276 0.09 296.3); --cell-bg-top: oklch(0.374 0.127 297.6); --cell-bg-bot: oklch(0.276 0.09 296.3);
+        --cell-hi-top: oklch(0.593 0.273 328.4 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.905 0.155 194.8 / 0.55); --scrollbar-thumb: oklch(0.593 0.273 328.4); --track-bg: oklch(0.374 0.127 297.6);
+        --footer-bg: oklch(0.142 0.066 295.8 / 0.5); --suspended-veil: oklch(0.142 0.066 295.8 / 0.78); --header-sep: oklch(0.593 0.273 328.4);
+      }
+      html[data-theme="retro-purple"] {
+        --fx-rain: #00ffff; --fx-rain-2: #ff02ff;
+        --fx-snow: #e0ffff; --fx-snow-2: #ffe0ff;
+        --fx-snow-glow: #00ffff; --fx-snow-glow-2: #ff02ff;
+        --fx-style: drops;
+      }
+      html[data-theme="inverted"] {
+        --bg: oklch(0.939 0.027 78.2); --bg2: oklch(0.85 0.059 75.3); --card: oklch(0.754 0.085 67.1); --line: oklch(0.551 0.162 251.4);
+        --ink: oklch(0.218 0 0); --dim: oklch(0.409 0 0); --faint: oklch(0.551 0.162 251.4);
+        --copper: oklch(0.485 0.291 264.1); --amber: oklch(0.533 0.26 262.6); --amber-glow: oklch(0.533 0.26 262.6);
+        --green: oklch(0.713 0.16 245.1); --red: oklch(0.66 0.17 25); --cyan: oklch(0.658 0.189 250.5); --violet: var(--cyan);
+        --hex-bg: #f5e9d7; --hex-bg2: #e5c9a3; --hex-card: #d4a574; --hex-line: #0073cc;
+        --hex-ink: #1a1a1a; --hex-dim: #4a4a4a; --hex-faint: #0073cc;
+        --hex-copper: #0033ff; --hex-amber: #0055ff; --hex-green: #34aaff; --hex-red: #e8605b; --hex-cyan: #0094ff;
+        --panel: oklch(0.85 0.059 75.3); --topbar-bg: oklch(0.939 0.027 78.2 / 0.92); --overlay-bg: oklch(0.939 0.027 78.2 / 0.6);
+        --viz-bg: oklch(0.85 0.059 75.3); --cell-bg-top: oklch(0.754 0.085 67.1); --cell-bg-bot: oklch(0.85 0.059 75.3);
+        --cell-hi-top: oklch(0.551 0.162 251.4 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.485 0.291 264.1 / 0.55); --scrollbar-thumb: oklch(0.551 0.162 251.4); --track-bg: oklch(0.754 0.085 67.1);
+        --footer-bg: oklch(0.939 0.027 78.2 / 0.5); --suspended-veil: oklch(0.939 0.027 78.2 / 0.78); --header-sep: oklch(0.551 0.162 251.4);
+      }
+      html[data-theme="inverted"] {
+        --fx-rain: #0094ff; --fx-rain-2: #0094ff;
+        --fx-snow: #0094ff; --fx-snow-2: #0094ff;
+        --fx-snow-glow: #0033ff; --fx-snow-glow-2: #0033ff;
+        --fx-style: drops;
+      }
+      html[data-theme="zombie"] {
+        --bg: oklch(0.198 0.038 144); --bg2: oklch(0.278 0.045 144.3); --card: oklch(0.375 0.066 144.1); --line: oklch(0.732 0.249 142.5);
+        --ink: oklch(1 0 0); --dim: oklch(0.757 0 0); --faint: oklch(0.732 0.249 142.5);
+        --copper: oklch(0.882 0.199 160.1); --amber: oklch(0.905 0.149 167.7); --amber-glow: oklch(0.905 0.149 167.7);
+        --green: oklch(0.887 0.234 143.3); --red: oklch(0.66 0.17 25); --cyan: oklch(0.866 0.295 142.5); --violet: var(--cyan);
+        --hex-bg: #0a1a0a; --hex-bg2: #1a2e1a; --hex-card: #2a4a2a; --hex-line: #00cc00;
+        --hex-ink: #ffffff; --hex-dim: #b0b0b0; --hex-faint: #00cc00;
+        --hex-copper: #02ffaa; --hex-amber: #67ffcc; --hex-green: #66ff66; --hex-red: #e8605b; --hex-cyan: #00ff00;
+        --panel: oklch(0.278 0.045 144.3); --topbar-bg: oklch(0.198 0.038 144 / 0.92); --overlay-bg: oklch(0.198 0.038 144 / 0.6);
+        --viz-bg: oklch(0.278 0.045 144.3); --cell-bg-top: oklch(0.375 0.066 144.1); --cell-bg-bot: oklch(0.278 0.045 144.3);
+        --cell-hi-top: oklch(0.732 0.249 142.5 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.882 0.199 160.1 / 0.55); --scrollbar-thumb: oklch(0.732 0.249 142.5); --track-bg: oklch(0.375 0.066 144.1);
+        --footer-bg: oklch(0.198 0.038 144 / 0.5); --suspended-veil: oklch(0.198 0.038 144 / 0.78); --header-sep: oklch(0.732 0.249 142.5);
+      }
+      html[data-theme="zombie"] {
+        --fx-rain: #cc0000; --fx-rain-2: #cc0000;
+        --fx-snow: #ffd702; --fx-snow-2: #ffd702;
+        --fx-snow-glow: #ffff01; --fx-snow-glow-2: #ffff01;
+        --fx-style: drops;
+      }
+      html[data-theme="code-fall"] {
+        --bg: oklch(0.161 0.013 144.9); --bg2: oklch(0.201 0.031 144.3); --card: oklch(0.253 0.045 144.1); --line: oklch(0.732 0.249 142.5);
+        --ink: oklch(1 0 0); --dim: oklch(0.757 0 0); --faint: oklch(0.732 0.249 142.5);
+        --copper: oklch(0.85 0.20 166); --amber: oklch(0.90 0.16 110); --amber-glow: oklch(0.90 0.16 110);
+        --green: oklch(0.90 0.24 135); --red: oklch(0.66 0.17 25); --cyan: oklch(0.82 0.16 192); --violet: var(--cyan);
+        --hex-bg: #0a0f0a; --hex-bg2: #0d1a0d; --hex-card: #142814; --hex-line: #00cc00;
+        --hex-ink: #ffffff; --hex-dim: #b0b0b0; --hex-faint: #00cc00;
+        --hex-copper: #00f5af; --hex-amber: #e5e75b; --hex-green: #92ff3e; --hex-red: #e8605b; --hex-cyan: #00e4df;
+        --panel: oklch(0.201 0.031 144.3); --topbar-bg: oklch(0.161 0.013 144.9 / 0.92); --overlay-bg: oklch(0.161 0.013 144.9 / 0.6);
+        --viz-bg: oklch(0.201 0.031 144.3); --cell-bg-top: oklch(0.253 0.045 144.1); --cell-bg-bot: oklch(0.201 0.031 144.3);
+        --cell-hi-top: oklch(0.732 0.249 142.5 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.85 0.20 166 / 0.55); --scrollbar-thumb: oklch(0.732 0.249 142.5); --track-bg: oklch(0.253 0.045 144.1);
+        --footer-bg: oklch(0.161 0.013 144.9 / 0.5); --suspended-veil: oklch(0.161 0.013 144.9 / 0.78); --header-sep: oklch(0.732 0.249 142.5);
+      }
+      html[data-theme="code-fall"] {
+        --fx-rain: #00ff00; --fx-rain-2: #00ff00;
+        --fx-snow: #00ff00; --fx-snow-2: #00ff00;
+        --fx-snow-glow: #00aa00; --fx-snow-glow-2: #00aa00;
+        --fx-style: matrix;
+      }
+      html[data-theme="winter"] {
+        --bg: oklch(0.2 0.04 258.3); --bg2: oklch(0.342 0.071 251.8); --card: oklch(0.459 0.097 251.6); --line: oklch(0.641 0.129 231.1);
+        --ink: oklch(1 0 0); --dim: oklch(0.757 0 0); --faint: oklch(0.641 0.129 231.1);
+        --copper: oklch(0.904 0.162 144.1); --amber: oklch(0.929 0.131 144.4); --amber-glow: oklch(0.929 0.131 144.4);
+        --green: oklch(0.815 0.082 225.8); --red: oklch(0.66 0.17 25); --cyan: oklch(0.755 0.153 231.6); --violet: var(--cyan);
+        --hex-bg: #0a1628; --hex-bg2: #1a3a5c; --hex-card: #2a5a8c; --hex-line: #0299cc;
+        --hex-ink: #ffffff; --hex-dim: #b0b0b0; --hex-faint: #0299cc;
+        --hex-copper: #98fb98; --hex-amber: #b0ffb0; --hex-green: #87ceeb; --hex-red: #e8605b; --hex-cyan: #02bfff;
+        --panel: oklch(0.342 0.071 251.8); --topbar-bg: oklch(0.2 0.04 258.3 / 0.92); --overlay-bg: oklch(0.2 0.04 258.3 / 0.6);
+        --viz-bg: oklch(0.342 0.071 251.8); --cell-bg-top: oklch(0.459 0.097 251.6); --cell-bg-bot: oklch(0.342 0.071 251.8);
+        --cell-hi-top: oklch(0.641 0.129 231.1 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.904 0.162 144.1 / 0.55); --scrollbar-thumb: oklch(0.641 0.129 231.1); --track-bg: oklch(0.459 0.097 251.6);
+        --footer-bg: oklch(0.2 0.04 258.3 / 0.5); --suspended-veil: oklch(0.2 0.04 258.3 / 0.78); --header-sep: oklch(0.641 0.129 231.1);
+      }
+      html[data-theme="winter"] {
+        --fx-rain: #b0e0e6; --fx-rain-2: #b0e0e6;
+        --fx-snow: #ffffff; --fx-snow-2: #ffffff;
+        --fx-snow-glow: #98fb98; --fx-snow-glow-2: #98fb98;
+        --fx-style: drops;
+      }
+      html[data-theme="code-red"] {
+        --bg: oklch(0.151 0.009 18.2); --bg2: oklch(0.178 0.023 19.5); --card: oklch(0.22 0.033 20.1); --line: oklch(0.531 0.218 29.2);
+        --ink: oklch(1 0 0); --dim: oklch(0.757 0 0); --faint: oklch(0.531 0.218 29.2);
+        --copper: oklch(0.646 0.241 32.6); --amber: oklch(0.698 0.197 38); --amber-glow: oklch(0.698 0.197 38);
+        --green: oklch(0.704 0.187 23.2); --red: oklch(0.66 0.17 25); --cyan: oklch(0.628 0.258 29.2); --violet: var(--cyan);
+        --hex-bg: #0f0a0a; --hex-bg2: #1a0d0d; --hex-card: #281414; --hex-line: #cc0000;
+        --hex-ink: #ffffff; --hex-dim: #b0b0b0; --hex-faint: #cc0000;
+        --hex-copper: #ff3300; --hex-amber: #ff6633; --hex-green: #ff6666; --hex-red: #e8605b; --hex-cyan: #ff0000;
+        --panel: oklch(0.178 0.023 19.5); --topbar-bg: oklch(0.151 0.009 18.2 / 0.92); --overlay-bg: oklch(0.151 0.009 18.2 / 0.6);
+        --viz-bg: oklch(0.178 0.023 19.5); --cell-bg-top: oklch(0.22 0.033 20.1); --cell-bg-bot: oklch(0.178 0.023 19.5);
+        --cell-hi-top: oklch(0.531 0.218 29.2 / 0.18); --cell-shadow: oklch(0.04 0.01 0 / 0.5);
+        --cell-border-hov: oklch(0.646 0.241 32.6 / 0.55); --scrollbar-thumb: oklch(0.531 0.218 29.2); --track-bg: oklch(0.22 0.033 20.1);
+        --footer-bg: oklch(0.151 0.009 18.2 / 0.5); --suspended-veil: oklch(0.151 0.009 18.2 / 0.78); --header-sep: oklch(0.531 0.218 29.2);
+      }
+      html[data-theme="code-red"] {
+        --fx-rain: #ff0000; --fx-rain-2: #ff0000;
+        --fx-snow: #ff0000; --fx-snow-2: #ff0000;
+        --fx-snow-glow: #aa0000; --fx-snow-glow-2: #aa0000;
+        --fx-style: matrix;
+      }
+      /* GEN:DASHBOARD-FX END */
+
+      /* ── Per-theme fonts (#204) ──────────────────────────────────────────
+         Each theme gets a display (--font-ui) and, where it matters, a mono
+         (--font-mono) face that fits its identity. Robust fallbacks keep text
+         readable if a web font fails. Hand-authored OUTSIDE the GEN markers so
+         theme regeneration never clobbers it. Themes not listed keep the :root
+         defaults (Inter / JetBrains Mono) — chosen for legibility (e.g.
+         weatherstar stays on Inter so the readability fix in #201 holds). */
+      html[data-theme="holo"],
+      html[data-theme="vector-tron"],
+      html[data-theme="synthwave"],
+      html[data-theme="retro-purple"] {
+        --font-ui: 'Orbitron', 'Inter', system-ui, sans-serif;
+        --font-mono: 'Share Tech Mono', 'JetBrains Mono', ui-monospace, monospace;
+      }
+      html[data-theme="terminal"],
+      html[data-theme="code-fall"],
+      html[data-theme="code-red"] {
+        --font-ui: 'Share Tech Mono', 'JetBrains Mono', ui-monospace, monospace;
+        --font-mono: 'Share Tech Mono', 'JetBrains Mono', ui-monospace, monospace;
+      }
+      html[data-theme="brutalist"],
+      html[data-theme="nod"] {
+        --font-ui: 'Oswald', 'Inter', system-ui, sans-serif;
+      }
+      html[data-theme="nod"] {
+        --font-mono: 'Share Tech Mono', 'JetBrains Mono', ui-monospace, monospace;
+      }
+      html[data-theme="royal"] {
+        --font-ui: 'Cinzel', Georgia, 'Times New Roman', serif;
+      }
+      html[data-theme="glitch-mag"],
+      html[data-theme="zombie"] {
+        --font-ui: 'Special Elite', 'Courier New', monospace;
+      }
+      html[data-theme="zombie"] {
+        --font-mono: 'Special Elite', 'Courier New', monospace;
+      }
     </style>
   </head>
   <body>
     <div id="app">
 
-      <!-- ── Topbar ─────────────────────────────────────────────────── -->
-      <header id="topbar">
-        <span class="logo-mark">hive</span>
-        <span class="topbar-title">Hive Command Center</span>
-        <div class="topbar-sep"></div>
-        <div class="live-dot" id="live-dot"></div>
-        <span class="live-label" id="live-label">live</span>
-        <div class="topbar-sep"></div>
-        <span class="board-state-chip" id="board-state-chip">loading…</span>
-        <div class="topbar-sep"></div>
-        <span class="topbar-clock" id="clock">--:--:--</span>
-        <div class="topbar-sep"></div>
-        <span class="topbar-esc-badge" id="topbar-esc-badge"></span>
-        <div class="topbar-sep"></div>
-        <span class="topbar-cost" id="topbar-cost">--</span>
-        <div class="topbar-sep"></div>
-        <span id="topbar-tier" data-tier="offline">offline</span>
+      <!-- ── Topbar (F2: grouped, responsive, overflow menu) ─────────────── -->
+      <header id="topbar" class="fx-glass">
 
-        <div class="topbar-sep"></div>
-        <!-- ── Mode toggle (P4): ambient ⇄ focus. Always visible (click target;
-             Lively keyboard is unreliable). ───────────────────────────────── -->
-        <button id="act-mode" class="act-btn act-mode" title="Toggle ambient / focus (Esc exits focus)">◐ Ambient</button>
-        <button id="act-theme" class="act-btn" title="Cycle theme (warm-black / light / neutral-dark)">◑ Theme</button>
+        <!-- ── Brand ───────────────────────────────────────────────────── -->
+        <div class="tb-group tb-brand">
+          <span class="logo-mark" aria-label="Hive dashboard">hive</span>
+        </div>
 
-        <!-- ── Command surface (CC1) ──────────────────────────────────── -->
-        <div id="topbar-actions" class="topbar-actions">
-          <button id="act-pause"   class="act-btn act-mutate" title="Pause/Resume dispatcher">⏸ Pause</button>
-          <button id="act-task"    class="act-btn act-mutate" title="New task">+ Task</button>
-          <button id="act-goal"    class="act-btn act-mutate" title="Decompose a goal into tasks">✦ Goal</button>
-          <button id="act-board"   class="act-btn" title="Open the crew board web page">⊞ Board</button>
-          <button id="act-palette" class="act-btn act-btn-icon" title="Command palette (Ctrl+K)">⌘</button>
+        <!-- ── Health pill (F2.1: merges live-dot+live-label+pulse+esc+cost) ── -->
+        <div class="tb-group tb-health">
+          <div class="topbar-health-pill" id="topbar-health-pill" aria-live="polite" aria-label="System status">
+            <div class="live-dot" id="live-dot"></div>
+            <span id="topbar-pulse" class="topbar-pulse">&#x2014;</span>
+          </div>
+          <span class="topbar-esc-badge" id="topbar-esc-badge" aria-label="Escalations"></span>
+          <span class="topbar-cost" id="topbar-cost" title="Session spend">--</span>
+          <span class="board-state-chip" id="board-state-chip" style="display:none">loading&#x2026;</span>
+        </div>
+
+        <!-- ── View group: mode / presets / modules / board-switcher ─────── -->
+        <div class="tb-group tb-view" role="group" aria-label="View controls">
+          <button id="act-presets" class="act-btn" title="Layout, modules, monitor &amp; saved arrangements" aria-label="Layout menu">&#x229E; Layout</button>
+          <!-- #211: the standalone "Modules" button folded into the Layout menu. -->
+          <!-- DL4: lock button — hidden unless desktop mode is active -->
+          <button id="act-lock" class="act-btn act-desktop-only" title="Lock / unlock panel positions" aria-label="Lock or unlock panel positions" style="display:none">&#x1F513; Unlock</button>
+          <div id="topbar-board-switcher" class="topbar-board-switcher"></div>
+        </div>
+
+        <!-- ── Mutate group: pause / task / goal / board ──────────────── -->
+        <div id="topbar-actions" class="tb-group tb-mutate topbar-actions" role="group" aria-label="Board actions">
+          <button id="act-pause"   class="act-btn act-mutate" title="Pause or resume the dispatcher" aria-label="Pause or resume dispatcher">&#x23F8; Pause</button>
+          <button id="act-task"    class="act-btn act-mutate" title="Create a new task" aria-label="New task">&#xFF0B; Task</button>
+          <button id="act-goal"    class="act-btn act-mutate" title="Decompose a goal into tasks" aria-label="Decompose goal">&#x2726; Goal</button>
+          <button id="act-board"   class="act-btn" title="Open the crew board web page" aria-label="Open crew board">&#x229E; Board</button>
         </div>
 
         <div class="topbar-spacer"></div>
 
-        <!-- ── Suno mini-player (transport in the top bar) ─────────────── -->
-        <div id="topbar-suno" class="topbar-suno">
-          <button id="suno-btn-prev" class="suno-mini-btn" aria-label="Previous">⏮</button>
-          <button id="suno-btn-play" class="suno-mini-btn suno-mini-play" aria-label="Play/Pause">▶</button>
-          <button id="suno-btn-next" class="suno-mini-btn" aria-label="Next">⏭</button>
+        <!-- ── Suno mini-player ───────────────────────────────────────── -->
+        <div id="topbar-suno" class="topbar-suno" aria-label="Music player">
+          <button id="suno-btn-prev" class="suno-mini-btn" aria-label="Previous track">&#x23EE;</button>
+          <button id="suno-btn-play" class="suno-mini-btn suno-mini-play" aria-label="Play or pause">&#x25B6;</button>
+          <button id="suno-btn-next" class="suno-mini-btn" aria-label="Next track">&#x23ED;</button>
           <span id="suno-mini-title" class="suno-mini-title" title="">No track</span>
-          <button id="suno-dd-toggle" class="suno-mini-btn suno-dd-toggle" aria-label="Browse songs" aria-expanded="false">▾</button>
+          <button id="suno-dd-toggle" class="suno-mini-btn suno-dd-toggle" aria-label="Browse songs" aria-expanded="false">&#x25BE;</button>
         </div>
 
-        <div class="topbar-sep"></div>
-        <span class="paused-badge" id="paused-badge">Paused</span>
+        <!-- Low-frequency controls, INLINE (the ⋯ More menu was removed). -->
+        <div class="tb-group tb-fx">
+          <button id="act-theme"   class="act-btn" title="Cycle theme" aria-label="Cycle theme">&#x25D1; Theme</button>
+          <button id="act-rain"    class="act-btn act-fx" title="Toggle rain effect" aria-label="Toggle rain">&#x1F327;</button>
+          <button id="act-snow"    class="act-btn act-fx" title="Toggle snow effect" aria-label="Toggle snow">&#x2744;</button>
+          <button id="act-palette" class="act-btn act-btn-icon" title="Command palette (Ctrl+K)" aria-label="Command palette">&#x2318;</button>
+        </div>
+
+        <span class="paused-badge" id="paused-badge" aria-live="polite">Paused</span>
       </header>
 
-      <!-- ── Suno dropdown: song navigator (hidden until toggled) ──────── -->
-      <div id="suno-dropdown" class="suno-dropdown" hidden>
+      <!-- ── Player dropdown: Suno + Local sources (hidden until toggled) ── -->
+      <div id="suno-dropdown" class="suno-dropdown fx-glass" hidden>
+
+        <!-- Source switcher (F4.2) -->
+        <div class="music-source-switcher" role="group" aria-label="Music source">
+          <button id="music-src-suno"  class="suno-btn music-src-btn active" aria-label="Suno source">&#x1F3B5; Suno</button>
+          <button id="music-src-local" class="suno-btn music-src-btn" aria-label="Local folder source">&#x1F4C2; Local</button>
+        </div>
+
+        <!-- Now-playing (shared between both sources) -->
         <div class="suno-dd-now">
           <img id="suno-art" class="suno-art" src="" alt="" />
           <div class="suno-dd-now-info">
@@ -1685,19 +2646,39 @@
           </div>
           <span id="suno-duration" class="suno-duration">--:--</span>
         </div>
+
+        <!-- Visualizer canvas (shared — reacts to same <audio> for both sources) -->
         <canvas id="suno-viz" class="suno-viz" width="360" height="44"></canvas>
+
+        <!-- Transport controls (shared) -->
         <div class="suno-dd-controls">
-          <button id="suno-btn-shuffle" class="suno-btn" aria-label="Shuffle" aria-pressed="false">⇌ shuffle</button>
+          <button id="suno-btn-shuffle" class="suno-btn" aria-label="Shuffle" aria-pressed="false">&#x21CC; shuffle</button>
+          <button id="music-btn-repeat" class="suno-btn" aria-label="Repeat off">&#x27F3; off</button>
           <div class="suno-vol-wrap">
             <label class="suno-vol-label">vol</label>
             <input id="suno-volume" class="suno-volume" type="range" min="0" max="100" value="80" />
           </div>
         </div>
-        <div class="suno-list-header">
-          <input id="suno-search" class="suno-search" type="search" placeholder="filter tracks…" autocomplete="off" spellcheck="false" />
-          <span id="suno-count" class="suno-count">0</span>
+
+        <!-- Suno section (track list + search) -->
+        <div id="suno-suno-section">
+          <div class="suno-list-header">
+            <input id="suno-search" class="suno-search" type="search" placeholder="filter tracks…" autocomplete="off" spellcheck="false" />
+            <span id="suno-count" class="suno-count">0</span>
+          </div>
+          <div id="suno-track-list" class="suno-track-list"></div>
         </div>
-        <div id="suno-track-list" class="suno-track-list"></div>
+
+        <!-- Local section (folder browser / queue) (F4.2–F4.3) -->
+        <div id="music-local-section" hidden>
+          <div class="suno-list-header">
+            <input id="music-search" class="suno-search" type="search" placeholder="filter tracks…" autocomplete="off" spellcheck="false" />
+            <span id="music-count" class="suno-count">0</span>
+          </div>
+          <!-- Folder browser or queue is rendered into this area by music.ts -->
+          <div id="music-browser-area" class="suno-track-list music-browser-area"></div>
+        </div>
+
       </div>
 
       <!-- ── Command palette (Ctrl+K) ───────────────────────────────── -->
@@ -1739,12 +2720,7 @@
 
       <!-- ── Main three-column grid ─────────────────────────────────── -->
 
-      <!-- Footer -->
-      <footer id="footer">
-        <span class="footer-hex">⬡ ⬡ ⬡ ⬡ ⬡</span>
-        <span class="footer-text">Hive Command Center · Phase B</span>
-        <span class="footer-hex">⬡ ⬡ ⬡ ⬡ ⬡</span>
-      </footer>
+      <!-- Footer removed: grid now fills full remaining height -->
     </div>
 
     <script type="module" src="/src/main.ts"></script>

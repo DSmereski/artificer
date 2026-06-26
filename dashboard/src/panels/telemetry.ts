@@ -2,16 +2,19 @@
  * panels/telemetry.ts — uPlot time-series telemetry wall.
  *
  * Charts rendered:
- *   - Token rate (hive vs claude lines)
- *   - Cost $
- *   - Throughput done/h
- *   - Smoke pass %
- *   - Parse-fail rate (red alarm > 5%)
- *   - Pipeline by_status mini bars
+ *   Row 1: TOKEN RATE — hive vs claude rolling samples (wide)
+ *   Row 2: COST USD · DONE/H · SMOKE PASS % (three small)
+ *   Row 3: TOKENS / DAY — hive vs claude, last 30 days from /board/tokens-by-day (wide)
  *
- * Data source: rolling in-memory buffer of BoardStatsSample (pushed by main.ts
- * each poll cycle). History is built client-side since the gateway's
- * /board/stats endpoint does not expose a time-series.
+ * Styling for all charts follows the tokens-day reference aesthetic:
+ *   • padding [8,8,0,0], no cursor/legend, no grid dash
+ *   • axis stroke --hex-faint, tick/grid stroke --hex-line
+ *   • font 9px JetBrains Mono, y-axis size 40
+ *   • series fill ${color}1a, stroke width 1.5
+ *   • y-axis value formatters: K/M, $, % as appropriate
+ *
+ * Rolling buffer data source: BoardStatsSample pushed by plugins/telemetry.ts
+ * each poll cycle. Tokens/day fetched independently from /board/tokens-by-day.
  */
 
 import {
@@ -19,19 +22,22 @@ import {
   createCostChart,
   createThroughputChart,
   createSmokeChart,
+  createTokensByDayChart,
   type Chart,
 } from '../charts/uplot_factory.js';
 import type { BoardStatsSample } from '../types.js';
 import { bufferToUplot, throughputPerHour, fmtPct, fmtNum, escHtml } from '../format.js';
 import type { BoardStats } from '../gateway.js';
+import { tokensByDay, type TokensByDayEntry } from '../gateway.js';
 
 // ─── Chart instances ──────────────────────────────────────────────────────────
 
 interface ChartSet {
-  tokenRate: Chart;
-  cost:      Chart;
-  throughput: Chart;
-  smoke:     Chart;
+  tokenRate:    Chart;
+  cost:         Chart;
+  throughput:   Chart;
+  smoke:        Chart;
+  tokensByDay:  Chart;
 }
 
 let charts: ChartSet | null = null;
@@ -41,6 +47,10 @@ const SMALL_W  = 340;
 const SMALL_H  = 100;
 const WIDE_W   = 720;
 const WIDE_H   = 110;
+
+// ─── Tokens/day state ─────────────────────────────────────────────────────────
+/** Raw gateway data, kept so the legend can be refreshed on theme change. */
+let _tokensByDayEntries: TokensByDayEntry[] = [];
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -54,26 +64,37 @@ export function initTelemetryPanel(): void {
 
   // Row 1: token rate (wide)
   const tokenRow = _makeRow('token-rate-row');
-  const tokenContainer = _makeChartCell('TOKEN RATE', 'token-rate-chart');
-  tokenRow.appendChild(tokenContainer);
+  tokenRow.appendChild(_makeChartCell('TOKEN RATE — HIVE VS CLAUDE', 'token-rate-chart'));
   panel.appendChild(tokenRow);
 
-  // Row 2: cost + throughput + smoke (three small). Parse-fail + the pipeline
-  // mini-bars + the (stub) activity ticker were dropped — they crammed the md
-  // cell so nothing was legible. Token rate + these three is the readable set.
+  // Row 2: cost + throughput + smoke (three small).
   const row2 = _makeRow('charts-row-2');
-  row2.appendChild(_makeChartCell('COST $',      'cost-chart'));
-  row2.appendChild(_makeChartCell('DONE/H',      'throughput-chart'));
-  row2.appendChild(_makeChartCell('SMOKE PASS',  'smoke-chart'));
+  row2.appendChild(_makeChartCell('COST USD',     'cost-chart'));
+  row2.appendChild(_makeChartCell('DONE / H',     'throughput-chart'));
+  row2.appendChild(_makeChartCell('SMOKE PASS %', 'smoke-chart'));
   panel.appendChild(row2);
+
+  // Row 3: tokens/day — hive vs claude, last 30 days (wide).
+  // Folded in from the standalone tokens-day panel.
+  const row3 = _makeRow('tokens-day-row');
+  row3.appendChild(_makeChartCell('TOKENS / DAY — HIVE VS CLAUDE (30 d)', 'tokens-day-chart'));
+  const legendEl = document.createElement('div');
+  legendEl.id = 'tokens-day-legend';
+  legendEl.style.cssText = 'display:flex;gap:12px;margin-top:4px;padding:0 8px 4px;font-size:10px;font-family:var(--font-mono);color:var(--faint)';
+  row3.appendChild(legendEl);
+  panel.appendChild(row3);
 
   // Instantiate uPlot charts
   charts = {
-    tokenRate:  createTokenRateChart(_el('token-rate-chart')!,   WIDE_W,  WIDE_H),
-    cost:       createCostChart(     _el('cost-chart')!,         SMALL_W, SMALL_H),
-    throughput: createThroughputChart(_el('throughput-chart')!,  SMALL_W, SMALL_H),
-    smoke:      createSmokeChart(    _el('smoke-chart')!,        SMALL_W, SMALL_H),
+    tokenRate:   createTokenRateChart(   _el('token-rate-chart')!,  WIDE_W,  WIDE_H),
+    cost:        createCostChart(        _el('cost-chart')!,        SMALL_W, SMALL_H),
+    throughput:  createThroughputChart(  _el('throughput-chart')!,  SMALL_W, SMALL_H),
+    smoke:       createSmokeChart(       _el('smoke-chart')!,       SMALL_W, SMALL_H),
+    tokensByDay: createTokensByDayChart( _el('tokens-day-chart')!,  WIDE_W,  WIDE_H),
   };
+
+  // Fetch tokens/day data immediately.
+  void _fetchAndDrawTokensByDay();
 }
 
 // ─── Update from rolling buffer ───────────────────────────────────────────────
@@ -103,6 +124,57 @@ export function updateTelemetryCharts(buf: BoardStatsSample[]): void {
   charts.smoke.update([ts, smoke]);
 }
 
+// ─── Tokens/day fetch + render ────────────────────────────────────────────────
+
+/** Fetch from /board/tokens-by-day and push to the chart + legend. */
+async function _fetchAndDrawTokensByDay(): Promise<void> {
+  const entries = await tokensByDay(30);
+  if (!entries.length) return;
+  _tokensByDayEntries = entries;
+  _applyTokensByDay(entries);
+}
+
+function _applyTokensByDay(entries: TokensByDayEntry[]): void {
+  if (!charts || !entries.length) return;
+
+  const timestamps: number[] = [];
+  const hive: number[] = [];
+  const claude: number[] = [];
+  for (const e of entries) {
+    const epochMs = Date.parse(e.date + 'T00:00:00Z');
+    if (!Number.isFinite(epochMs)) continue;
+    timestamps.push(epochMs / 1_000);
+    hive.push(e.hive);
+    claude.push(e.claude);
+  }
+
+  charts.tokensByDay.update([timestamps, hive, claude]);
+
+  // Update the inline legend with latest-day values.
+  const legendEl = document.getElementById('tokens-day-legend');
+  if (legendEl) {
+    const last = entries[entries.length - 1];
+    const fmt = (v: number) =>
+      v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : String(v);
+    legendEl.innerHTML =
+      `<span style="color:var(--green)">&#9632; hive ${fmt(last.hive)}</span>` +
+      `<span style="color:var(--cyan)">&#9632; claude ${fmt(last.claude)}</span>` +
+      `<span style="color:var(--faint)">(${last.date})</span>`;
+  }
+}
+
+/** Called by plugins/telemetry.ts on a ~1-minute cadence. */
+export function refreshTokensByDay(): void {
+  void _fetchAndDrawTokensByDay();
+}
+
+/** Called on theme change to re-render the legend (chart re-renders via makeChart handler). */
+export function recolorTokensByDayLegend(): void {
+  if (_tokensByDayEntries.length) {
+    _applyTokensByDay(_tokensByDayEntries);
+  }
+}
+
 // ─── Update pipeline mini bars ────────────────────────────────────────────────
 
 export function updatePipelineBars(stats: BoardStats): void {
@@ -111,14 +183,16 @@ export function updatePipelineBars(stats: BoardStats): void {
 
   const byStatus = stats.by_status ?? {};
   const statuses = ['backlog', 'ready', 'in_progress', 'qa', 'review', 'blocked', 'done'];
+  // Resolve from CSS theme vars so bars re-color when the theme switches.
+  const cs = getComputedStyle(document.documentElement);
   const colours: Record<string, string> = {
-    backlog:     '#363c30',
-    ready:       '#e0a030',
-    in_progress: '#c07840',
-    qa:          '#60c8c8',
-    review:      '#ffb94d',
-    blocked:     '#c44040',
-    done:        '#5cc870',
+    backlog:     cs.getPropertyValue('--hex-line').trim()   || '#363c30',
+    ready:       cs.getPropertyValue('--hex-amber').trim()  || '#e0a030',
+    in_progress: cs.getPropertyValue('--hex-copper').trim() || '#c07840',
+    qa:          cs.getPropertyValue('--hex-cyan').trim()   || '#60c8c8',
+    review:      cs.getPropertyValue('--hex-amber').trim()  || '#e0a030',
+    blocked:     cs.getPropertyValue('--hex-red').trim()    || '#c44040',
+    done:        cs.getPropertyValue('--hex-green').trim()  || '#5cc870',
   };
 
   const max = Math.max(1, ...Object.values(byStatus));
@@ -126,7 +200,7 @@ export function updatePipelineBars(stats: BoardStats): void {
   el.innerHTML = statuses.map((s) => {
     const count = byStatus[s] ?? 0;
     const pct   = Math.round((count / max) * 100);
-    const colour = colours[s] ?? '#8a8780';
+    const colour = colours[s] ?? (cs.getPropertyValue('--hex-faint').trim() || '#8a8780');
     const label  = s === 'in_progress' ? 'WIP' : s.charAt(0).toUpperCase() + s.slice(1, 3);
     return `
       <div class="pipeline-col">

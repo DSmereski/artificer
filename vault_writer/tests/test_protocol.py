@@ -137,11 +137,11 @@ def test_chat_log_clear_request_decodes() -> None:
     from vault_writer.protocol import ChatLogClearRequest
     payload = {
         "method": "chat_log_clear",
-        "params": {"bot": "terry", "user_id": 42},
+        "params": {"bot": "hive", "user_id": 42},
     }
     req = decode_request(json.dumps(payload).encode() + b"\n", expected_token=None)
     assert isinstance(req, ChatLogClearRequest)
-    assert req.bot == "terry"
+    assert req.bot == "hive"
     assert req.user_id == 42
 
 

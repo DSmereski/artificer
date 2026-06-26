@@ -11,6 +11,16 @@ import type { SystemState, RenderBudget } from '../state/types.js';
 import { updateAgendaPanel } from '../panels/right.js';
 import type { CalendarJob } from '../types.js';
 import { fmtTime, escHtml } from '../format.js';
+import { resolveSettings } from './instances.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+interface AgendaSettings {
+  maxItems: number;
+}
+
+/** Default 6 == today's behavior: the old render `slice(0, 6)`. */
+const DEFAULT_SETTINGS: AgendaSettings = { maxItems: 6 };
 
 // ─── Relevance ────────────────────────────────────────────────────────────────
 
@@ -55,7 +65,10 @@ export function onAgendaData(jobs: CalendarJob[] | null): void {
     return;
   }
 
-  panel.innerHTML = jobs.slice(0, 6).map((job) => `
+  const { maxItems } = resolveSettings(panel, 'agenda', DEFAULT_SETTINGS);
+  const cap = maxItems > 0 ? maxItems : DEFAULT_SETTINGS.maxItems;
+
+  panel.innerHTML = jobs.slice(0, cap).map((job) => `
     <div class="agenda-row">
       <span class="agenda-time">${fmtTime(job.next_run)}</span>
       <div class="agenda-body">
@@ -77,6 +90,18 @@ const agendaPlugin: PanelPlugin = {
   relevance,
   mount,
   update,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'maxItems',
+        label: 'Max rows',
+        type: 'number',
+        default: 6,
+        hint: 'How many upcoming jobs to list',
+      },
+    ],
+  },
 };
 
 register(agendaPlugin);

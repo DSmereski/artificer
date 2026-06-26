@@ -17,7 +17,7 @@ synthesizer can quote in plain language.
       "game_running": "StarCitizen.exe" | null,
       "game_gpu": 0 | null,
       "alerts": ["..."],
-      "terry_online": true,
+      "hive_online": true,
       "gateway_online": true
     },
     "user_msg": "..."

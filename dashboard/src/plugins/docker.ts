@@ -12,6 +12,16 @@ import type { PanelPlugin, RelevanceResult } from './contract.js';
 import type { SystemState, RenderBudget } from '../state/types.js';
 import type { DockerStatus } from '../types.js';
 import { escHtml } from '../format.js';
+import { resolveSettings } from './instances.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+interface DockerSettings {
+  /** Show exited/stopped containers. Default true == today's behavior. */
+  showStopped: boolean;
+}
+
+const DEFAULT_SETTINGS: DockerSettings = { showStopped: true };
 
 let _docker: DockerStatus | null = null;
 let _rootEl: HTMLElement | null = null;
@@ -77,28 +87,43 @@ function _rerender(): void {
 
   if (count) count.textContent = `${_docker.running}/${_docker.total}`;
 
-  if (_docker.containers.length === 0) {
-    body.innerHTML = '<p class="offline-state">No containers.</p>';
+  const { showStopped } = resolveSettings(_rootEl, 'docker', DEFAULT_SETTINGS);
+  const visible = showStopped
+    ? _docker.containers
+    : _docker.containers.filter((c) => c.state !== 'exited');
+
+  if (visible.length === 0) {
+    body.innerHTML = showStopped
+      ? '<p class="offline-state">No containers.</p>'
+      : '<p class="offline-state">No running containers.</p>';
     return;
   }
 
   // running first, then by name
-  const ordered = [..._docker.containers].sort((a, b) => {
+  const ordered = [...visible].sort((a, b) => {
     const ra = a.state === 'running' ? 0 : 1;
     const rb = b.state === 'running' ? 0 : 1;
     return ra - rb || a.name.localeCompare(b.name);
   });
 
-  body.innerHTML = ordered.map((c) => `
-    <div class="dk-row">
-      <span class="dk-dot ${_stateClass(c)}"></span>
+  body.innerHTML = ordered.map((c) => {
+    const stateClass = _stateClass(c);
+    // F3: running dots get heartbeat pulse; unhealthy rows get hazard stripe
+    const isRunning = stateClass === 'dk-up';
+    const isUnhealthy = stateClass === 'dk-bad';
+    const dotExtra = isRunning ? ' fx3-heartbeat' : '';
+    const rowExtra = isUnhealthy ? ' fx3-hazard fx3-hazard-red' : '';
+    return `
+    <div class="dk-row${rowExtra}">
+      <span class="dk-dot ${stateClass}${dotExtra}"></span>
       <div class="dk-info">
         <span class="dk-name">${escHtml(c.name)}</span>
         <span class="dk-sub">${escHtml(c.image)}</span>
       </div>
       <span class="dk-status">${escHtml(c.health || c.status.split(' ').slice(0, 2).join(' '))}</span>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function update(_state: SystemState, _budget: RenderBudget): void {
@@ -112,6 +137,18 @@ const dockerPlugin: PanelPlugin = {
   relevance,
   mount,
   update,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'showStopped',
+        label: 'Show stopped containers',
+        type: 'boolean',
+        default: true,
+        hint: 'Include exited containers in the list',
+      },
+    ],
+  },
 };
 
 register(dockerPlugin);

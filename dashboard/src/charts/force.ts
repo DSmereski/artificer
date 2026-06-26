@@ -158,18 +158,39 @@ export function decideShouldRender(graphMaxNodes: number): boolean {
   return graphMaxNodes > 0;
 }
 
-// ─── Canvas styling constants ─────────────────────────────────────────────────
+// ─── CSS-var reader ───────────────────────────────────────────────────────────
 
-const COLORS = {
-  bg:          '#0d0b0a',
-  nodeGod:     '#c87941',  // copper/amber — god-nodes
-  nodeHub:     '#7a4c28',  // dimmer copper — expanded 1-hop nodes
-  nodeStroke:  '#e8a44a',  // bright amber ring
-  linkLine:    '#3d2b1a',  // dim copper edge
-  labelText:   '#c8a882',  // warm beige label
-  hoverRing:   '#ffcc55',  // bright amber hover
-  selectFill:  '#e8a44a',  // selected fill
-} as const;
+function cssHex(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+/** Read graph canvas colors from CSS theme vars at draw-time. */
+function getGraphColors() {
+  const copper = cssHex('--hex-copper', '#c07840');
+  const amber  = cssHex('--hex-amber',  '#e0a030');
+  const bg     = cssHex('--hex-bg',     '#121610');
+  const line   = cssHex('--hex-line',   '#363c30');
+  const dim    = cssHex('--hex-dim',    '#b8b4a8');
+  return {
+    bg,
+    nodeGod:    copper,
+    nodeHub:    _darken(copper, 0.55),
+    nodeStroke: amber,
+    linkLine:   _darken(line, 0.7),
+    labelText:  dim,
+    hoverRing:  cssHex('--hex-amber', '#e0a030'),
+    selectFill: amber,
+  };
+}
+
+/** Simple lightness scale — multiply RGB channels by factor (0=black, 1=same). */
+function _darken(hex: string, factor: number): string {
+  const m = hex.replace('#', '').match(/.{2}/g);
+  if (!m) return hex;
+  const [r, g, b] = m.map(x => Math.round(parseInt(x, 16) * factor));
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
 
 const NODE_RADIUS_GOD  = 10;
 const NODE_RADIUS_HUB  = 7;
@@ -286,6 +307,7 @@ export function createForceGraph(opts: ForceGraphOptions): ForceGraphInstance {
   }
 
   function _draw(w: number, h: number): void {
+    const COLORS = getGraphColors();
     ctx.clearRect(0, 0, w, h);
 
     // Background
@@ -339,7 +361,7 @@ export function createForceGraph(opts: ForceGraphOptions): ForceGraphInstance {
       // Label (short slug)
       if (r >= NODE_RADIUS_GOD) {
         ctx.save();
-        ctx.fillStyle    = COLORS.labelText;
+        ctx.fillStyle    = COLORS.labelText;  // resolved above
         ctx.font         = '9px "Inter", monospace';
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'top';
@@ -459,7 +481,14 @@ export function createForceGraph(opts: ForceGraphOptions): ForceGraphInstance {
     _sim = null;
     _nodes = [];
     _links = [];
+    window.removeEventListener('hive-theme-change', _onThemeChange);
   }
+
+  // Re-draw on theme switch so canvas picks up new colors immediately.
+  function _onThemeChange() {
+    _draw(canvas.width, canvas.height);
+  }
+  window.addEventListener('hive-theme-change', _onThemeChange);
 
   return { setData, resize, suspend, resume, destroy, canvas };
 }

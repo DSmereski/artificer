@@ -15,6 +15,32 @@ import { register } from './registry.js';
 import type { PanelPlugin, RelevanceResult } from './contract.js';
 import type { SystemState, RenderBudget } from '../state/types.js';
 import { fmtCost } from '../format.js';
+import { resolveSettings } from './instances.js';
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export type ClockFormat = '12h' | '24h';
+
+interface ClockSettings {
+  format: ClockFormat;
+  showSeconds: boolean;
+  showDate: boolean;
+}
+
+/**
+ * Defaults reproduce today's clock EXACTLY: 24-hour, seconds shown, date shown
+ * (matches the original `toLocaleTimeString({ hour12:false, …, second:'2-digit' })`
+ * + the date row). A fresh user sees no change.
+ */
+const DEFAULT_SETTINGS: ClockSettings = {
+  format: '24h',
+  showSeconds: true,
+  showDate: true,
+};
+
+function _resolve(el: HTMLElement | null): ClockSettings {
+  return resolveSettings(el, 'clock', DEFAULT_SETTINGS);
+}
 
 // ─── Relevance ────────────────────────────────────────────────────────────────
 
@@ -60,17 +86,25 @@ function _startClock(): void {
   function tick(): void {
     if (_suspended) return;
     const now = new Date();
+    const s = _resolve(_rootEl);
     const timeEl = document.getElementById('v2-clock-time');
     const dateEl = document.getElementById('v2-clock-date');
     if (timeEl) {
-      timeEl.textContent = now.toLocaleTimeString('en-US', {
-        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
-      });
+      const opts: Intl.DateTimeFormatOptions = {
+        hour12: s.format === '12h',
+        hour: '2-digit',
+        minute: '2-digit',
+      };
+      if (s.showSeconds) opts.second = '2-digit';
+      timeEl.textContent = now.toLocaleTimeString('en-US', opts);
     }
     if (dateEl) {
-      dateEl.textContent = now.toLocaleDateString('en-US', {
-        weekday: 'short', month: 'short', day: 'numeric',
-      });
+      dateEl.style.display = s.showDate ? '' : 'none';
+      dateEl.textContent = s.showDate
+        ? now.toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric',
+          })
+        : '';
     }
   }
 
@@ -134,6 +168,23 @@ const clockPlugin: PanelPlugin = {
   update,
   suspend,
   resume,
+  defaultSettings: { ...DEFAULT_SETTINGS },
+  settingsSchema: {
+    fields: [
+      {
+        key: 'format',
+        label: 'Time format',
+        type: 'select',
+        default: '24h',
+        options: [
+          { value: '24h', label: '24-hour' },
+          { value: '12h', label: '12-hour' },
+        ],
+      },
+      { key: 'showSeconds', label: 'Show seconds', type: 'boolean', default: true },
+      { key: 'showDate', label: 'Show date', type: 'boolean', default: true },
+    ],
+  },
 };
 
 register(clockPlugin);

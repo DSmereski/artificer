@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio  # noqa: F401
 
-from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig
+from vault_writer.config import AuthConfig, Config, GiteaConfig, ScanConfig, SearchConfig, WikiSynthConfig
 from vault_writer.daemon import Daemon, _EMBED_FAIL_LIMIT
 from vault_writer.embedder import EmbeddingError, chunk_text, _CHUNK_SIZE
 
@@ -92,12 +92,14 @@ def _make_config(tmp_vault: Path) -> Config:
         scan=ScanConfig(initial_full_scan=False, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
 
 def _note_text(body: str = "hello") -> str:
     return (
-        "---\ntype: knowledge\nauthor: terry\naudience: [all]\n"
+        "---\ntype: knowledge\nauthor: hive\naudience: [all]\n"
         f"title: Test\n---\n\n{body}\n"
     )
 
@@ -200,6 +202,8 @@ async def test_oversized_doc_chunked_and_indexed(tmp_path: Path) -> None:
         scan=ScanConfig(initial_full_scan=True, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
     daemon = Daemon(config, embedder=_CapturingEmbedder())
@@ -254,6 +258,8 @@ async def test_chunked_embedding_failure_marked_skipped(tmp_path: Path) -> None:
         scan=ScanConfig(initial_full_scan=False, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
     daemon = Daemon(config, embedder=embedder)
@@ -315,6 +321,8 @@ async def test_skipped_doc_not_retried(tmp_path: Path) -> None:
         scan=ScanConfig(initial_full_scan=False, periodic_seconds=0,
                         reconcile_orphans=False),
         auth=AuthConfig(token_path=None),
+        wiki_synth=WikiSynthConfig(enabled=False, model="planner-qwen",
+                                   top_k=5, timeout_seconds=30),
     )
 
     daemon = Daemon(config, embedder=embedder)

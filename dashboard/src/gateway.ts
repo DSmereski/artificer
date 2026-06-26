@@ -24,7 +24,32 @@ const BASE_URL: string = import.meta.env.DEV
 // origin and return index.html. Same-origin iframe internals have no CORS.
 const GATEWAY_ORIGIN = 'http://127.0.0.1:8766';
 
+// #182/#183: tell the gateway the active theme so it can (a) serve it to the
+// phone app for cross-device sync, and (b) set the Windows OS accent to match the
+// wallpaper. Loopback PUT; failures are non-fatal.
+if (typeof window !== 'undefined') {
+  const pushTheme = (): void => {
+    const theme = document.documentElement.dataset.theme || 'hive-v2';
+    fetch(`${GATEWAY_ORIGIN}/v1/theme`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ theme }),
+    }).catch(() => {});
+  };
+  // On every theme switch (the ◑ button dispatches this).
+  window.addEventListener('hive-theme-change', pushTheme);
+  // AND once on load, so the OS accent follows the persisted theme without a
+  // manual cycle — the missing sync that left the accent stuck after a reboot,
+  // a reload, or a stale wallpaper build that never re-PUT the theme.
+  pushTheme();
+}
+
 const TIMEOUT_MS = 8_000;
+// Evolve (Suggest/Go) runs the repo analyzer + a planner-qwen synthesis on the
+// gateway — that's an LLM call that can take minutes, far longer than the 8s
+// board-read timeout. Without this, the fetch aborts ("signal is aborted
+// without reason") before the analysis returns.
+const EVOLVE_TIMEOUT_MS = 180_000;
 
 // ─── Runtime bearer token (set via Lively Properties / localStorage) ─────────
 
@@ -36,6 +61,15 @@ export function setBearerToken(token: string | null): void {
 
 export function getBearerToken(): string | null {
   return _bearerToken;
+}
+
+// ─── /board/list types (P2 v-Next) ──────────────────────────────────────────
+
+export interface BoardInfo {
+  board_id: string;
+  name: string;
+  description: string;
+  created_at: string;
 }
 
 // ─── /board/stats types (matches gateway contract) ───────────────────────────
@@ -107,9 +141,10 @@ export interface BoardState {
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
+  timeoutMs: number = TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
@@ -126,20 +161,39 @@ function authHeaders(): HeadersInit {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function getBoardStats(): Promise<BoardStats> {
-  const res = await fetchWithTimeout(`${BASE_URL}/board/stats`);
+export async function getBoardStats(board?: string): Promise<BoardStats> {
+  const url = board
+    ? `${BASE_URL}/board/stats?board=${encodeURIComponent(board)}`
+    : `${BASE_URL}/board/stats`;
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error(`/board/stats returned HTTP ${res.status}`);
   }
   return (await res.json()) as BoardStats;
 }
 
-export async function getBoardState(): Promise<BoardState> {
-  const res = await fetchWithTimeout(`${BASE_URL}/board/state`);
+export async function getBoardState(board?: string): Promise<BoardState> {
+  const url = board
+    ? `${BASE_URL}/board/state?board=${encodeURIComponent(board)}`
+    : `${BASE_URL}/board/state`;
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error(`/board/state returned HTTP ${res.status}`);
   }
   return (await res.json()) as BoardState;
+}
+
+/**
+ * GET /board/list — returns the registered boards. Returns [] on error.
+ */
+export async function getBoardList(): Promise<BoardInfo[]> {
+  try {
+    const res = await fetchWithTimeout(`${BASE_URL}/board/list`);
+    if (!res.ok) return [];
+    return (await res.json()) as BoardInfo[];
+  } catch {
+    return [];
+  }
 }
 
 // ─── /board/tokens-by-day types ──────────────────────────────────────────────
@@ -213,6 +267,39 @@ export async function getScoutStatus(): Promise<ScoutStatus | null> {
   return fetchV1<ScoutStatus>('/scout/status');
 }
 
+// ─── GPU mode switch ("free the 4080") ────────────────────────────────────────
+
+export interface GpuMode {
+  mode: 'auto' | 'force_on' | 'force_off';
+  gaming: boolean;
+  ai_may_use_4080: boolean;
+  ai_devices: string;
+}
+
+/** GET /v1/gpu-mode — current 4080 policy (loopback-exempt). */
+export async function getGpuMode(): Promise<GpuMode | null> {
+  try {
+    return await fetchV1<GpuMode>('/gpu-mode');
+  } catch {
+    return null;
+  }
+}
+
+/** PUT /v1/gpu-mode — set the 4080 policy. Returns the new status or null. */
+export async function setGpuMode(mode: GpuMode['mode']): Promise<GpuMode | null> {
+  try {
+    const res = await fetchWithTimeout(`${BASE_URL}/v1/gpu-mode`, {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'content-type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as GpuMode;
+  } catch {
+    return null;
+  }
+}
+
 /** GET /v1/docker/status — local Docker containers (loopback-exempt). */
 export async function getDockerStatus(): Promise<DockerStatus | null> {
   return fetchV1<DockerStatus>('/docker/status');
@@ -279,7 +366,10 @@ export async function sunoTracks(): Promise<SunoTrack[]> {
 
 /** Build the streaming audio URL for a track ID. */
 export function sunoAudioUrl(id: string): string {
-  return `${BASE_URL}/v1/suno/audio/${id}`;
+  // Track ids can be "Title [shorthash]" (spaces + brackets), so they MUST be
+  // URL-encoded or the <audio> src is malformed and never loads (the dead play
+  // button). encodeURIComponent keeps the path segment valid; the gateway decodes it.
+  return `${BASE_URL}/v1/suno/audio/${encodeURIComponent(id)}`;
 }
 
 /**
@@ -287,11 +377,15 @@ export function sunoAudioUrl(id: string): string {
  * Prod: loopback gateway. Vite dev: /api proxy. The embed page carries its own
  * X-Board-Token, so the iframe mutates without dashboard-side auth wiring.
  */
-export function boardEmbedUrl(): string {
+export function boardEmbedUrl(project?: string | null): string {
   // Always the direct gateway origin (never the dev /api proxy) — see
   // GATEWAY_ORIGIN. The embed page's own absolute fetches must resolve to the
   // gateway, which only happens when the iframe's document origin IS the gateway.
-  return `${GATEWAY_ORIGIN}/board?embed=1`;
+  // `project` (the dashboard's active project filter) is forwarded as a query
+  // param; the embed page seeds its FILTER_PROJ from it so the framed board
+  // scopes to that project. Re-pointing src reloads + re-filters.
+  const base = `${GATEWAY_ORIGIN}/board?embed=1`;
+  return project ? `${base}&project=${encodeURIComponent(project)}` : base;
 }
 
 // ─── Board mutations (CC1 command surface) ────────────────────────────────────
@@ -316,16 +410,32 @@ export async function getBoardSessionToken(): Promise<string | null> {
 }
 
 /** POST a board mutation with X-Board-Token (+ Bearer fallback). */
-async function boardMutate(path: string, body?: unknown): Promise<Response> {
-  const token = await getBoardSessionToken();
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (token) headers['X-Board-Token'] = token;
-  if (_bearerToken) headers['Authorization'] = `Bearer ${_bearerToken}`;
-  return fetchWithTimeout(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+async function boardMutate(
+  path: string,
+  body?: unknown,
+  timeoutMs?: number,
+): Promise<Response> {
+  const send = async (): Promise<Response> => {
+    const token = await getBoardSessionToken();
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (token) headers['X-Board-Token'] = token;
+    if (_bearerToken) headers['Authorization'] = `Bearer ${_bearerToken}`;
+    return fetchWithTimeout(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }, timeoutMs);
+  };
+  let r = await send();
+  // The gateway regenerates its board token on every restart, so a long-lived
+  // wallpaper holds a stale cached token and every mutation 401/403s silently
+  // (the "approve does nothing" bug). On an auth failure, drop the cache, fetch
+  // a fresh token, and retry once.
+  if (r.status === 401 || r.status === 403) {
+    _boardToken = null;
+    r = await send();
+  }
+  return r;
 }
 
 export async function pauseBoard(): Promise<boolean> {
@@ -355,6 +465,65 @@ export async function decomposeGoal(input: {
   return r.ok;
 }
 
+// ─── Evolve (continuous-dev) ───────────────────────────────────────────────────
+
+export interface EvolveCandidate {
+  title: string;
+  body?: string;
+  rationale?: string;
+  source?: string[];
+  score?: number;
+  checklist?: string[];
+}
+
+/** Analyze a done project → ranked next-work candidates (no build). */
+export async function evolveSuggest(slug: string): Promise<EvolveCandidate[]> {
+  const r = await boardMutate(`/board/projects/${encodeURIComponent(slug)}/evolve/suggest`, undefined, EVOLVE_TIMEOUT_MS);
+  const d = (await r.json().catch(() => ({}))) as { candidates?: EvolveCandidate[]; detail?: string };
+  if (!r.ok) throw new Error(d.detail || `evolve/suggest HTTP ${r.status}`);
+  return d.candidates ?? [];
+}
+
+/** CP2: draft a Karpathy master plan for a goal → lands in the Proposed lane
+ *  for your approval (instead of building immediately). */
+export async function proposePlan(
+  slug: string, goal: string,
+): Promise<{ slug: string; steps: number }> {
+  const r = await boardMutate('/board/plans/propose', { project_slug: slug, goal }, EVOLVE_TIMEOUT_MS);
+  const d = (await r.json().catch(() => ({}))) as { slug?: string; steps?: number; detail?: string };
+  if (!r.ok) throw new Error(d.detail || `propose-plan HTTP ${r.status}`);
+  return { slug: d.slug ?? '', steps: d.steps ?? 0 };
+}
+
+/** Build the top next-work candidate → a goal + tickets the hive picks up. */
+export async function evolveGo(slug: string): Promise<{ created: number; evolved_from: string; project_slug: string }> {
+  const r = await boardMutate(`/board/projects/${encodeURIComponent(slug)}/evolve/go`, {}, EVOLVE_TIMEOUT_MS);
+  const d = (await r.json().catch(() => ({}))) as { created?: number; evolved_from?: string; project_slug?: string; detail?: string };
+  if (!r.ok) throw new Error(d.detail || `evolve/go HTTP ${r.status}`);
+  return { created: d.created ?? 0, evolved_from: d.evolved_from ?? '', project_slug: d.project_slug ?? slug };
+}
+
+/** Enable/disable a project for the hive (whether the dispatcher works it). */
+export async function setProjectEnabled(slug: string, on: boolean): Promise<boolean> {
+  const verb = on ? 'enable' : 'disable';
+  const r = await boardMutate(`/board/projects/${encodeURIComponent(slug)}/${verb}`);
+  return r.ok;
+}
+
+/** POST /board/boards — create a new board (P2 v-Next). Returns true on success. */
+export async function createBoard(input: {
+  board_id: string;
+  name: string;
+  description?: string;
+}): Promise<boolean> {
+  const r = await boardMutate('/board/boards', {
+    board_id: input.board_id,
+    name: input.name,
+    description: input.description ?? '',
+  });
+  return r.ok;
+}
+
 export async function moveBoardTask(slug: string, status: string): Promise<boolean> {
   const r = await boardMutate(`/board/tasks/${slug}/move`, { status });
   return r.ok;
@@ -374,4 +543,117 @@ export async function createContent(input: {
 /** URL for a generated media id (loopback-exempt). */
 export function mediaUrl(id: string): string {
   return `${BASE_URL}/v1/media/${id}`;
+}
+
+// ─── Music endpoints (F4) ─────────────────────────────────────────────────────
+
+export interface MusicFolder {
+  id: string;
+  path: string;
+  name: string;
+}
+
+export interface MusicBrowseEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+}
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration_s: number | null;
+  track_no: number | null;
+  folder_id?: string;
+}
+
+/**
+ * GET /v1/music/browse?path=<dir>
+ * Lists directory entries for mouse-only folder navigation.
+ * Returns [] on error.
+ */
+export async function musicBrowse(path?: string): Promise<MusicBrowseEntry[]> {
+  try {
+    const url = path
+      ? `${BASE_URL}/v1/music/browse?path=${encodeURIComponent(path)}`
+      : `${BASE_URL}/v1/music/browse`;
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return [];
+    // Gateway returns { dirs: [...], current }, not a bare array.
+    const data = await res.json();
+    return (Array.isArray(data) ? data : (data?.dirs ?? [])) as MusicBrowseEntry[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * GET /v1/music/folders — list remembered library roots.
+ * Returns [] on error.
+ */
+export async function getMusicFolders(): Promise<MusicFolder[]> {
+  try {
+    const res = await fetchWithTimeout(`${BASE_URL}/v1/music/folders`);
+    if (!res.ok) return [];
+    // Gateway returns { folders: [...] }, not a bare array.
+    const data = await res.json();
+    return (Array.isArray(data) ? data : (data?.folders ?? [])) as MusicFolder[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * POST /v1/music/folders — remember a chosen folder path.
+ * Returns the created MusicFolder or null on error.
+ */
+export async function addMusicFolder(path: string): Promise<MusicFolder | null> {
+  try {
+    const res = await fetchWithTimeout(`${BASE_URL}/v1/music/folders`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as MusicFolder;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /v1/music/tracks?folder=<id|path>
+ * Returns the track list for a given folder id or path.
+ * Returns [] on error.
+ */
+export async function getMusicTracks(folder: string): Promise<MusicTrack[]> {
+  try {
+    const res = await fetchWithTimeout(
+      `${BASE_URL}/v1/music/tracks?folder=${encodeURIComponent(folder)}`,
+    );
+    if (!res.ok) return [];
+    // Gateway returns { tracks: [...] }, not a bare array.
+    const data = await res.json();
+    return (Array.isArray(data) ? data : (data?.tracks ?? [])) as MusicTrack[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Build the HTTP streaming URL for a local music track.
+ * The gateway serves with Range support for seek/scrub.
+ */
+export function musicStreamUrl(id: string): string {
+  return `${BASE_URL}/v1/music/stream/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Build the album-art URL for a local music track.
+ * The gateway returns embedded art or a generated fallback tile.
+ */
+export function musicArtUrl(id: string): string {
+  return `${BASE_URL}/v1/music/art/${encodeURIComponent(id)}`;
 }

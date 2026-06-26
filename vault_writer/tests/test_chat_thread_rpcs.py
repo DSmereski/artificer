@@ -12,7 +12,7 @@ def _open(tmp_path: Path) -> VaultIndex:
 def _seed_thread(idx: VaultIndex) -> str:
     now = int(time.time())
     idx.thread_create(
-        thread_id="t-1", bot="terry", user_id=1,
+        thread_id="t-1", bot="hive", user_id=1,
         title="auto-title", created_at=now,
     )
     return "t-1"

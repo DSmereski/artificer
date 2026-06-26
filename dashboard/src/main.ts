@@ -14,16 +14,25 @@
 // ─── Side-effect imports: Lively integration ──────────────────────────────────
 import './props.js';
 import './pause.js';
+import './weather-fx.js';
+import './audio-viz-bg.js';
+
+// ─── F1: Design-system fx layer + motion governor ────────────────────────────
+import './styles/fx.css';
+import { initMotionGovernor, onTierChange as motionOnTierChange } from './styles/motion.js';
+import { onAudioVizTierChange } from './audio-viz-bg.js';
+import { installWallpaperInputDedupe } from './util/input-dedupe.js';
 
 // ─── Plugin barrel: triggers all self-registrations ──────────────────────────
 import './plugins/index.js';
 
-import { all as allPlugins, enabled as enabledPlugins } from './plugins/registry.js';
+import { all as allPlugins, enabled as enabledPlugins, isPanelEnabled } from './plugins/registry.js';
 import { createStore } from './state/store.js';
-import { wireSources, onBoardPoll, onScoutPoll, onEscalationPoll, onGatewayUp } from './state/sources.js';
+import { wireSources, onBoardPoll, onScoutPoll, onEscalationPoll, onGatewayUp, setProjectFilter } from './state/sources.js';
 import { buildSystemState } from './state/derive.js';
 import { initLayoutApplier, applyTemplate, isPanelVisible, getCellEl } from './layout/apply.js';
-import { pickTemplate } from './layout/templates.js';
+import { resolveTemplate, openTemplateSelector, onLayoutOverrideChange, getLayoutOverride } from './layout/template-select.js';
+import { applyTopbarVisibility } from './layout/monitor-config.js';
 import { governor } from './resource/governor.js';
 import {
   getBoardStats,
@@ -43,17 +52,40 @@ import { onBoardStats as telemetryOnStats } from './plugins/telemetry.js';
 import { onAgendaData } from './plugins/agenda.js';
 import { onSunoTracks } from './plugins/suno.js';
 import { initSunoPlayer } from './panels/suno.js';
-import { setFullBoardNudge } from './plugins/crew-board-full.js';
+import { setFullBoardNudge, reloadBoardFrame } from './plugins/crew-board-full.js';
 import { initCommandSurface, reflectBoardPaused } from './topbar/commands.js';
-import { onNeedsYouBoard, onNeedsYouEscalations, setNeedsYouRefresh } from './plugins/needs-you.js';
+import { initBoardSwitcher, getActiveBoard, onBoardChange } from './topbar/board-switcher.js';
+import { openModuleManager, setModuleManagerChangeCallback } from './plugins/module-manager.js';
 import { trackEscalations } from './alerts.js';
 import { onSystemScout } from './plugins/system.js';
 import { onDockerStatus } from './plugins/docker.js';
-import { logAction } from './plugins/actions-log.js';
-import { onGitActivity } from './plugins/git-activity.js';
+import {
+  logAction,
+  onGitActivity,
+  onActivityNeedsYouBoard,
+  onActivityNeedsYouEscalations,
+  setActivityNeedsYouRefresh,
+} from './plugins/activity-feed.js';
 import { onContentBoard } from './plugins/content-gallery.js';
-import { focusedId, setFocusNudge, toggleFocus, clearFocus } from './layout/focus.js';
-import { getMode, isFocus, setMode, toggleMode, onModeChange, isHeavyLive } from './state/mode.js';
+import { getMode, isFocus, setMode, onModeChange, isHeavyLive } from './state/mode.js';
+// ── P1: Free-form layout + presets ─────────────────────────────────────────
+import { isFreeformActive } from './layout/presets.js';
+import {
+  initFreeformApplier,
+  applyFreeformLayout,
+  teardownFreeformApplier,
+} from './layout/freeform-apply.js';
+import { setPresetChangeCallback } from './layout/preset-controls.js';
+// ── DL: Desktop windowed layout ─────────────────────────────────────────────
+import {
+  isDesktopActive,
+  initDesktopLayout,
+  applyDesktopLayout,
+  saveDesktopRects,
+  isDesktopLocked,
+  lockDesktop,
+  unlockDesktop,
+} from './layout/desktop.js';
 import { prependTickerEvent } from './panels/telemetry.js';
 import { getBearerToken } from './gateway.js';
 import { onBoardEvent } from './state/sources.js';
@@ -83,28 +115,46 @@ function _updateTopbar(state: SystemState): void {
   const chip  = document.getElementById('board-state-chip');
   const cost  = document.getElementById('topbar-cost');
   const esc   = document.getElementById('topbar-esc-badge');
-  const tier  = document.getElementById('topbar-tier');
 
   if (dot)   dot.className   = `live-dot${state.gatewayUp ? '' : ' offline'}`;
-  if (label) { label.textContent = state.gatewayUp ? 'live' : 'offline';
-                label.className  = `live-label${state.gatewayUp ? '' : ' offline'}`; }
-  if (chip) {
-    chip.textContent = state.activity;
-    chip.className   = `board-state-chip ${state.activity}`;
+  if (label) {
+    label.textContent = state.gatewayUp ? 'live' : 'offline';
+    label.className   = `live-label${state.gatewayUp ? '' : ' offline'}`;
   }
-  if (cost)  cost.textContent  = state.counts.costUsd > 0
+  if (chip) {
+    // board-state-chip kept hidden in F2 layout — pulse word carries this info.
+    chip.style.display = 'none';
+    chip.className = `board-state-chip ${state.activity}`;
+  }
+  if (cost) cost.textContent = state.counts.costUsd > 0
     ? `$${state.counts.costUsd.toFixed(2)}`
     : '--';
   if (esc) {
     esc.textContent = state.escalations.open > 0 ? `esc:▲${state.escalations.open}` : '';
     esc.className   = `topbar-esc-badge${state.escalations.open > 0 ? ' active' : ''}`;
   }
-  if (tier) {
-    const tierLabel: Record<string, string> = {
-      idle: 'idle', busy: 'busy', gaming: 'gaming', offline: 'offline',
-    };
-    tier.textContent = tierLabel[state.tier] ?? state.tier;
-    tier.setAttribute('data-tier', state.tier);
+
+  const pulse = document.getElementById('topbar-pulse');
+  // F2.1: determine the pulse word + apply health-pill state class.
+  const pill  = document.getElementById('topbar-health-pill');
+  let pulseWord = 'IDLE';
+  let pulseColor = 'var(--green)';
+  let pillState: 'is-urgent' | 'is-active' | '' = '';
+
+  if (!state.gatewayUp) {
+    pulseWord = 'OFFLINE'; pulseColor = 'var(--red)'; pillState = 'is-urgent';
+  } else if (state.tier === 'gaming') {
+    pulseWord = 'GAMING';  pulseColor = 'var(--dim)';  pillState = '';
+  } else if (state.tasks.building.length > 0) {
+    pulseWord = 'BUILDING'; pulseColor = 'var(--amber)'; pillState = 'is-active';
+  } else if (state.escalations.open > 0) {
+    pulseWord = 'NEEDS YOU'; pulseColor = 'var(--red)'; pillState = 'is-urgent';
+  }
+
+  if (pulse) { pulse.textContent = pulseWord; pulse.style.color = pulseColor; }
+  if (pill)  {
+    pill.classList.remove('is-urgent', 'is-active');
+    if (pillState) pill.classList.add(pillState);
   }
 }
 
@@ -112,10 +162,19 @@ function _updateTopbar(state: SystemState): void {
 
 async function init(): Promise<void> {
   initProbeInput();
+  // Kill Lively's double-keystroke echo on all text inputs (typing "test" → "tteesstt").
+  installWallpaperInputDedupe();
+
+  // ── F1: Motion governor — init before first paint so data-motion is set ──
+  initMotionGovernor();
 
   // ── Container + layout applier ──
   const container = _initContainer();
   initLayoutApplier(container);
+  // P1: also wire the free-form applier (no-op until a preset is active).
+  initFreeformApplier(container);
+  // DL: desktop windowed layout (activated by dash:desktopMode=1).
+  initDesktopLayout(container);
 
   // ── Initial state (offline, no data yet) ──
   const initialState = buildSystemState({
@@ -143,16 +202,55 @@ async function init(): Promise<void> {
   // refresh = immediate board re-poll so mutations reflect at once.
   initCommandSurface({ refresh: () => void pollBoard(), relayout: () => store.emit() });
 
-  // Top-bar live clock. The standalone Clock panel is retired (it ate a grid
-  // cell for one number); the time now ticks here once a second.
-  const _clockEl = document.getElementById('clock');
-  const _tickClock = (): void => {
-    if (_clockEl) {
-      _clockEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+  // P2 v-Next: board switcher. Renders into the dedicated #topbar-board-switcher
+  // container (F2 layout). Falls back to #topbar for back-compat.
+  const _boardSwitcherEl =
+    document.getElementById('topbar-board-switcher') ??
+    document.getElementById('topbar');
+  if (_boardSwitcherEl) {
+    void initBoardSwitcher(_boardSwitcherEl);
+  }
+  // #211: honor this monitor's top-bar on/off flag (per ?win) at startup.
+  applyTopbarVisibility();
+  // Apply persisted project selection immediately before the first poll.
+  setProjectFilter(getActiveBoard());
+  onBoardChange(() => {
+    setProjectFilter(getActiveBoard());
+    store.emit();         // filter client-side immediately
+    reloadBoardFrame();   // re-point the embedded board iframe at the new project
+    void pollBoard();     // also refresh from gateway
+  });
+
+  // F2.2: ⋯ More popover — toggle on the trigger button, close on outside click.
+  {
+    const moreBtn = document.getElementById('act-more');
+    const morePop = document.getElementById('topbar-more-popover');
+    if (moreBtn && morePop) {
+      // Portal out of #topbar: its backdrop-filter traps position:fixed children
+      // inside its stacking context, so the popover painted BEHIND the grid.
+      // As a body child it's truly viewport-fixed and its z-index wins.
+      document.body.appendChild(morePop);
+      const _place = (): void => {
+        const r = moreBtn.getBoundingClientRect();
+        morePop.style.top = `${Math.round(r.bottom + 6)}px`;
+        morePop.style.right = `${Math.round(window.innerWidth - r.right)}px`;
+        morePop.style.left = 'auto';
+      };
+      moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = !morePop.hidden;
+        if (!open) _place();          // about to show → anchor under the ⋯ button
+        morePop.hidden = open;
+        moreBtn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      });
+      document.addEventListener('click', (e) => {
+        if (!morePop.hidden && !moreBtn.contains(e.target as Node) && !morePop.contains(e.target as Node)) {
+          morePop.hidden = true;
+          moreBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
     }
-  };
-  _tickClock();
-  setInterval(_tickClock, 1000);
+  }
 
   // Top-bar "Board" button → open the crew board web page (the gateway serves
   // the full kanban at /board) in the system browser.
@@ -160,48 +258,76 @@ async function init(): Promise<void> {
     window.open('http://127.0.0.1:8766/board', '_blank', 'noopener');
   });
 
-  // CC2: the "needs you" rail approves review tasks → re-poll to reflect.
-  setNeedsYouRefresh(() => void pollBoard());
-
-  // CC5 focus mode: a toggle is a user action (not a state change), so it
-  // nudges the store to re-layout. Click a panel header to focus/unfocus it;
-  // Esc exits focus. Ignore clicks on header controls (buttons/inputs).
-  setFocusNudge(() => store.emit());
-  const grid = document.getElementById('dashboard-grid');
-  grid?.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest('button, input, select, a, .needs-approve')) return;
-    const header = target.closest('.panel-header');
-    if (!header) return;
-    const cell = target.closest('[data-plugin-id]') as HTMLElement | null;
-    const id = cell?.dataset['pluginId'];
-    if (id) toggleFocus(id);
+  // P1: Legacy preset-change callback (kept for module-manager compatibility).
+  setPresetChangeCallback(() => store.emit());
+  // Layout button → template selector overlay.
+  document.getElementById('act-presets')?.addEventListener('click', () => {
+    openTemplateSelector(() => store.emit());
   });
+  // Re-apply layout when the override changes (e.g. on reload from localStorage).
+  onLayoutOverrideChange(() => {
+    lastLayoutSig = '';  // force re-apply even if template name is the same
+    if (_lastState) _applyLayout(_lastState);
+  });
+
+  // v-Next: Module Manager button — add/remove/duplicate modules + per-instance
+  // settings. A module change re-emits so the layout re-applies (visible in
+  // free-form mode; in template mode the instance is stored until you switch).
+  setModuleManagerChangeCallback(() => store.emit());
+  document.getElementById('act-modules')?.addEventListener('click', () => {
+    openModuleManager();
+  });
+
+  // CC2: approving a review task from the Activity feed → re-poll to reflect.
+  setActivityNeedsYouRefresh(() => void pollBoard());
+
+  // DL1: ambient/focus is collapsed into ONE mode — the toggle button + its
+  // hotkey are removed (David: "I don't like the ambient/focus mode, just
+  // combine them"). The mode stays at its default; nothing switches it.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && focusedId()) { clearFocus(); return; }
-    // P4: Esc from a clean focus deck (no CC5 panel zoomed) returns to ambient.
-    if (e.key === 'Escape' && !focusedId() && isFocus()) { setMode('ambient'); return; }
-    // Desktop hotkey (Lively keyboard is unreliable, so this is a convenience,
-    // not the primary affordance — the ◐ button is).
-    if ((e.ctrlKey || e.metaKey) && (e.key === '.' || e.key === '`')) {
-      e.preventDefault();
-      toggleMode();
-    }
+    if (e.key === 'Escape' && isFocus()) { setMode('ambient'); return; }
   });
 
-  // P4 hybrid mode: the ◐ button is the PRIMARY toggle (click is forwarded by
-  // Lively; keyboard is not). A mode change re-emits state so the subscribe
-  // re-applies layout + mode + the update tick (terminals reconnect on focus).
-  document.getElementById('act-mode')?.addEventListener('click', () => toggleMode());
-  onModeChange(() => store.emit());
-  // Reflect initial chrome before the first data tick.
-  document.body.classList.toggle('mode-focus', isFocus());
-  document.body.classList.toggle('mode-ambient', !isFocus());
+  // DL4: lock toggle. Show the button when desktop mode is active.
   {
-    const _mb = document.getElementById('act-mode');
-    if (_mb) _mb.textContent = getMode() === 'focus' ? '◓ Focus' : '◐ Ambient';
+    const lockBtn = document.getElementById('act-lock');
+    if (lockBtn) {
+      if (isDesktopActive()) lockBtn.style.display = '';
+      lockBtn.addEventListener('click', () => {
+        if (isDesktopLocked()) {
+          unlockDesktop();
+          lockBtn.textContent = '🔓 Unlock';
+          lockBtn.classList.remove('is-locked');
+        } else {
+          lockDesktop();
+          lockBtn.textContent = '🔒 Lock';
+          lockBtn.classList.add('is-locked');
+        }
+      });
+    }
   }
+
+  // DL4: persist desktop rects on page exit.
+  window.addEventListener('pagehide', () => saveDesktopRects());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveDesktopRects();
+  });
+
+  // DL1: ambient/focus toggle removed — one mode. _reflectMode still sets the
+  // body.mode-* class (CSS hooks) for the pinned default mode; the button-update
+  // lines below are null-safe no-ops now that the button is gone.
+  const _reflectMode = (): void => {
+    document.body.classList.toggle('mode-focus', isFocus());
+    document.body.classList.toggle('mode-ambient', !isFocus());
+    const _mb = document.getElementById('act-mode');
+    if (_mb) {
+      _mb.textContent = getMode() === 'focus' ? '◓ Focus' : '◐ Ambient';
+      _mb.classList.toggle('is-focus', isFocus());
+    }
+  };
+  onModeChange(() => { _reflectMode(); store.emit(); });
+  // Reflect initial chrome before the first data tick.
+  _reflectMode();
 
   // ── Layout (P0: hand-designed templates per screen-class; no auto-packer) ──
   // Re-apply the grid only when the screen-class OR the visible panel set
@@ -211,19 +337,56 @@ async function init(): Promise<void> {
   let lastLayoutSig = '';
   let _lastState: SystemState | null = null;
 
+  let _lastLayoutMode: 'template' | 'freeform' | 'desktop' = 'template';
+
   function _applyLayout(state: SystemState): void {
-    const tpl = pickTemplate(window.innerWidth, window.innerHeight);
-    const fid = focusedId();
-    const plugins = enabledPlugins();
-    const visible = fid
-      ? [fid]
-      : plugins
-          .filter((p) => tpl.slots[p.id] != null && isPanelVisible(p, state))
-          .map((p) => p.id);
-    const sig = `${tpl.name}|${fid ?? ''}|${visible.sort().join(',')}`;
+    // DL: desktop windowed mode takes highest priority (opt-in via localStorage flag).
+    if (isDesktopActive()) {
+      if (_lastLayoutMode !== 'desktop') {
+        // Tear down previous mode cleanly.
+        if (_lastLayoutMode === 'freeform') teardownFreeformApplier();
+        container.style.cssText = '';
+        lastLayoutSig = '';
+        _lastLayoutMode = 'desktop';
+      }
+      const layoutId = getLayoutOverride();
+      applyDesktopLayout(allPlugins(), state, layoutId);
+      return;
+    }
+
+    // P1: branch between free-form and template layout.
+    if (isFreeformActive()) {
+      if (_lastLayoutMode !== 'freeform') {
+        lastLayoutSig = '';
+        _lastLayoutMode = 'freeform';
+      }
+      applyFreeformLayout(enabledPlugins(), state);
+      return;
+    }
+
+    // Template mode (the default, back-compat path).
+    if (_lastLayoutMode === 'freeform') {
+      teardownFreeformApplier();
+      container.style.cssText = '';
+      lastLayoutSig = '';
+      _lastLayoutMode = 'template';
+    }
+    if (_lastLayoutMode === 'desktop') {
+      container.style.cssText = '';
+      lastLayoutSig = '';
+      _lastLayoutMode = 'template';
+    }
+
+    const tpl = resolveTemplate(window.innerWidth, window.innerHeight);
+    // DL1: focusedId() panel-zoom removed. Panels always use their template slot.
+    const plugins = allPlugins();
+    const visible = plugins
+      .filter((p) => tpl.slots[p.id] != null && isPanelEnabled(p.id) && isPanelVisible(p, state))
+      .map((p) => p.id);
+    const sig = `${tpl.name}|${getLayoutOverride()}|${visible.sort().join(',')}`;
     if (sig !== lastLayoutSig) {
       lastLayoutSig = sig;
-      applyTemplate(tpl, plugins, state, fid);
+      applyTemplate(tpl, plugins, state, null);
     }
   }
 
@@ -265,6 +428,10 @@ async function init(): Promise<void> {
     scheduler.setInterval('scout', bud.scoutMs);
     scheduler.setInterval('board', bud.boardMs);
 
+    // F1: update motion governor from current tier
+    motionOnTierChange(state.tier);
+    onAudioVizTierChange(state.tier);
+
     _applyLayout(state);
     _applyMode();
 
@@ -295,6 +462,8 @@ async function init(): Promise<void> {
 
   async function pollBoard(): Promise<void> {
     try {
+      // The selection is a PROJECT slug, not a board id — fetch the full board
+      // and filter client-side (the gateway's ?board= param is a different axis).
       const [stats, state] = await Promise.all([
         getBoardStats().catch((e) => { console.warn('[poll:board] stats', e); return null; }),
         getBoardState().catch((e) => { console.warn('[poll:board] state', e); return null; }),
@@ -303,8 +472,14 @@ async function init(): Promise<void> {
       onGatewayUp(online);
       onBoardPoll(stats, state);
       if (state) reflectBoardPaused(!!state.paused);
-      if (state) onNeedsYouBoard(state.tasks ?? []);
-      if (state) onContentBoard(state.tasks ?? []);
+      // Project filter applies to the visible board-task surfaces too, so the
+      // activity feed's review rows + content gallery reflect the selection.
+      const proj = getActiveBoard();
+      const boardTasks = proj
+        ? (state?.tasks ?? []).filter((t) => t.project_slug === proj)
+        : (state?.tasks ?? []);
+      if (state) onActivityNeedsYouBoard(boardTasks);
+      if (state) onContentBoard(boardTasks);
       if (stats) telemetryOnStats(stats);
     } catch (err) {
       console.error('[poll:board]', err);
@@ -332,7 +507,7 @@ async function init(): Promise<void> {
         getGitActivity().catch((e) => { console.warn('[poll:git]', e); return null; }),
       ]);
       if (escs !== undefined) onEscalationPoll(escs);
-      onNeedsYouEscalations(escs);
+      onActivityNeedsYouEscalations(escs);
       trackEscalations(escs);
       onDockerStatus(docker);
       onGitActivity(git);

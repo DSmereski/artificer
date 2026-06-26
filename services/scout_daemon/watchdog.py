@@ -1,7 +1,7 @@
-"""Process watchdog: detect Terry/gateway crashes and auto-restart.
+"""Process watchdog: detect Hive/gateway crashes and auto-restart.
 
 Maggy is gone (M1) so we no longer watch for it. We watch:
-  - terry (the Discord bot — kept around for VC; restarted via start-terry.cmd)
+  - hive (the Discord bot — kept around for VC; restarted via start-hive.cmd)
   - gateway (the FastAPI hub — restarted via start-gateway.ps1)
 """
 
@@ -23,7 +23,7 @@ class ProcessStatus:
     uptime_seconds: float | None
 
 
-_ALLOWED_SEARCHES = frozenset({"terry.*bot", "-m gateway"})
+_ALLOWED_SEARCHES = frozenset({"hive.*bot", "-m gateway"})
 
 
 def _find_process(search_term: str) -> tuple[int | None, float | None]:
@@ -61,9 +61,9 @@ def _find_process(search_term: str) -> tuple[int | None, float | None]:
         return None, None
 
 
-def check_terry() -> ProcessStatus:
-    pid, uptime = _find_process("terry.*bot")
-    return ProcessStatus(name="terry", is_running=pid is not None, pid=pid, uptime_seconds=uptime)
+def check_hive() -> ProcessStatus:
+    pid, uptime = _find_process("hive.*bot")
+    return ProcessStatus(name="hive", is_running=pid is not None, pid=pid, uptime_seconds=uptime)
 
 
 def check_gateway() -> ProcessStatus:
@@ -71,10 +71,10 @@ def check_gateway() -> ProcessStatus:
     return ProcessStatus(name="gateway", is_running=pid is not None, pid=pid, uptime_seconds=uptime)
 
 
-def restart_terry() -> bool:
+def restart_hive() -> bool:
     try:
         subprocess.Popen(
-            ["cmd.exe", "/C", str(SCRIPTS_DIR / "start-terry.cmd")],
+            ["cmd.exe", "/C", str(SCRIPTS_DIR / "start-hive.cmd")],
             creationflags=0x00000008,
         )
         return True

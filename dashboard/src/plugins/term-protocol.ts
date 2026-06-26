@@ -13,29 +13,45 @@ export const GW_WS_BASE = 'ws://127.0.0.1:8766';
 
 // ─── Canon palette ────────────────────────────────────────────────────────────
 
-// Match the Hive design system's warm-black background + amber/copper accent.
-export const TERMINAL_THEME = {
-  background:    '#0d0b09',  // warm-black
-  foreground:    '#e8d5b0',  // warm parchment
-  cursor:        '#c17f24',  // amber
-  cursorAccent:  '#0d0b09',
-  black:         '#1a1511',
-  red:           '#c0392b',
-  green:         '#7dae75',
-  yellow:        '#c17f24',  // amber
-  blue:          '#5a8a9f',
-  magenta:       '#a05c7b',
-  cyan:          '#6aadaa',
-  white:         '#e8d5b0',
-  brightBlack:   '#4a3f35',
-  brightRed:     '#e74c3c',
-  brightGreen:   '#a8d5a2',
-  brightYellow:  '#e09c34',  // copper
-  brightBlue:    '#7aacbf',
-  brightMagenta: '#c47b9b',
-  brightCyan:    '#8acdca',
-  brightWhite:   '#f5ead6',
-} as const;
+// Terminal palette derived from CSS theme vars where possible.
+// background/foreground/cursor track the dashboard theme;
+// the 16 ANSI color slots keep semantically-stable hues (red=error, green=ok)
+// while key slots (bg/fg/cursor/yellow) follow the active theme.
+function _cv(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+export function getTerminalTheme() {
+  return {
+    background:    _cv('--hex-bg',     '#0d0b09'),
+    foreground:    _cv('--hex-ink',    '#e8d5b0'),
+    cursor:        _cv('--hex-amber',  '#c17f24'),
+    cursorAccent:  _cv('--hex-bg',     '#0d0b09'),
+    // ANSI 16 — semantic colors kept stable so the terminal reads correctly
+    // in every theme; bg/fg/cursor/yellow track theme accents.
+    black:         _cv('--hex-bg2',    '#1a1511'),
+    red:           '#c0392b',
+    green:         _cv('--hex-green',  '#7dae75'),
+    yellow:        _cv('--hex-amber',  '#c17f24'),
+    blue:          '#5a8a9f',
+    magenta:       '#a05c7b',
+    cyan:          _cv('--hex-cyan',   '#6aadaa'),
+    white:         _cv('--hex-dim',    '#e8d5b0'),
+    brightBlack:   _cv('--hex-faint',  '#4a3f35'),
+    brightRed:     '#e74c3c',
+    brightGreen:   _cv('--hex-green',  '#a8d5a2'),
+    brightYellow:  _cv('--hex-copper', '#e09c34'),
+    brightBlue:    '#7aacbf',
+    brightMagenta: _cv('--hex-copper', '#c47b9b'),
+    brightCyan:    _cv('--hex-cyan',   '#8acdca'),
+    brightWhite:   _cv('--hex-ink',    '#f5ead6'),
+  };
+}
+
+// Backwards-compatible static export (used by callers that don't re-theme).
+// Prefer getTerminalTheme() for new code.
+export const TERMINAL_THEME = getTerminalTheme();
 
 // ─── Reconnect backoff ────────────────────────────────────────────────────────
 

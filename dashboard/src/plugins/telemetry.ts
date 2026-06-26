@@ -12,6 +12,8 @@ import type { SystemState, RenderBudget } from '../state/types.js';
 import {
   initTelemetryPanel,
   updateTelemetryCharts,
+  refreshTokensByDay,
+  recolorTokensByDayLegend,
 } from '../panels/telemetry.js';
 import type { BoardStats } from '../gateway.js';
 import type { BoardStatsSample } from '../types.js';
@@ -35,6 +37,10 @@ let _mounted = false;
 let _suspended = false;
 let _rollingBuf: BoardStatsSample[] = [];
 
+// Refresh tokens/day every ~60 update ticks (~1 min at 1s poll cadence).
+let _tokensDayTicks = 0;
+const _TOKENS_DAY_INTERVAL = 60;
+
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
 function mount(el: HTMLElement): void {
@@ -50,11 +56,16 @@ function mount(el: HTMLElement): void {
     initTelemetryPanel();
     _mounted = true;
   }
+
+  // Re-color the tokens/day legend when the theme changes (the uPlot chart
+  // re-creates itself via makeChart's hive-theme-change handler; the HTML
+  // legend needs an explicit refresh so its CSS-var color spans stay correct).
+  window.addEventListener('hive-theme-change', recolorTokensByDayLegend);
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-function update(_state: SystemState, budget: RenderBudget): void {
+function update(state: SystemState, budget: RenderBudget): void {
   if (_suspended) return;
 
   // Update with rolling buffer if we have data
@@ -67,6 +78,15 @@ function update(_state: SystemState, budget: RenderBudget): void {
 
     if (budget.chartFps > 0) {
       updateTelemetryCharts(buf);
+    }
+  }
+
+  // Refresh tokens/day on a ~1-minute cadence (only when gateway is up).
+  if (state.gatewayUp) {
+    _tokensDayTicks++;
+    if (_tokensDayTicks >= _TOKENS_DAY_INTERVAL) {
+      _tokensDayTicks = 0;
+      refreshTokensByDay();
     }
   }
 }

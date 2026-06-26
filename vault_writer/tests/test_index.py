@@ -32,14 +32,14 @@ def test_hybrid_search_keyword_finds_notes_vector_misses(tmp_path: Path) -> None
         # query vector but its body contains the literal word.
         idx.upsert(
             path="knowledge/kraken.md", note_type="knowledge",
-            author="terry", audience=["all"],
+            author="hive", audience=["all"],
             frontmatter={"title": "Kraken"},
             body="The Kraken is a Drake capital ship in Star Citizen.",
             embedding=[0.99] * 8,
         )
         idx.upsert(
             path="knowledge/unrelated.md", note_type="knowledge",
-            author="terry", audience=["all"],
+            author="hive", audience=["all"],
             frontmatter={"title": "Unrelated"},
             body="A note about cooking pasta with herbs.",
             embedding=[0.01] * 8,
@@ -60,13 +60,13 @@ def test_neighbours_excludes_seed(tmp_path: Path) -> None:
     try:
         idx.upsert(
             path="knowledge/a.md", note_type="knowledge",
-            author="terry", audience=["all"],
+            author="hive", audience=["all"],
             frontmatter={"title": "A"}, body="alpha",
             embedding=[0.1] * 8,
         )
         idx.upsert(
             path="knowledge/b.md", note_type="knowledge",
-            author="terry", audience=["all"],
+            author="hive", audience=["all"],
             frontmatter={"title": "B"}, body="beta",
             embedding=[0.11] * 8,
         )
@@ -103,12 +103,12 @@ def test_upsert_then_search_returns_note(tmp_path: Path) -> None:
             embedding=_vec(8, 0.1),
         )
         idx.upsert(
-            path="canon/terry.md",
+            path="canon/hive.md",
             note_type="canon",
             author="human",
             audience=["all"],
-            frontmatter={"title": "Terry"},
-            body="Terry handles voice and images.",
+            frontmatter={"title": "Hive"},
+            body="Hive handles voice and images.",
             embedding=_vec(8, 0.9),
         )
         assert idx.count() == 2
@@ -189,12 +189,12 @@ def test_thread_create_is_idempotent(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         rows = idx.thread_create(
-            thread_id="t1", bot="terry", user_id=42,
+            thread_id="t1", bot="hive", user_id=42,
             title="first message of thread", created_at=100,
         )
         assert rows == 1
         rows2 = idx.thread_create(
-            thread_id="t1", bot="terry", user_id=42,
+            thread_id="t1", bot="hive", user_id=42,
             title="DIFFERENT TITLE — should be ignored",
             created_at=200,
         )
@@ -223,7 +223,7 @@ def test_thread_touch_no_op_for_missing_row(tmp_path: Path) -> None:
 def test_thread_touch_bumps_last_active_at(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
-        idx.thread_create(thread_id="t1", bot="terry", user_id=1,
+        idx.thread_create(thread_id="t1", bot="hive", user_id=1,
                           title="x", created_at=100)
         idx.thread_touch(thread_id="t1", last_active_at=500)
         thread = idx.thread_get(thread_id="t1")
@@ -236,13 +236,13 @@ def test_thread_touch_bumps_last_active_at(tmp_path: Path) -> None:
 def test_thread_list_orders_by_last_active_desc(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
-        idx.thread_create(thread_id="old", bot="terry", user_id=1,
+        idx.thread_create(thread_id="old", bot="hive", user_id=1,
                           title="old thread", created_at=100)
-        idx.thread_create(thread_id="new", bot="terry", user_id=1,
+        idx.thread_create(thread_id="new", bot="hive", user_id=1,
                           title="new thread", created_at=200)
-        idx.thread_create(thread_id="newest", bot="terry", user_id=1,
+        idx.thread_create(thread_id="newest", bot="hive", user_id=1,
                           title="newest", created_at=300)
-        rows = idx.thread_list(bot="terry", user_id=1,
+        rows = idx.thread_list(bot="hive", user_id=1,
                                include_archived=False, limit=10)
         ids = [r["id"] for r in rows]
         assert ids == ["newest", "new", "old"]
@@ -253,17 +253,17 @@ def test_thread_list_orders_by_last_active_desc(tmp_path: Path) -> None:
 def test_thread_list_excludes_archived_by_default(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
-        idx.thread_create(thread_id="alive", bot="terry", user_id=1,
+        idx.thread_create(thread_id="alive", bot="hive", user_id=1,
                           title="alive", created_at=100)
-        idx.thread_create(thread_id="dead", bot="terry", user_id=1,
+        idx.thread_create(thread_id="dead", bot="hive", user_id=1,
                           title="dead", created_at=200)
         idx.thread_archive(thread_id="dead", archived_at=300)
         # Default: archived hidden.
-        rows = idx.thread_list(bot="terry", user_id=1,
+        rows = idx.thread_list(bot="hive", user_id=1,
                                include_archived=False, limit=10)
         assert [r["id"] for r in rows] == ["alive"]
         # Explicit include: both come back.
-        rows_all = idx.thread_list(bot="terry", user_id=1,
+        rows_all = idx.thread_list(bot="hive", user_id=1,
                                    include_archived=True, limit=10)
         assert {r["id"] for r in rows_all} == {"alive", "dead"}
     finally:
@@ -273,7 +273,7 @@ def test_thread_list_excludes_archived_by_default(tmp_path: Path) -> None:
 def test_thread_set_title_updates_in_place(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
-        idx.thread_create(thread_id="t1", bot="terry", user_id=1,
+        idx.thread_create(thread_id="t1", bot="hive", user_id=1,
                           title="initial", created_at=100)
         idx.thread_set_title(thread_id="t1", title="renamed by user")
         assert idx.thread_get(thread_id="t1")["title"] == "renamed by user"
@@ -375,17 +375,17 @@ def test_search_chat_or_recovers_loose_tokens(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=42,
+            thread_id="default", bot="hive", user_id=42,
             role="user", content="What's 17 times 23?",
             created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=42,
+            thread_id="default", bot="hive", user_id=42,
             role="assistant", content="17 times 23 is 391.",
             created_at=1_001,
         )
         hits = idx.search_chat(
-            bot="terry", user_id=42,
+            bot="hive", user_id=42,
             query_text="17 23 multiplication answer",
             limit=8, thread_id="default",
         )
@@ -401,17 +401,17 @@ def test_search_chat_filters_by_user_and_bot(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="assistant", content="kraken note for user 1",
             created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=2,
+            thread_id="default", bot="hive", user_id=2,
             role="assistant", content="kraken note for user 2",
             created_at=1_001,
         )
         hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken", limit=8,
+            bot="hive", user_id=1, query_text="kraken", limit=8,
         )
         assert len(hits) == 1
         assert hits[0]["user_id"] == 1
@@ -427,17 +427,17 @@ def test_search_chat_isolates_threads(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="thread-a", bot="terry", user_id=1,
+            thread_id="thread-a", bot="hive", user_id=1,
             role="user", content="alpha kraken in thread A",
             created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="thread-b", bot="terry", user_id=1,
+            thread_id="thread-b", bot="hive", user_id=1,
             role="user", content="beta kraken in thread B",
             created_at=1_001,
         )
         a_hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken",
+            bot="hive", user_id=1, query_text="kraken",
             thread_id="thread-a", limit=8,
         )
         assert len(a_hits) == 1
@@ -445,7 +445,7 @@ def test_search_chat_isolates_threads(tmp_path: Path) -> None:
         assert "alpha" in a_hits[0]["content"]
 
         b_hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken",
+            bot="hive", user_id=1, query_text="kraken",
             thread_id="thread-b", limit=8,
         )
         assert len(b_hits) == 1
@@ -465,11 +465,11 @@ def test_search_chat_no_thread_id_spans_all_threads(tmp_path: Path) -> None:
             ("thread-c", "kraken note three"),
         ]:
             idx.chat_log_append(
-                thread_id=thread, bot="terry", user_id=1,
+                thread_id=thread, bot="hive", user_id=1,
                 role="assistant", content=content, created_at=1_000,
             )
         hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken", limit=8,
+            bot="hive", user_id=1, query_text="kraken", limit=8,
         )
         thread_ids = sorted(h["thread_id"] for h in hits)
         assert thread_ids == ["thread-a", "thread-b", "thread-c"]
@@ -479,13 +479,13 @@ def test_search_chat_no_thread_id_spans_all_threads(tmp_path: Path) -> None:
 
 def test_search_chat_isolates_bots(tmp_path: Path) -> None:
     """Two bots can hold the same user_id (the owner). search_chat
-    must scope by bot so terry's history isn't surfaced when querying
+    must scope by bot so hive's history isn't surfaced when querying
     maggy and vice-versa."""
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
-            role="assistant", content="terry-side kraken",
+            thread_id="default", bot="hive", user_id=1,
+            role="assistant", content="hive-side kraken",
             created_at=1_000,
         )
         idx.chat_log_append(
@@ -493,15 +493,15 @@ def test_search_chat_isolates_bots(tmp_path: Path) -> None:
             role="assistant", content="maggy-side kraken",
             created_at=1_001,
         )
-        terry_hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken", limit=8,
+        hive_hits = idx.search_chat(
+            bot="hive", user_id=1, query_text="kraken", limit=8,
         )
         maggy_hits = idx.search_chat(
             bot="maggy", user_id=1, query_text="kraken", limit=8,
         )
-        assert len(terry_hits) == 1
-        assert terry_hits[0]["bot"] == "terry"
-        assert "terry-side" in terry_hits[0]["content"]
+        assert len(hive_hits) == 1
+        assert hive_hits[0]["bot"] == "hive"
+        assert "hive-side" in hive_hits[0]["content"]
         assert len(maggy_hits) == 1
         assert maggy_hits[0]["bot"] == "maggy"
     finally:
@@ -515,19 +515,19 @@ def test_search_chat_bm25_ranks_relevant_higher(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="user",
             content="random off-topic chatter about kraken",
             created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="assistant",
             content="kraken star citizen drake capital ship",
             created_at=1_001,
         )
         hits = idx.search_chat(
-            bot="terry", user_id=1,
+            bot="hive", user_id=1,
             query_text="kraken star citizen ship",
             limit=8,
         )
@@ -545,12 +545,12 @@ def test_search_chat_respects_limit(tmp_path: Path) -> None:
     try:
         for i in range(10):
             idx.chat_log_append(
-                thread_id="default", bot="terry", user_id=1,
+                thread_id="default", bot="hive", user_id=1,
                 role="user", content=f"kraken sighting {i}",
                 created_at=1_000 + i,
             )
         hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken", limit=3,
+            bot="hive", user_id=1, query_text="kraken", limit=3,
         )
         assert len(hits) == 3
     finally:
@@ -563,17 +563,17 @@ def test_search_chat_returns_role_and_metadata(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="user", content="kraken question from user",
             turn_id="turn-001", created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
-            role="assistant", content="kraken answer from terry",
+            thread_id="default", bot="hive", user_id=1,
+            role="assistant", content="kraken answer from hive",
             turn_id="turn-001", created_at=1_001,
         )
         hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken", limit=8,
+            bot="hive", user_id=1, query_text="kraken", limit=8,
         )
         roles = sorted(h["role"] for h in hits)
         assert roles == ["assistant", "user"]
@@ -593,7 +593,7 @@ def test_chat_log_append_returns_increasing_ids(tmp_path: Path) -> None:
     try:
         ids = [
             idx.chat_log_append(
-                thread_id="default", bot="terry", user_id=1,
+                thread_id="default", bot="hive", user_id=1,
                 role="user", content=f"turn {i}", created_at=1_000 + i,
             )
             for i in range(5)
@@ -610,18 +610,18 @@ def test_chat_log_append_round_trips_optional_fields(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         first_id = idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="user", content="kraken parent",
             turn_id="turn-parent", created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="assistant", content="kraken child",
             turn_id="turn-child", parent_id=first_id,
             created_at=1_001,
         )
         hits = idx.search_chat(
-            bot="terry", user_id=1, query_text="kraken child", limit=8,
+            bot="hive", user_id=1, query_text="kraken child", limit=8,
         )
         child = next(h for h in hits if h["role"] == "assistant")
         assert child["parent_id"] == first_id
@@ -636,12 +636,12 @@ def test_search_chat_handles_empty_and_whitespace_queries(tmp_path: Path) -> Non
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="user", content="kraken", created_at=1_000,
         )
         for q in ["", "   ", "!!!", "...---..."]:
             hits = idx.search_chat(
-                bot="terry", user_id=1, query_text=q, limit=8,
+                bot="hive", user_id=1, query_text=q, limit=8,
             )
             assert hits == [], f"query {q!r} should yield no hits"
     finally:
@@ -659,29 +659,29 @@ def test_chat_log_clear_removes_rows_for_user(tmp_path: Path) -> None:
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="user", content="private message A", created_at=1_000,
         )
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=1,
+            thread_id="default", bot="hive", user_id=1,
             role="assistant", content="reply A", created_at=1_001,
         )
         # Different user — must NOT be deleted.
         idx.chat_log_append(
-            thread_id="default", bot="terry", user_id=2,
+            thread_id="default", bot="hive", user_id=2,
             role="user", content="user 2 message", created_at=1_002,
         )
 
-        deleted = idx.chat_log_clear(bot="terry", user_id=1)
+        deleted = idx.chat_log_clear(bot="hive", user_id=1)
         assert deleted == 2, f"expected 2 deleted, got {deleted}"
 
         # User 1 rows gone.
-        hits = idx.search_chat(bot="terry", user_id=1,
+        hits = idx.search_chat(bot="hive", user_id=1,
                                query_text="private", limit=10)
         assert hits == [], "user 1 rows should be gone after clear"
 
         # User 2 rows intact.
-        hits2 = idx.search_chat(bot="terry", user_id=2,
+        hits2 = idx.search_chat(bot="hive", user_id=2,
                                 query_text="user", limit=10)
         assert hits2, "user 2 rows must survive"
     finally:
@@ -693,10 +693,10 @@ def test_chat_log_clear_noop_when_no_rows(tmp_path: Path) -> None:
     raise — idempotent when called multiple times."""
     idx = VaultIndex.open(tmp_path / "vault.db", dimension=8)
     try:
-        deleted = idx.chat_log_clear(bot="terry", user_id=99)
+        deleted = idx.chat_log_clear(bot="hive", user_id=99)
         assert deleted == 0
         # Second call also returns 0 without raising.
-        deleted2 = idx.chat_log_clear(bot="terry", user_id=99)
+        deleted2 = idx.chat_log_clear(bot="hive", user_id=99)
         assert deleted2 == 0
     finally:
         idx.close()

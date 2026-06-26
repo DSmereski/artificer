@@ -66,7 +66,7 @@ def coerce_audience(raw: object) -> list[str]:
     return ["__malformed__"]
 
 
-_BOT_NAMES = frozenset({"maggy", "terry", "scout"})
+_BOT_NAMES = frozenset({"maggy", "hive", "scout"})
 
 
 def audience_matches(agent: str, audience: list[str]) -> bool:
@@ -74,8 +74,8 @@ def audience_matches(agent: str, audience: list[str]) -> bool:
 
     `agent="all"` is the privileged-caller wildcard — the user's personal
     devices pair with ``audience=["all"]`` and routes pass that string
-    through here. Without this case every Terry-saved note (typically
-    ``audience: [terry, claude-code]``) was invisible to the vault tab in
+    through here. Without this case every Hive-saved note (typically
+    ``audience: [hive, claude-code]``) was invisible to the vault tab in
     the app, even though the device was meant to see everything.
     """
     if agent == "all":

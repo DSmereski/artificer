@@ -33,6 +33,7 @@ class GPUProcess:
     pid: int
     gpu_index: int
     process_name: str
+    used_memory_mb: int = 0
 
 
 def query_gpu_status() -> list[GPUStatus]:
@@ -71,8 +72,8 @@ def query_gpu_processes() -> list[GPUProcess]:
         result = subprocess.run(
             [
                 "nvidia-smi",
-                "--query-compute-apps=pid,gpu_uuid,process_name",
-                "--format=csv,noheader",
+                "--query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory",
+                "--format=csv,noheader,nounits",
             ],
             capture_output=True, text=True, timeout=10,
         )
@@ -98,8 +99,19 @@ def query_gpu_processes() -> list[GPUProcess]:
             pid = int(row[0].strip())
             gpu_uuid = row[1].strip()
             name = row[2].strip()
+            # used_gpu_memory is MiB (nounits). "[N/A]" on some drivers → 0.
+            used_mb = 0
+            if len(row) >= 4:
+                raw_mem = row[3].strip()
+                try:
+                    used_mb = int(raw_mem)
+                except ValueError:
+                    used_mb = 0
             gpu_idx = uuid_map.get(gpu_uuid, -1)
-            processes.append(GPUProcess(pid=pid, gpu_index=gpu_idx, process_name=name))
+            processes.append(GPUProcess(
+                pid=pid, gpu_index=gpu_idx, process_name=name,
+                used_memory_mb=used_mb,
+            ))
         return processes
     except Exception:
         return []
@@ -121,3 +133,31 @@ def detect_game_on_gpu(gpu_index: int) -> str | None:
             if exe in _GAME_EXES:
                 return exe
     return None
+
+
+def friendly_process_name(process_name: str) -> str:
+    """Strip the path and the .exe suffix from an nvidia-smi process name.
+
+    e.g. "C:\\...\\ollama.exe" -> "ollama", "python.exe" -> "python".
+    Falls back to the basename when there's nothing to strip.
+    """
+    base = process_name.rsplit("\\", 1)[-1].rsplit("/", 1)[-1].strip()
+    if base.lower().endswith(".exe"):
+        base = base[:-4]
+    return base or process_name
+
+
+def processes_by_gpu(
+    processes: list[GPUProcess] | None = None,
+) -> dict[int, list[GPUProcess]]:
+    """Group compute processes by GPU index, heaviest VRAM consumer first.
+
+    Reads live from nvidia-smi when *processes* is omitted (injectable for tests).
+    """
+    procs = query_gpu_processes() if processes is None else processes
+    grouped: dict[int, list[GPUProcess]] = {}
+    for p in procs:
+        grouped.setdefault(p.gpu_index, []).append(p)
+    for idx in grouped:
+        grouped[idx].sort(key=lambda p: p.used_memory_mb, reverse=True)
+    return grouped

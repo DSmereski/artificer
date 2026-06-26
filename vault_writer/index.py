@@ -353,6 +353,13 @@ class VaultIndex:
             """
         )
         conn.commit()
+
+        # ---------------------------------------------------------- ingest_queue
+        # Durable crash-safe write queue (C1, 2026-06-18).  Created here so
+        # every VaultIndex.open() call — including tests — gets the table.
+        from vault_writer.ingest_queue import ensure_schema as _iq_schema
+        _iq_schema(conn)
+
         return cls(conn, dimension)
 
     def close(self) -> None:
@@ -855,9 +862,9 @@ class VaultIndex:
             # caller's audience is "all" (the user's privileged
             # devices), they see every note. Without this carve-out,
             # devices paired with audience=["all"] couldn't see notes
-            # scoped to bot-only audiences (like "terry"), which is
+            # scoped to bot-only audiences (like "hive"), which is
             # how the app's vault tab silently returned nothing for
-            # everything Terry had saved.
+            # everything Hive had saved.
             if audience != "all" and "all" not in aud and audience not in aud:
                 continue
             results.append(

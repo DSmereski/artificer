@@ -7,11 +7,9 @@ Usage:
 Only the original requester or the bot owner can delete the message.
 """
 
-import os
-
 import discord
 
-OWNER_ID = int(os.environ.get("HIVE_OWNER_DISCORD_ID", "0"))
+OWNER_ID = 000000000000000000
 
 
 class DeleteButtonView(discord.ui.View):

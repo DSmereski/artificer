@@ -17,6 +17,12 @@ export type {
 
 // ─── Scout / telemetry types ─────────────────────────────────────────────────
 
+export interface GpuProcInfo {
+  pid: number;
+  name: string;            // friendly name (path + .exe stripped)
+  used_memory_mb: number;
+}
+
 export interface GpuInfo {
   index: number;
   name: string;
@@ -26,6 +32,7 @@ export interface GpuInfo {
   vram_used_pct: number;
   utilization_pct: number;
   game?: boolean;
+  processes?: GpuProcInfo[];
 }
 
 export interface DiskInfo {

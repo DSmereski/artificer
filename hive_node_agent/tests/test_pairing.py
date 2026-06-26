@@ -21,12 +21,12 @@ async def test_pairing_persists_token_and_node_id(tmp_path: Path) -> None:
     ) as mock:
         result = await pair_with_host(
             cfg,
-            host_url="http://192.0.2.10:8766",
+            host_url="http://127.0.0.1:8766",
             code="123-456",
             name="rtx-rig",
             capabilities={"agent_version": "0.1.0"},
         )
-    assert result.host_url == "http://192.0.2.10:8766"
+    assert result.host_url == "http://127.0.0.1:8766"
     assert result.token == "tok-xyz"
     assert result.node_id == "n_abc"
     # Reload from disk to confirm persistence.

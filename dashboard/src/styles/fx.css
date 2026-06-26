@@ -1,0 +1,737 @@
+/*
+ * fx.css — Hive Dashboard design-system "fx" layer (F1)
+ *
+ * OPT-IN vocabulary of premium surface treatments. Nothing in this file
+ * changes the default look of the dashboard. Every class here is additive:
+ * apply it explicitly to get the treatment; omit it to stay with the
+ * existing style.
+ *
+ * All token references consume the existing `--*` custom properties from
+ * index.html so every effect re-themes automatically across all themes.
+ *
+ * Motion governor:
+ *   html[data-motion="off"]  — all fx animations suppressed (reduced-motion)
+ *   html[data-motion="calm"] — animations slowed / reduced (busy/contended tier)
+ *   html[data-motion="full"] — full ambient speed (default idle)
+ *
+ * Animation rules:
+ *   - TRANSFORM and OPACITY only (GPU composited, no layout-animating props).
+ *   - Tasteful / slow: cycle times 6s–30s.
+ *   - Never flashing (<3 Hz).
+ */
+
+/* ─── 1. Panel framing ──────────────────────────────────────────────────────
+ *
+ * .fx-panel  — hairline border + inset top-sheen (frame only, no size change)
+ * .fx-bevel  — subtle 1px hi-lo bevel using box-shadow
+ * .fx-glass  — backdrop-filter blur + semi-transparent fill
+ * .fx-notch  — clip-path corner cut (top-right)
+ */
+
+.fx-panel {
+  border: 1px solid color-mix(in oklch, var(--line) 80%, transparent);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, var(--ink) 8%, transparent),
+    0 2px 12px 0 color-mix(in oklch, var(--bg) 70%, transparent);
+  position: relative;
+}
+
+/* Inset top sheen — gives the panel that pressed-glass top edge. */
+.fx-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--ink) 6%, transparent) 0%,
+    transparent 40%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure panel content renders above the pseudo-sheen. */
+.fx-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── .fx-bevel — hi-lo edge bevel ─────────────────────────────────────── */
+.fx-bevel {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--ink) 12%, transparent),
+    inset 0 -1px 0 color-mix(in oklch, var(--bg) 60%, transparent),
+    inset 1px 0 0 color-mix(in oklch, var(--ink) 5%, transparent),
+    inset -1px 0 0 color-mix(in oklch, var(--bg) 40%, transparent);
+}
+
+/* ── .fx-glass — glassmorphic backdrop blur ───────────────────────────── */
+.fx-glass {
+  background: color-mix(in oklch, var(--card) 72%, transparent);
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid color-mix(in oklch, var(--line) 55%, transparent);
+}
+
+/* ── .fx-notch — clip-path corner cut (top-right) ────────────────────── */
+.fx-notch {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% 100%,
+    0 100%
+  );
+}
+
+
+/* ─── 2. Signature effects ──────────────────────────────────────────────────
+ *
+ * .fx-honeycomb — SVG hex tile background (hive theme)
+ * .fx-grid      — perspective grid wash (vector-tron theme)
+ * .fx-scanline  — subtle CRT scanline overlay (terminal theme)
+ * .fx-holo      — holo-stripe drift (holo theme)
+ * .fx-glow      — chromatic/RGB-split edge glow
+ * .fx-marquee   — marquee text container
+ * .fx-ambient   — radial blob drift backdrop (ambient default)
+ */
+
+/* ── .fx-honeycomb ─────────────────────────────────────────────────────── */
+/* Hexagonal tile using an SVG data-URI. The stroke picks up --line. */
+.fx-honeycomb {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 3 L53 18 L53 48 L28 63 L3 48 L3 18 Z' fill='none' stroke='%23ffffff14' stroke-width='1'/%3E%3Cpath d='M28 53 L53 68 L53 98 L28 113 L3 98 L3 68 Z' fill='none' stroke='%23ffffff14' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 56px 100px;
+  background-repeat: repeat;
+}
+
+/* ── .fx-grid ─────────────────────────────────────────────────────────── */
+/* Perspective grid lines fading toward the top (horizon wash). */
+.fx-grid {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in oklch, var(--line) 25%, transparent) 0px,
+      color-mix(in oklch, var(--line) 25%, transparent) 1px,
+      transparent 1px,
+      transparent 40px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--line) 25%, transparent) 0px,
+      color-mix(in oklch, var(--line) 25%, transparent) 1px,
+      transparent 1px,
+      transparent 80px
+    );
+  background-size: 80px 40px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 60%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 60%);
+}
+
+/* ── .fx-scanline ─────────────────────────────────────────────────────── */
+/* Subtle horizontal scanline repeating every 3px — CRT phosphor feel. */
+.fx-scanline {
+  background-image: repeating-linear-gradient(
+    0deg,
+    color-mix(in oklch, var(--bg) 30%, transparent) 0px,
+    color-mix(in oklch, var(--bg) 30%, transparent) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  background-size: 100% 3px;
+}
+
+/* ── .fx-holo ─────────────────────────────────────────────────────────── */
+/* Drifting holo-stripe — slow diagonal gradient shift. */
+.fx-holo {
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-holo::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: repeating-linear-gradient(
+    105deg,
+    transparent 0%,
+    color-mix(in oklch, var(--copper) 6%, transparent) 5%,
+    color-mix(in oklch, var(--cyan)   4%, transparent) 8%,
+    transparent 12%
+  );
+  background-size: 200% 200%;
+  animation: fxHoloDrift 18s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Off/calm: stop or slow */
+html[data-motion="off"]  .fx-holo::after { animation: none; }
+html[data-motion="calm"] .fx-holo::after { animation-duration: 36s; }
+
+@keyframes fxHoloDrift {
+  0%   { transform: translateX(-30%) translateY(-10%); }
+  50%  { transform: translateX(0%)   translateY(10%); }
+  100% { transform: translateX(-30%) translateY(-10%); }
+}
+
+/* ── .fx-glow ─────────────────────────────────────────────────────────── */
+/* Accent-colour edge glow on borders + text-shadow on child text. */
+.fx-glow {
+  box-shadow:
+    0 0 8px  color-mix(in oklch, var(--amber) 30%, transparent),
+    0 0 20px color-mix(in oklch, var(--amber) 15%, transparent);
+  border-color: color-mix(in oklch, var(--amber) 60%, transparent);
+}
+
+/* ── .fx-marquee ─────────────────────────────────────────────────────── */
+/* Horizontally scrolling marquee container.
+ * Usage: <div class="fx-marquee"><div class="fx-marquee__inner">text</div></div>
+ * The inner element scrolls; the outer clips. */
+.fx-marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.fx-marquee__inner {
+  display: inline-block;
+  animation: fxMarqueeScroll 20s linear infinite;
+}
+
+/* Pause/slow marquee on motion reduction */
+html[data-motion="off"]  .fx-marquee__inner { animation: none; }
+html[data-motion="calm"] .fx-marquee__inner { animation-duration: 40s; }
+
+@keyframes fxMarqueeScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ── .fx-ambient ─────────────────────────────────────────────────────── */
+/* Radial blob drift — a very slow, subtly shifting radial gradient.
+ * Intended for the BACKDROP layer (full-screen, behind the grid).
+ * Uses transform only. */
+.fx-ambient {
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-ambient::before {
+  content: '';
+  position: absolute;
+  /* Oversized so the blob stays in-frame while drifting */
+  width: 160%;
+  height: 160%;
+  top: -30%;
+  left: -30%;
+  background: radial-gradient(
+    ellipse 55% 45% at 40% 50%,
+    color-mix(in oklch, var(--amber) 9%, transparent) 0%,
+    color-mix(in oklch, var(--copper) 5%, transparent) 30%,
+    transparent 70%
+  );
+  animation: fxAmbientDrift 28s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fx-ambient::after {
+  content: '';
+  position: absolute;
+  width: 140%;
+  height: 140%;
+  top: -20%;
+  left: -20%;
+  background: radial-gradient(
+    ellipse 40% 55% at 65% 55%,
+    color-mix(in oklch, var(--cyan) 6%, transparent) 0%,
+    transparent 65%
+  );
+  animation: fxAmbientDriftB 34s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Off: stop blobs entirely */
+html[data-motion="off"]  .fx-ambient::before,
+html[data-motion="off"]  .fx-ambient::after { animation: none; }
+
+/* Calm: slow drift by 2× */
+html[data-motion="calm"] .fx-ambient::before { animation-duration: 56s; }
+html[data-motion="calm"] .fx-ambient::after  { animation-duration: 68s; }
+
+@keyframes fxAmbientDrift {
+  0%   { transform: translate(0%,    0%) scale(1.0); }
+  33%  { transform: translate(8%,    5%) scale(1.05); }
+  66%  { transform: translate(-5%,   8%) scale(0.98); }
+  100% { transform: translate(0%,    0%) scale(1.0); }
+}
+
+@keyframes fxAmbientDriftB {
+  0%   { transform: translate(0%,    0%) scale(1.0); }
+  40%  { transform: translate(-7%,  -5%) scale(1.04); }
+  80%  { transform: translate(4%,    7%) scale(0.97); }
+  100% { transform: translate(0%,    0%) scale(1.0); }
+}
+
+
+/* ─── 3. Ambient backdrop layer ─────────────────────────────────────────────
+ *
+ * #fx-backdrop — a fixed, pointer-events:none layer behind the grid.
+ * Created by motion.ts and placed as the first child of <body>.
+ * The theme-specific class is set by motion.ts based on data-theme.
+ */
+
+#fx-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;              /* behind everything */
+  overflow: hidden;
+  /* The panel grid sits at z-index ≥ 1; topbar at z-index 10+ */
+}
+
+/* Ensure body + grid render above the backdrop */
+#topbar,
+#app,
+#dashboard-grid {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ─── 4. Panel frame opt-in ──────────────────────────────────────────────────
+ *
+ * .fx-panel-frame — applied to .dashboard-cell by motion.ts when fancy is
+ * active. Additive: only adds border/shadow treatment over the existing cell.
+ * Does NOT change layout, size, padding, or grid placement.
+ */
+
+.fx-panel-frame {
+  border: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, var(--ink) 7%, transparent),
+    0 4px 16px 0 color-mix(in oklch, var(--cell-shadow, var(--bg)) 60%, transparent);
+  /* The existing .dashboard-cell already has border-radius; preserve it */
+}
+
+/* Sheen strip using the accent-panel colour — subtle top glow per domain. */
+.fx-panel-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--accent-panel, var(--copper)) 8%, transparent) 0%,
+    transparent 28%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+
+/* ─── 5. Reduced-motion master gate ─────────────────────────────────────────
+ *
+ * When data-motion="off", ALL .fx-* animations stop unconditionally.
+ * This is the CSS enforcement of the motion governor; it mirrors what
+ * motion.ts sets on <html> in response to prefers-reduced-motion.
+ */
+
+html[data-motion="off"] .fx-panel::before,
+html[data-motion="off"] .fx-panel-frame::before {
+  /* static sheen is fine — not animated */
+}
+
+/* Any fx element with an animation: freeze it. */
+html[data-motion="off"] [class*="fx-"] {
+  animation: none !important;
+  transition-duration: 0s !important;
+}
+
+/* Also gate the pseudo-element animations via the specific keyframe rules above. */
+
+
+/* ─── 6. Hover transitions (80ms, transform/opacity only) ───────────────────
+ *
+ * Tasteful lift on fx-panel and fx-panel-frame cells.
+ * Transform-only so it cannot cause layout reflow.
+ */
+
+.fx-panel,
+.fx-panel-frame {
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+html[data-motion="off"] .fx-panel,
+html[data-motion="off"] .fx-panel-frame {
+  transition: none;
+}
+
+
+/* ─── 7. F3 Module glow-up helpers ──────────────────────────────────────────
+ *
+ * All classes below are additive — they do not change layout, size, or padding.
+ * Every animation is gated by data-motion (governor rules above apply globally
+ * via the [data-motion="off"] [class*="fx-"] blanket rule).
+ *
+ * New keyframe names use the "fx3" prefix to avoid collisions with F1 keyframes.
+ */
+
+/* ── 7a. RGB-split / chromatic glow on text ──────────────────────────────── */
+/*
+ * .fx3-rgb-split — chromatic aberration text treatment.
+ * Apply to the element whose text should glow.
+ * The element must have `color` set for the glow to follow the accent.
+ *
+ * Breathing variant: add .fx3-rgb-breathe to pulse text-shadow opacity slowly.
+ */
+.fx3-rgb-split {
+  text-shadow:
+    2px 0 0 color-mix(in oklch, var(--cyan)   35%, transparent),
+    -2px 0 0 color-mix(in oklch, var(--red)   25%, transparent),
+    0 0 12px currentColor;
+}
+
+/* Slow-breathe variant — text-shadow opacity cycles 8s */
+@keyframes fx3RgbBreathe {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+.fx3-rgb-breathe {
+  animation: fx3RgbBreathe 8s ease-in-out infinite;
+}
+html[data-motion="off"]  .fx3-rgb-breathe { animation: none; opacity: 1; }
+html[data-motion="calm"] .fx3-rgb-breathe { animation-duration: 16s; }
+
+
+/* ── 7b. Hazard-stripe left rail ─────────────────────────────────────────── */
+/*
+ * .fx3-hazard — 6px diagonal hazard stripe left border.
+ * Colour variant classes: .fx3-hazard-red, .fx3-hazard-amber (default amber)
+ * On motion:full the stripes drift upward slowly.
+ */
+.fx3-hazard {
+  position: relative;
+  padding-left: 8px; /* make room so the border doesn't overlap content */
+}
+
+.fx3-hazard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklch, var(--amber) 70%, transparent) 0px,
+    color-mix(in oklch, var(--amber) 70%, transparent) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+  background-size: 10px 10px;
+  animation: fx3HazardDrift 4s linear infinite;
+  pointer-events: none;
+  border-radius: inherit 0 0 inherit;
+}
+
+.fx3-hazard-red::before {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklch, var(--red) 70%, transparent) 0px,
+    color-mix(in oklch, var(--red) 70%, transparent) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+  background-size: 10px 10px;
+  animation: fx3HazardDrift 4s linear infinite;
+}
+
+@keyframes fx3HazardDrift {
+  from { background-position: 0 0; }
+  to   { background-position: 0 -20px; }
+}
+
+html[data-motion="off"]  .fx3-hazard::before,
+html[data-motion="off"]  .fx3-hazard-red::before { animation: none; }
+html[data-motion="calm"] .fx3-hazard::before,
+html[data-motion="calm"] .fx3-hazard-red::before { animation-duration: 8s; }
+
+
+/* ── 7c. Single-shot fresh-entry flash ───────────────────────────────────── */
+/*
+ * .fx3-fresh — single 600ms background fade from accent → transparent.
+ * Add via JS, auto-remove via animationend listener.
+ */
+@keyframes fx3FreshFlash {
+  from { background-color: color-mix(in oklch, var(--amber) 18%, transparent); }
+  to   { background-color: transparent; }
+}
+
+.fx3-fresh {
+  animation: fx3FreshFlash 600ms ease-out forwards;
+}
+
+html[data-motion="off"] .fx3-fresh {
+  animation: none;
+  background-color: transparent;
+}
+
+
+/* ── 7d. Generating shimmer sweep ────────────────────────────────────────── */
+/*
+ * .fx3-shimmer — left-to-right shimmer over an element.
+ * Use on .cg-pending items.
+ */
+@keyframes fx3Shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.fx3-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--card, #1a1a2e) 25%,
+    color-mix(in oklch, var(--ink) 10%, transparent) 50%,
+    var(--card, #1a1a2e) 75%
+  );
+  background-size: 200% 100%;
+  animation: fx3Shimmer 2.4s ease-in-out infinite;
+}
+
+html[data-motion="off"]  .fx3-shimmer { animation: none; }
+html[data-motion="calm"] .fx3-shimmer { animation-duration: 4.8s; }
+
+
+/* ── 7e. Module-level ambient blob (panel-scoped red/alarm) ──────────────── */
+/*
+ * .fx3-alarm-blob — red radial blob drifting inside a panel.
+ * Composited via ::before; requires position:relative on the host.
+ */
+@keyframes fx3AlarmDrift {
+  0%   { transform: translate(0%,   0%) scale(1.0); }
+  33%  { transform: translate(5%,   8%) scale(1.08); }
+  66%  { transform: translate(-4%,  5%) scale(0.95); }
+  100% { transform: translate(0%,   0%) scale(1.0); }
+}
+
+.fx3-alarm-blob {
+  position: relative;
+  overflow: hidden;
+}
+
+.fx3-alarm-blob::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 50%,
+    color-mix(in oklch, var(--red) 10%, transparent) 0%,
+    transparent 70%
+  );
+  animation: fx3AlarmDrift 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure panel content renders above the blob */
+.fx3-alarm-blob > * {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-motion="off"]  .fx3-alarm-blob::before { animation: none; }
+html[data-motion="calm"] .fx3-alarm-blob::before { animation-duration: 40s; }
+
+
+/* ── 7f. Heartbeat pulse (service/container dots) ────────────────────────── */
+/*
+ * .fx3-heartbeat — soft box-shadow ring-expand every 4s.
+ * Apply to inline/block-level status dots.
+ */
+@keyframes fx3Heartbeat {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  60%  { box-shadow: 0 0 0 4px transparent; opacity: 0.7; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
+.fx3-heartbeat {
+  animation: fx3Heartbeat 4s ease-out infinite;
+}
+
+html[data-motion="off"]  .fx3-heartbeat { animation: none; }
+html[data-motion="calm"] .fx3-heartbeat { animation-duration: 8s; }
+
+
+/* ── 7g. Ring glow pulse (SVG circle, hero ring) ─────────────────────────── */
+/*
+ * .fx3-ring-pulse — single-shot drop-shadow filter pulse on an SVG element.
+ * Add via JS on progress change; remove after animationend.
+ */
+@keyframes fx3RingPulse {
+  0%   { filter: drop-shadow(0 0 0px transparent); }
+  40%  { filter: drop-shadow(0 0 6px var(--amber)); }
+  100% { filter: drop-shadow(0 0 0px transparent); }
+}
+
+.fx3-ring-pulse {
+  animation: fx3RingPulse 800ms ease-out forwards;
+}
+
+html[data-motion="off"] .fx3-ring-pulse {
+  animation: none;
+  filter: none;
+}
+
+
+/* ── 7h. Temp glow (GPU temperature) ────────────────────────────────────────*/
+/*
+ * .fx3-temp-warm — amber text-shadow when >70°C
+ * .fx3-temp-hot  — red text-shadow with breathing animation when >78°C
+ */
+.fx3-temp-warm {
+  text-shadow: 0 0 6px color-mix(in oklch, var(--amber) 60%, transparent);
+}
+
+@keyframes fx3TempBreathe {
+  0%, 100% { text-shadow: 0 0 6px color-mix(in oklch, var(--red) 50%, transparent); }
+  50%       { text-shadow: 0 0 14px color-mix(in oklch, var(--red) 80%, transparent); }
+}
+
+.fx3-temp-hot {
+  text-shadow: 0 0 6px color-mix(in oklch, var(--red) 50%, transparent);
+  animation: fx3TempBreathe 2s ease-in-out infinite;
+}
+
+html[data-motion="off"]  .fx3-temp-hot { animation: none; text-shadow: 0 0 6px color-mix(in oklch, var(--red) 50%, transparent); }
+html[data-motion="calm"] .fx3-temp-hot { animation-duration: 4s; }
+
+
+/* ── 7i. Chrome-bevel badge (escalation count) ───────────────────────────── */
+/*
+ * .fx3-badge-alarm — chrome bevel + red outer glow on alarm badges.
+ */
+.fx3-badge-alarm {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--ink) 15%, transparent),
+    0 0 8px color-mix(in oklch, var(--red) 50%, transparent);
+  border: 1px solid color-mix(in oklch, var(--ink) 10%, transparent);
+}
+
+
+/* ── 7j. Matrix monospace glow (git hashes) ──────────────────────────────── */
+/*
+ * .fx3-matrix — green monospace text shadow (SHA hash treatment).
+ */
+.fx3-matrix {
+  font-family: var(--font-mono, 'Cascadia Code', 'Consolas', monospace);
+  color: var(--green, #4caf50);
+  text-shadow: 0 0 4px color-mix(in oklch, var(--green) 60%, transparent);
+}
+
+
+/* ── 7k. Active tab chrome bevel (terminal) ──────────────────────────────── */
+/*
+ * .fx3-tab-active — chrome-lift for the active terminal tab.
+ */
+.fx3-tab-active {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--ink) 12%, transparent),
+    0 0 0 1px color-mix(in oklch, var(--ink) 6%, transparent);
+  background: color-mix(in oklch, var(--ink) 7%, transparent) !important;
+  transition: background 80ms ease, box-shadow 80ms ease;
+}
+
+
+/* ── 7l. Inset-sheen tab strip ───────────────────────────────────────────── */
+/*
+ * .fx3-tab-strip — recessed tab-strip track treatment.
+ */
+.fx3-tab-strip {
+  background: color-mix(in oklch, var(--bg) 25%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in oklch, var(--ink) 5%, transparent);
+}
+
+
+/* ── 7m. Stall / stalled-lane hazard (kpi lanes) ────────────────────────── */
+/*
+ * .fx3-stall-border — applied to .hero-lane.is-stalled
+ * Amber hazard rail on the lane row; drifts on motion:full.
+ */
+.fx3-stall-border {
+  position: relative;
+  padding-left: 8px;
+}
+
+.fx3-stall-border::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklch, var(--amber) 60%, transparent) 0px,
+    color-mix(in oklch, var(--amber) 60%, transparent) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  background-size: 8px 8px;
+  animation: fx3HazardDrift 4s linear infinite;
+  pointer-events: none;
+}
+
+html[data-motion="off"]  .fx3-stall-border::before { animation: none; }
+html[data-motion="calm"] .fx3-stall-border::before { animation-duration: 8s; }
+
+
+/* ── 7n. Lane bar gradient fill helper ───────────────────────────────────── */
+/*
+ * .fx3-lane-bar — gradient-fill progress bar.
+ * Applied to the <span> INSIDE .hero-lane-bar that has a width: % inline style.
+ * Overrides the plain amber fill.
+ */
+.fx3-lane-bar {
+  background: linear-gradient(
+    90deg,
+    var(--copper, #b87333) 0%,
+    var(--amber,  #e8a020) 70%,
+    var(--green,  #4caf50) 100%
+  ) !important;
+}
+
+
+/* ── 7o. Approve button notch + hover arc ───────────────────────────────────*/
+/*
+ * .fx3-approve-btn — clip-path notch + 80ms hover glow on approve buttons.
+ */
+.fx3-approve-btn {
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
+  transition: background-color 80ms ease, box-shadow 80ms ease;
+}
+
+.fx3-approve-btn:hover {
+  background-color: color-mix(in oklch, var(--green) 15%, transparent) !important;
+  box-shadow: 0 0 6px color-mix(in oklch, var(--green) 40%, transparent);
+}
+
+
+/* ── 7p. Wiki kind-tag clip-path notch ───────────────────────────────────── */
+/*
+ * .fx3-kind-notch — tag badge with a notched corner.
+ */
+.fx3-kind-notch {
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%);
+}
+
+
+/* ── 7q. Wiki action button hover glow ───────────────────────────────────── */
+.fx3-wiki-resolve:hover { box-shadow: 0 0 6px color-mix(in oklch, var(--green)  60%, transparent); transition: box-shadow 80ms; }
+.fx3-wiki-dismiss:hover { box-shadow: 0 0 6px color-mix(in oklch, var(--red)    40%, transparent); transition: box-shadow 80ms; }
+.fx3-wiki-research:hover{ box-shadow: 0 0 6px color-mix(in oklch, var(--cyan)   60%, transparent); transition: box-shadow 80ms; }

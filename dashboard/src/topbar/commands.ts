@@ -117,6 +117,16 @@ export function reflectBoardPaused(paused: boolean): void {
   btn.classList.toggle('is-paused', paused);
 }
 
+/** True when the dispatcher is currently paused (for module action bars). */
+export function isBoardPaused(): boolean { return _paused; }
+
+// ─── #211: reusable command entry points for per-module action bars ───────────
+// Module headers (crew-board, projects) call these so Pause/Task/Goal work the
+// same whether you click the top bar or a module bar — same modal, same state.
+export function cmdTogglePause(): void { void _togglePause(); }
+export function cmdNewTask(): void { _openModal('task'); }
+export function cmdNewGoal(): void { _openModal('goal'); }
+
 // ─── Modal (task / goal) ────────────────────────────────────────────────────────
 
 type ModalMode = 'task' | 'goal' | 'image' | 'video';
@@ -137,8 +147,17 @@ async function _populateProjects(): Promise<void> {
       _projects = [];
     }
   }
-  sel.innerHTML = _projects
-    .map((s) => `<option value="${s}">${s}</option>`)
+  // Goal mode gets AUTO (classify → existing or new) + an explicit New option;
+  // task mode must target a concrete existing project.
+  const head =
+    _modalMode === 'goal'
+      ? [
+          '<option value="auto">✨ Auto — pick the right project or create one</option>',
+          '<option value="">+ New project (auto-named)</option>',
+        ]
+      : [];
+  sel.innerHTML = head
+    .concat(_projects.map((s) => `<option value="${s}">${s}</option>`))
     .join('');
 }
 
@@ -202,8 +221,13 @@ async function _submitModal(): Promise<void> {
   }
 
   const project = sel?.value ?? '';
-  if (!project) { if (msg) msg.textContent = 'Pick a project.'; return; }
+  // Tasks need a concrete project; goals accept 'auto' or '' (new project).
+  if (_modalMode === 'task' && !project) {
+    if (msg) msg.textContent = 'Pick a project.';
+    return;
+  }
   if (msg) msg.textContent = 'Working…';
+  const projLabel = project || 'new';
   const ok =
     _modalMode === 'task'
       ? await createBoardTask({ title: value, project_slug: project })
@@ -211,7 +235,7 @@ async function _submitModal(): Promise<void> {
   if (ok) {
     logAction('action', _modalMode === 'task'
       ? `New task: ${value} (${project})`
-      : `Decompose goal: ${value} (${project})`);
+      : `Decompose goal: ${value} (${projLabel})`);
     _closeModal();
     _refresh();
   } else if (msg) {

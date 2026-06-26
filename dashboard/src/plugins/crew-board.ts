@@ -12,6 +12,10 @@ import type { SystemState, RenderBudget } from '../state/types.js';
 import { fmtNum, fmtCost, escHtml } from '../format.js';
 import { activateFullBoard } from './crew-board-full.js';
 
+// ─── F3: track progress for ring pulse ────────────────────────────────────────
+
+let _prevProgress: number | null = null;
+
 // ─── Relevance ────────────────────────────────────────────────────────────────
 
 function relevance(state: SystemState): RelevanceResult {
@@ -132,6 +136,10 @@ function _renderHero(state: SystemState): void {
     ? `<span class="hero-stalled">stalled ${Math.round(task.stalledMs / 60_000)}m</span>`
     : '';
 
+  // F3: detect progress tick for ring pulse
+  const progressChanged = _prevProgress !== null && _prevProgress !== task.progress;
+  _prevProgress = task.progress;
+
   // Circular progress ring (SVG). r=16 → circumference ≈ 100.53.
   const C = 100.53;
   const off = (C * (1 - Math.min(1, Math.max(0, task.progress)))).toFixed(1);
@@ -166,6 +174,18 @@ function _renderHero(state: SystemState): void {
       </div>
     </div>
   `;
+
+  // F3: fire ring glow pulse when progress just changed
+  if (progressChanged) {
+    const ringEl = heroBody.querySelector('.hero-ring') as SVGElement | null;
+    if (ringEl) {
+      ringEl.classList.remove('fx3-ring-pulse');
+      // Force reflow so re-adding the class restarts the animation
+      void ringEl.getBoundingClientRect();
+      ringEl.classList.add('fx3-ring-pulse');
+      ringEl.addEventListener('animationend', () => ringEl.classList.remove('fx3-ring-pulse'), { once: true });
+    }
+  }
 
   // Remaining columns (below hero)
   _renderTaskList('v2-count-ready',  state.tasks.ready);

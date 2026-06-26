@@ -16,6 +16,13 @@
 import type { SunoTrack } from '../types.js';
 import { escHtml } from '../format.js';
 import { sunoAudioUrl } from '../gateway.js';
+import {
+  getActiveSource,
+  localTogglePlay,
+  localSkip,
+  setMusicAudio,
+  initMusicPlayer,
+} from './music.js';
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -141,6 +148,11 @@ function $<T extends HTMLElement>(id: string): T | null {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+/** Expose the shared audio element so music.ts can drive local playback. */
+export function getSunoAudio(): HTMLAudioElement | null {
+  return _audio;
+}
+
 export function initSunoPlayer(): void {
   _audio = new Audio();
   _audio.preload = 'none';
@@ -153,10 +165,22 @@ export function initSunoPlayer(): void {
   const savedVol = localStorage.getItem(LS_VOLUME);
   _audio.volume = savedVol != null ? parseFloat(savedVol) : 0.8;
 
-  // Wire transport controls
-  $('suno-btn-play')?.addEventListener('click',    () => _togglePlay());
-  $('suno-btn-prev')?.addEventListener('click',    () => _skipTrack('prev'));
-  $('suno-btn-next')?.addEventListener('click',    () => _skipTrack('next'));
+  // Share the audio element with the local music player.
+  setMusicAudio(_audio);
+
+  // Wire transport controls — delegate to local source when active.
+  $('suno-btn-play')?.addEventListener('click',    () => {
+    if (getActiveSource() === 'local') { localTogglePlay(); return; }
+    _togglePlay();
+  });
+  $('suno-btn-prev')?.addEventListener('click',    () => {
+    if (getActiveSource() === 'local') { localSkip('prev'); return; }
+    _skipTrack('prev');
+  });
+  $('suno-btn-next')?.addEventListener('click',    () => {
+    if (getActiveSource() === 'local') { localSkip('next'); return; }
+    _skipTrack('next');
+  });
   $('suno-btn-shuffle')?.addEventListener('click', () => _toggleShuffle());
 
   // Wire scrub bar
@@ -190,6 +214,9 @@ export function initSunoPlayer(): void {
   }
 
   _wireDropdown();
+
+  // F4: Init local music player (shares this <audio> element).
+  initMusicPlayer();
 }
 
 // ─── Ducking (CC2 alerts lower the music briefly) ────────────────────────────
@@ -214,6 +241,17 @@ let _audioCtx: AudioContext | null = null;
 let _analyser: AnalyserNode | null = null;
 let _vizRaf: number | null = null;
 let _vizCanvas: HTMLCanvasElement | null = null;
+
+/**
+ * Expose the shared AnalyserNode so external layers (e.g. audio-viz-bg.ts)
+ * can read frequency data from the same node without creating a second
+ * MediaElementSource (which would throw InvalidStateError).
+ *
+ * Returns null until the first play event triggers _ensureAnalyser().
+ */
+export function getMusicAnalyser(): AnalyserNode | null {
+  return _analyser;
+}
 
 /** Build the analyser graph once. Side-tap: source→destination keeps audio
  *  intact; source→analyser is a parallel tap that never reaches output, so a
@@ -251,11 +289,23 @@ function _drawViz(): void {
   g.clearRect(0, 0, W, H);
   const bars = 56;
   const bw = W / bars;
+  // Resolve copper + amber from CSS vars so bars recolor with the theme.
+  const cs      = getComputedStyle(document.documentElement);
+  const copperH = cs.getPropertyValue('--hex-copper').trim() || '#c07840';
+  const amberH  = cs.getPropertyValue('--hex-amber').trim()  || '#e0a030';
+  // Parse hex channels for interpolation.
+  function _ch(hex: string, off: number) { return parseInt(hex.slice(off, off + 2), 16); }
+  const cr = _ch(copperH, 1), cg = _ch(copperH, 3), cb = _ch(copperH, 5);
+  const ar = _ch(amberH,  1), ag = _ch(amberH,  3), ab = _ch(amberH,  5);
+
   for (let i = 0; i < bars; i++) {
     const v = (data[Math.floor((i / bars) * n)] ?? 0) / 255;
     const bh = Math.max(1, v * H);
     // copper → amber by intensity, glow on the loud bars.
-    g.fillStyle = `rgba(${193 + v * 31}, ${127 + v * 37}, ${36 + v * 33}, ${0.45 + v * 0.55})`;
+    const r = Math.round(cr + (ar - cr) * v);
+    const gv = Math.round(cg + (ag - cg) * v);
+    const b  = Math.round(cb + (ab - cb) * v);
+    g.fillStyle = `rgba(${r},${gv},${b},${0.45 + v * 0.55})`;
     g.fillRect(i * bw, H - bh, Math.max(1, bw - 1), bh);
   }
 }
