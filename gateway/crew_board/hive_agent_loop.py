@@ -57,10 +57,10 @@ _MAX_FILE_BYTES = 200_000
 _MAX_LIST_ENTRIES = 200
 _MAX_READ_BYTES = 50_000
 # Default model picked by the v5 bench (commit 9b57378 results):
-# qwen3.6:27b cleared all 10 tiers — only model in the 11-model field
+# qwen2.5-coder:7b cleared all 10 tiers — only model in the 11-model field
 # to break the tier-5 cliff. ~17GB Q4 dense, fits one RTX 5060 Ti with
 # auto-split headroom. Override per call via `model=` kwarg.
-_DEFAULT_MODEL = "qwen3.6:27b"
+_DEFAULT_MODEL = "qwen2.5-coder:7b"
 
 # JSON Schema for the single tool-call the model emits each turn.
 # Passed to Ollama's structured-output `format` so the sampler can

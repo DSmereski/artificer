@@ -1,4 +1,4 @@
-"""Hive runner — uses the existing HiveCoordinator (hive-qwen) to
+"""Hive runner — uses the existing HiveCoordinator (planner-qwen) to
 process a task.
 
 For MVP we treat the hive as a planning/proposal layer: it produces
