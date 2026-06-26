@@ -14,7 +14,9 @@ Never raises. Failed verifications return ok=False with a reason.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass, field
@@ -32,6 +34,12 @@ class VerifyResult:
     files: dict = field(default_factory=dict)
     criteria: dict = field(default_factory=dict)
     reason: str = ""
+    # True only when at least one RUNNABLE outcome probe existed and passed.
+    # A smoke_cmd that ran and exited 0 is the primary mechanism. Tests-green
+    # alone is NOT outcome_proven — that gap is what caused the silent
+    # false-done problem (dashboard features shipped broken while tests passed).
+    outcome_proven: bool = False
+    outcome_reason: str = ""
 
 
 def _augmented_env() -> dict:
@@ -118,13 +126,65 @@ def _run_tests(project: Project, *, timeout: float = 180.0) -> dict:
             "stdout_tail": "",
             "stderr_tail": "",
         }
+    _out = proc.stdout or ""
     return {
         "ran": True,
         "exit_code": proc.returncode,
         "reason": "",
-        "stdout_tail": (proc.stdout or "")[-2000:],
+        "stdout_tail": _out[-2000:],
         "stderr_tail": (proc.stderr or "")[-2000:],
+        # Parse from a larger window than we keep for display, so baseline-diff
+        # verification can compare failing-test identifiers across runs.
+        "failed_ids": _parse_failing_tests(_out[-8000:], project.test_cmd or ""),
     }
+
+
+def _parse_failing_tests(stdout: str, test_cmd: str) -> list[str]:
+    """Best-effort extraction of FAILING test identifiers from runner stdout,
+    for baseline-diff verification ("pass iff no NEW failures"). Runner-specific;
+    returns [] when nothing recognisable is found (caller then fails strict, so a
+    parser miss never falsely passes a red suite)."""
+    cmd = (test_cmd or "").lower()
+    ids: list[str] = []
+    lines = stdout.splitlines()
+    if "flutter" in cmd or "dart" in cmd:
+        # e.g. "00:02 +186 -3: <file>.dart: <test name> [E]"
+        for ln in lines:
+            s = ln.strip()
+            if s.endswith("[E]") and ".dart:" in s:
+                seg = re.sub(r"^\d+:\d+\s+\+\d+\s+-\d+:\s*", "", s)
+                ids.append(seg[:-3].strip())
+    elif "pytest" in cmd or "python" in cmd:
+        for ln in lines:
+            if ln.startswith("FAILED "):
+                ids.append(ln[7:].split(" ")[0])
+            elif ln.startswith("ERROR ") and "::" in ln:
+                ids.append(ln[6:].split(" ")[0])
+    elif "cargo" in cmd:
+        for ln in lines:
+            s = ln.strip()
+            if s.startswith("test ") and s.endswith("... FAILED"):
+                ids.append(s.split()[1])
+    elif "go test" in cmd or cmd.strip().startswith("go "):
+        for ln in lines:
+            s = ln.strip()
+            if s.startswith("--- FAIL:"):
+                parts = s.split()
+                if len(parts) >= 3:
+                    ids.append(parts[2])
+    elif any(k in cmd for k in ("npm", "node", "jest", "vitest", "yarn", "pnpm")):
+        for ln in lines:
+            s = ln.strip()
+            if s.startswith("not ok ") or s.startswith("✕") or s.startswith("✗") \
+                    or s.startswith("FAIL "):
+                ids.append(s[:160])
+    seen: set[str] = set()
+    out: list[str] = []
+    for x in ids:
+        if x and x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
 
 
 def _check_files(task: Task, project: Project) -> dict:
@@ -170,9 +230,9 @@ def _check_criteria(task: Task) -> dict:
 def _check_commit(task: Task, project: Project) -> dict:
     """False-done gate: a real 'done' must show actual work — either uncommitted
     changes in the tree (the loop commits after verify) OR a commit that
-    references the task. A clean tree with no task commit means nothing was
-    produced (the task was marked done with zero diff). Permissive when the
-    project isn't a git checkout."""
+    references the task. A CLEAN tree with NO task commit means nothing was
+    produced (the example-app T-0375 case: marked done, zero diff). Permissive
+    when the project isn't a git checkout."""
     pdir = Path(project.path) if getattr(project, "path", None) else None
     if pdir is None or not (pdir / ".git").exists():
         return {"checked": False, "reason": "not a git checkout"}
@@ -198,9 +258,9 @@ def _check_commit(task: Task, project: Project) -> dict:
 
 
 def _check_entrypoint(task: Task, project: Project) -> dict:
-    """Boot gate: an app must be launchable, not merely test-green. Catches the
-    'tests pass but the app has no entry point' class where tests all pass but
-    the app cannot start on any platform.
+    """Boot gate: an APP must be launchable, not merely test-green. Catches the
+    'tests pass but the app has no entry point' class (the tetris no-main() bug,
+    where 79 tests passed but the app could not start on any platform).
     Flutter: require a top-level main() in lib/main.dart."""
     import re
     pdir = Path(project.path) if getattr(project, "path", None) else None
@@ -255,9 +315,9 @@ def verify(
     smoke = _run_smoke(task, project) if run_tests else {"ran": False}
     # #177 gates: a task can't be "done" on green tests alone.
     #   - false-done gate: clean tree AND no commit referencing the task = no
-    #     work was produced (task was marked done with zero diff).
-    #   - boot gate: an app must be launchable, not merely test-green (tests
-    #     pass with their own mains; the app entry point may still be absent).
+    #     work was produced (example-app T-0375 was marked done with zero diff).
+    #   - boot gate: an app must be launchable, not merely test-green (the tetris
+    #     no-main() bug: 79 tests passed but the app had no entry point).
     commit = _check_commit(task, project) if run_tests else {"checked": False}
     entry = _check_entrypoint(task, project)
     # Auto-Ok rules (gates the move-to-review):
@@ -276,13 +336,33 @@ def verify(
     _spawn_failed = (not tests.get("ran")) and _tests_reason.startswith(
         ("could not spawn", "project path missing")
     )
-    tests_ok = (
-        not _spawn_failed
-        and (
-            not tests.get("ran")  # skipped / no test_cmd is permissive
-            or tests.get("exit_code") == 0
-        )
-    )
+    if _spawn_failed:
+        tests_ok = False
+    elif not tests.get("ran"):
+        tests_ok = True  # no test_cmd configured / skipped — permissive (unchanged)
+    elif tests.get("exit_code") == 0:
+        tests_ok = True  # whole suite green
+    else:
+        # Non-zero exit. BASELINE-DIFF: pass iff every currently-failing test was
+        # ALREADY failing when the chain started (captured by the pre-flight in
+        # decompose_goal as crew_meta `preflight:failing:<slug>`). This stops a
+        # pre-existing broken/flaky test from freezing a whole chain whose own
+        # work is fine. Requires a captured baseline AND parseable failures;
+        # otherwise fail strict (covers compile errors / crashes / timeouts where
+        # nothing parses → no false pass).
+        _baseline_raw = store.get_meta(f"preflight:failing:{project.slug}")
+        _failed_ids = tests.get("failed_ids") or []
+        if _baseline_raw is not None and _failed_ids:
+            try:
+                _baseline = set(json.loads(_baseline_raw))
+            except (ValueError, TypeError):
+                _baseline = set()
+            _new = set(_failed_ids) - _baseline
+            tests_ok = not _new
+            if not tests_ok:
+                tests["new_failures"] = sorted(_new)[:20]
+        else:
+            tests_ok = False
     smoke_ok = (
         not smoke.get("ran")  # no smoke_cmd configured is permissive
         or smoke.get("exit_code") == 0
@@ -298,9 +378,16 @@ def verify(
         if _spawn_failed:
             reasons.append(f"tests could not run: {_tests_reason}")
         else:
-            reasons.append(
-                f"tests failed (exit={tests.get('exit_code')})"
-            )
+            _nf = tests.get("new_failures")
+            if _nf:
+                reasons.append(
+                    f"tests failed — {len(_nf)} NEW failure(s) vs baseline: "
+                    f"{_nf[:5]}"
+                )
+            else:
+                reasons.append(
+                    f"tests failed (exit={tests.get('exit_code')})"
+                )
     if not files.get("all_present", True):
         missing = [g["glob"] for g in files.get("globs", []) if g["count"] == 0]
         reasons.append(f"files missing: {missing}")
@@ -319,12 +406,36 @@ def verify(
             f"(owner-review) {criteria.get('total', 0) - criteria.get('checked', 0)} "
             f"criteria unchecked"
         )
+    # Outcome-proven: was actual behavior ever asserted by a runnable probe?
+    # Tests passing alone is NOT sufficient — the pipeline has historically
+    # shipped broken features (e.g. all-black dashboard panels) where every
+    # test mocked the real system and nothing ran end-to-end. A smoke_cmd
+    # that ran and exited 0 is the primary mechanism for proving behavior.
+    # outcome_proven gates the auto-approve timeout path in the dispatcher;
+    # it does NOT change `ok` (which gates promotion to review as before).
+    if smoke.get("ran") and smoke.get("exit_code") == 0:
+        outcome_proven = True
+        outcome_reason = "smoke_cmd ran and exited 0"
+    else:
+        outcome_proven = False
+        if not getattr(task, "smoke_cmd", None):
+            outcome_reason = "no outcome probe configured (no smoke_cmd)"
+        elif not smoke.get("ran"):
+            outcome_reason = (
+                f"smoke_cmd could not run: {smoke.get('reason', 'unknown')}"
+            )
+        else:
+            outcome_reason = (
+                f"smoke_cmd exited {smoke.get('exit_code')} (non-zero)"
+            )
     result = VerifyResult(
         ok=ok,
         tests=tests,
         files=files,
         criteria=criteria,
         reason="; ".join(reasons),
+        outcome_proven=outcome_proven,
+        outcome_reason=outcome_reason,
     )
     store.update_verify_results(task.slug, {
         "ok": result.ok,
@@ -335,6 +446,8 @@ def verify(
         "commit": commit,
         "entrypoint": entry,
         "reason": result.reason,
+        "outcome_proven": result.outcome_proven,
+        "outcome_reason": result.outcome_reason,
     })
     return result
 

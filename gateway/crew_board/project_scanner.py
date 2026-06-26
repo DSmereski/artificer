@@ -1,6 +1,6 @@
-"""Auto-detect git repos under the projects root (HIVE_PROJECTS_ROOT,
-default ~/projects) and upsert into the crew_projects table. Owner toggles
-`enabled` to allow agents to work the project.
+"""Auto-detect git repos under C:/Projects/ and upsert into the
+crew_projects table. Owner toggles `enabled` to allow agents to
+work the project.
 
 Run once on gateway startup and every N minutes via the lifespan
 background loop. Idempotent — re-detecting a known project just
@@ -10,20 +10,12 @@ refreshes path / name / test_cmd.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from gateway.crew_board.store import CrewBoardStore, Project
 
 log = logging.getLogger("gateway.crew_board.scanner")
-
-# Where to auto-detect projects. Honours HIVE_PROJECTS_ROOT (see
-# config/.env.example); defaults to ~/projects so the release works without a
-# Windows C:\Projects layout.
-_DEFAULT_PROJECTS_ROOT = Path(
-    os.environ.get("HIVE_PROJECTS_ROOT", str(Path.home() / "projects"))
-).expanduser()
 
 # Stem -> test command heuristic. Order matters: first match wins.
 _TEST_CMD_BY_FILE = (
@@ -67,9 +59,15 @@ def _detect_test_cmd(repo: Path) -> str | None:
     return None
 
 
+def _norm_path(p: str) -> str:
+    """Normalise a path for identity comparison: forward slashes, lower-case,
+    no trailing slash. So 'C:\\Projects\\Foo' and 'c:/projects/foo/' match."""
+    return p.replace("\\", "/").rstrip("/").lower()
+
+
 def scan(
     store: CrewBoardStore,
-    root: Path = _DEFAULT_PROJECTS_ROOT,
+    root: Path = Path(r"C:/Projects"),
 ) -> ScanResult:
     """Walk `root`, register every directory that is a git repo."""
     added = 0
@@ -78,6 +76,12 @@ def scan(
     if not root.is_dir():
         log.info("project scanner: root %s does not exist", root)
         return ScanResult(0, 0, [])
+    # Map every already-registered path → its slug so we never mint a SECOND
+    # project for a directory that is already owned under a different slug. This
+    # is what produced the duplicate twins (decompose registers a kebab slug for
+    # a squashed dir name; the scanner then re-derived a squashed slug from the
+    # same dir → a disabled 0-task duplicate). Path identity is the truth.
+    path_owner = {_norm_path(p.path): p.slug for p in store.list_projects()}
     for entry in sorted(root.iterdir()):
         if not entry.is_dir():
             continue
@@ -87,6 +91,18 @@ def scan(
             continue
         slug = _slugify(entry.name)
         if not slug:
+            continue
+        owner = path_owner.get(_norm_path(str(entry)))
+        if owner is not None and owner != slug:
+            # This directory already belongs to another slug — refresh that
+            # canonical project's derived fields instead of duplicating it.
+            canon = store.get_project(owner)
+            if canon is not None:
+                canon.path = str(entry).replace("\\", "/")
+                canon.test_cmd = _detect_test_cmd(entry)
+                store.upsert_project(canon)
+                updated += 1
+            seen.append(owner)
             continue
         seen.append(slug)
         existing = store.get_project(slug)

@@ -1,4 +1,4 @@
-"""Hive runner — uses the existing HiveCoordinator (planner-qwen) to
+"""Hive runner — uses the existing HiveCoordinator (hive-qwen) to
 process a task.
 
 For MVP we treat the hive as a planning/proposal layer: it produces
@@ -77,7 +77,7 @@ async def run_hive(
     ctx = TurnContext(
         user_msg=user_msg,
         user_id=user_id, device_id=device_id,
-        bot="terry",
+        bot="hive",
         available_helpers=[
             "planner", "researcher", "synthesizer", "critic",
         ],

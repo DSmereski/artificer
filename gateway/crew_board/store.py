@@ -23,6 +23,14 @@ from gateway.crew_board import schema
 
 
 @dataclass
+class Board:
+    board_id: str
+    name: str
+    description: str
+    created_at: str = ""
+
+
+@dataclass
 class Project:
     slug: str
     path: str
@@ -89,6 +97,23 @@ class Task:
     # shims, not a code runner. content_spec holds the request + result media.
     kind: str = "code"
     content_spec: dict = field(default_factory=dict)
+    # P6 goal-completion loop: the goal_id this task belongs to (None for
+    # tasks not created as part of a /board/decompose goal plan).
+    goal_id: str | None = None
+    # P2 v-Next: which board this task belongs to. 'default' for all existing
+    # tasks (back-compat via ALTER TABLE DEFAULT in schema migrations).
+    board_id: str = "default"
+    # #198: last-agent handoff summary — "what I did + current state + next
+    # step" — plus who wrote it (model/agent) and when. Overwritten on each
+    # agent touch so it always reflects the most recent worker.
+    last_summary: str | None = None
+    last_summary_by: str | None = None
+    last_summary_at: str | None = None
+    # CP1: live agent reasoning stream + a pending owner steer nudge.
+    live_thoughts: list = field(default_factory=list)
+    steer_message: str | None = None
+    # CP2: master-plan spec (kind='plan' tickets awaiting approval in proposed).
+    plan_spec: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -211,6 +236,35 @@ class CrewBoardStore:
                 if "content_spec" in row.keys() and row["content_spec"]
                 else {}
             ),
+            goal_id=(
+                row["goal_id"] if "goal_id" in row.keys() else None
+            ),
+            board_id=(
+                row["board_id"] if "board_id" in row.keys() and row["board_id"]
+                else "default"
+            ),
+            last_summary=(
+                row["last_summary"] if "last_summary" in row.keys() else None
+            ),
+            last_summary_by=(
+                row["last_summary_by"] if "last_summary_by" in row.keys() else None
+            ),
+            last_summary_at=(
+                row["last_summary_at"] if "last_summary_at" in row.keys() else None
+            ),
+            live_thoughts=(
+                json.loads(row["live_thoughts"])
+                if "live_thoughts" in row.keys() and row["live_thoughts"]
+                else []
+            ),
+            steer_message=(
+                row["steer_message"] if "steer_message" in row.keys() else None
+            ),
+            plan_spec=(
+                json.loads(row["plan_spec"])
+                if "plan_spec" in row.keys() and row["plan_spec"]
+                else {}
+            ),
         )
 
     def _row_to_audit(self, row: sqlite3.Row) -> AuditEntry:
@@ -306,6 +360,19 @@ class CrewBoardStore:
                 ).fetchall()
             return [self._row_to_project(r) for r in rows]
 
+    def delete_project(self, slug: str) -> bool:
+        """Delete a project row by slug. Returns True if a row was removed.
+
+        Does NOT touch tasks — callers must ensure the project is empty (or
+        intentionally orphan its tasks) first.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM crew_projects WHERE slug = ?", (slug,),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
     def set_project_enabled(self, slug: str, *, enabled: bool) -> None:
         with self._lock:
             self._conn.execute(
@@ -353,6 +420,8 @@ class CrewBoardStore:
         smoke_cmd: str | None = None,
         kind: str = "code",
         content_spec: dict | None = None,
+        goal_id: str | None = None,
+        board_id: str = "default",
     ) -> Task:
         if priority not in schema.PRIORITIES:
             raise ValueError(f"unknown priority {priority!r}")
@@ -371,8 +440,9 @@ class CrewBoardStore:
                     (slug, title, body, status, project_slug, created_by,
                      priority, estimate, acceptance_criteria,
                      files_of_interest, depends_on, tags,
-                     review_by, polish_iters, smoke_cmd, kind, content_spec)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     review_by, polish_iters, smoke_cmd, kind, content_spec,
+                     goal_id, board_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     slug, title, body, status, project_slug, created_by,
@@ -383,6 +453,7 @@ class CrewBoardStore:
                     json.dumps(tags or []),
                     review_by, polish_iters, smoke_cmd,
                     kind, json.dumps(content_spec or {}),
+                    goal_id, board_id,
                 ),
             )
             self._audit(
@@ -403,6 +474,26 @@ class CrewBoardStore:
             )
             self._conn.commit()
 
+    # ---------------------------------------------------------------- P6 goal_id
+
+    def set_goal_id(self, slug: str, goal_id: str) -> None:
+        """Stamp a task with the goal_id it belongs to (P6)."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE crew_tasks SET goal_id = ? WHERE slug = ?",
+                (goal_id, slug),
+            )
+            self._conn.commit()
+
+    def list_tasks_by_goal_id(self, goal_id: str) -> list["Task"]:
+        """All tasks stamped with goal_id (subtasks + verify tickets)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM crew_tasks WHERE goal_id = ? ORDER BY id",
+                (goal_id,),
+            ).fetchall()
+            return [self._row_to_task(r) for r in rows]
+
     def get_task(self, slug: str) -> Task | None:
         with self._lock:
             row = self._conn.execute(
@@ -415,6 +506,7 @@ class CrewBoardStore:
         status: str | Iterable[str] | None = None,
         project_slug: str | None = None,
         assignee: str | None = None,
+        board_id: str | None = None,
     ) -> list[Task]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -436,6 +528,11 @@ class CrewBoardStore:
         if assignee is not None:
             clauses.append("assignee = ?")
             params.append(assignee)
+        # P2 v-Next: when board_id is given, scope to that board only.
+        # When None (back-compat default), return tasks from ALL boards.
+        if board_id is not None:
+            clauses.append("board_id = ?")
+            params.append(board_id)
         sql = "SELECT * FROM crew_tasks"
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
@@ -529,6 +626,39 @@ class CrewBoardStore:
             self._conn.commit()
             return self.get_task(slug)  # type: ignore[return-value]
 
+    def set_depends_on(
+        self, slug: str, depends_on: list[str], *, actor: str = "owner",
+    ) -> Task:
+        """Manually set a task's blockers (#172). The dispatcher won't claim the
+        task until every depends_on slug is done. Drops self-reference + blanks;
+        rejects unknown slugs and direct cycles."""
+        with self._lock:
+            task = self.get_task(slug)
+            if task is None:
+                raise ValueError(f"unknown task {slug!r}")
+            deps: list[str] = []
+            for raw in depends_on:
+                d = str(raw).strip()
+                if not d or d == slug or d in deps:
+                    continue
+                dep_task = self.get_task(d)
+                if dep_task is None:
+                    raise ValueError(f"unknown blocker {d!r}")
+                if slug in (dep_task.depends_on or []):
+                    raise ValueError(f"cycle: {d} already depends on {slug}")
+                deps.append(d)
+            self._conn.execute(
+                "UPDATE crew_tasks SET depends_on = ?, "
+                "updated_at = datetime('now') WHERE slug = ?",
+                (json.dumps(deps), slug),
+            )
+            self._audit(
+                slug, actor, "set_depends_on",
+                detail=f"blocked-by {deps}", metadata={"depends_on": deps},
+            )
+            self._conn.commit()
+            return self.get_task(slug)  # type: ignore[return-value]
+
     def set_review_by(self, slug: str, reviewer: str | None) -> Task:
         """Set (or clear) the reviewer that the dispatcher's review loop
         keys on. A task promoted to `review` with review_by=None is skipped
@@ -601,6 +731,82 @@ class CrewBoardStore:
             self._conn.execute(
                 "UPDATE crew_tasks SET last_action = ? WHERE slug = ?",
                 (action[:200], slug),
+            )
+            self._conn.commit()
+
+    def append_thought(
+        self, slug: str, turn: int, thought: str, action: str, cap: int = 12,
+    ) -> None:
+        """CP1: append one turn's reasoning to the task's live_thoughts buffer
+        (kept to the last `cap` turns). Drives the in-ticket AI-thoughts panel."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT live_thoughts FROM crew_tasks WHERE slug = ?", (slug,),
+            ).fetchone()
+            buf: list = []
+            if row and row[0]:
+                try:
+                    buf = json.loads(row[0])
+                except Exception:  # noqa: BLE001
+                    buf = []
+            buf.append({
+                "t": int(turn),
+                "th": (thought or "")[:300],
+                "a": (action or "")[:120],
+            })
+            buf = buf[-cap:]
+            self._conn.execute(
+                "UPDATE crew_tasks SET live_thoughts = ? WHERE slug = ?",
+                (json.dumps(buf), slug),
+            )
+            self._conn.commit()
+
+    def set_plan_spec(self, slug: str, spec: dict) -> None:
+        """CP2: store the master-plan spec on a kind='plan' ticket."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE crew_tasks SET plan_spec = ? WHERE slug = ?",
+                (json.dumps(spec or {}), slug),
+            )
+            self._conn.commit()
+
+    def set_steer(self, slug: str, msg: str) -> None:
+        """CP1: queue an owner steer nudge for a running task (capped)."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE crew_tasks SET steer_message = ? WHERE slug = ?",
+                ((msg or "").strip()[:1000], slug),
+            )
+            self._conn.commit()
+
+    def pop_steer(self, slug: str) -> str | None:
+        """CP1: read + clear the pending steer nudge (the loop injects it once)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT steer_message FROM crew_tasks WHERE slug = ?", (slug,),
+            ).fetchone()
+            msg = row[0] if row and row[0] else None
+            if msg:
+                self._conn.execute(
+                    "UPDATE crew_tasks SET steer_message = NULL WHERE slug = ?",
+                    (slug,),
+                )
+                self._conn.commit()
+            return msg
+
+    def set_task_summary(self, slug: str, summary: str, by: str = "") -> None:
+        """#198: store the last-agent handoff summary for a task — a short
+        "what I did + current state + next step". Overwrites any prior summary
+        and stamps the author (model/agent name) + time, so the board can show
+        "last touched by X". Truncated to keep the row small; no-op on empty."""
+        text = (summary or "").strip()[:1200]
+        if not text:
+            return
+        with self._lock:
+            self._conn.execute(
+                "UPDATE crew_tasks SET last_summary = ?, last_summary_by = ?, "
+                "last_summary_at = datetime('now') WHERE slug = ?",
+                (text, (by or "")[:80], slug),
             )
             self._conn.commit()
 
@@ -814,6 +1020,59 @@ class CrewBoardStore:
         ranked = sorted(lessons, key=_score, reverse=True)
         return ranked[:limit]
 
+    # ---------------------------------------------------------------- boards (P2)
+
+    def _row_to_board(self, row: sqlite3.Row) -> Board:
+        return Board(
+            board_id=row["board_id"],
+            name=row["name"],
+            description=row["description"],
+            created_at=row["created_at"],
+        )
+
+    def ensure_default_board(self) -> None:
+        """Idempotently ensure the 'default' board exists (called by schema.apply)."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO crew_boards (board_id, name, description) "
+                "VALUES ('default', 'Default', 'Default board')"
+            )
+            self._conn.commit()
+
+    def create_board(
+        self, board_id: str, name: str, description: str = "",
+    ) -> Board:
+        """Create a new board. Raises ValueError if board_id already exists."""
+        with self._lock:
+            existing = self._conn.execute(
+                "SELECT board_id FROM crew_boards WHERE board_id = ?",
+                (board_id,),
+            ).fetchone()
+            if existing:
+                raise ValueError(f"board {board_id!r} already exists")
+            self._conn.execute(
+                "INSERT INTO crew_boards (board_id, name, description) "
+                "VALUES (?, ?, ?)",
+                (board_id, name, description),
+            )
+            self._conn.commit()
+            return self.get_board(board_id)  # type: ignore[return-value]
+
+    def get_board(self, board_id: str) -> Board | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM crew_boards WHERE board_id = ?",
+                (board_id,),
+            ).fetchone()
+            return self._row_to_board(row) if row else None
+
+    def list_boards(self) -> list[Board]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM crew_boards ORDER BY created_at"
+            ).fetchall()
+            return [self._row_to_board(r) for r in rows]
+
     # ---------------------------------------------------------------- meta (kv)
 
     def get_meta(self, key: str, default: str | None = None) -> str | None:
@@ -823,6 +1082,14 @@ class CrewBoardStore:
                 "SELECT value FROM crew_meta WHERE key = ?", (key,)
             ).fetchone()
             return str(row["value"]) if row else default
+
+    def list_meta_like(self, pattern: str) -> list[tuple[str, str]]:
+        """Return all (key, value) pairs from crew_meta where key LIKE *pattern*."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT key, value FROM crew_meta WHERE key LIKE ?", (pattern,)
+            ).fetchall()
+            return [(str(r["key"]), str(r["value"])) for r in rows]
 
     def set_meta(self, key: str, value: str) -> None:
         """UPSERT a key/value pair into crew_meta. Persisted on disk."""

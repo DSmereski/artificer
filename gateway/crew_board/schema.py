@@ -137,6 +137,23 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    # P2 v-Next: board registry table
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS crew_boards (
+            board_id    TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    # Seed the default board so list_boards() always returns at least one entry.
+    conn.execute(
+        "INSERT OR IGNORE INTO crew_boards (board_id, name, description) "
+        "VALUES ('default', 'Default', 'Default board')"
+    )
+
     new_columns = (
         # (table, column, type, default)
         ("crew_tasks", "review_by", "TEXT", "NULL"),
@@ -174,6 +191,30 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         # seed_media_id, result_media_ids}.
         ("crew_tasks", "kind", "TEXT", "'code'"),
         ("crew_tasks", "content_spec", "TEXT", "'{}'"),
+        # P6 goal-completion loop: the goal_id this subtask belongs to.
+        # Also stored as a 'goal:<id>' tag but having it as a column lets
+        # the dispatcher query siblings without scanning tags JSON.
+        # NULL for tasks not created via /board/decompose with a goal.
+        ("crew_tasks", "goal_id", "TEXT", "NULL"),
+        # P2 v-Next: which board this task belongs to. Defaults to 'default'
+        # for all existing rows (back-compat). The board_id must exist in
+        # crew_boards. A separate index (added below) makes filtered reads fast.
+        ("crew_tasks", "board_id", "TEXT", "'default'"),
+        # #198: short handoff summary from the LAST agent that worked the
+        # task ("what I did + current state + next step") so opening a ticket
+        # shows where it was left without reading the transcript. Overwritten
+        # on every agent touch; _by/_at record which model/agent and when.
+        ("crew_tasks", "last_summary", "TEXT", "NULL"),
+        ("crew_tasks", "last_summary_by", "TEXT", "NULL"),
+        ("crew_tasks", "last_summary_at", "TEXT", "NULL"),
+        # CP1: live agent reasoning shown inside the ticket. live_thoughts is a
+        # capped JSON array of {t:turn, th:thought, a:action}; steer_message is a
+        # pending owner nudge the loop injects on its next turn then clears.
+        ("crew_tasks", "live_thoughts", "TEXT", "'[]'"),
+        ("crew_tasks", "steer_message", "TEXT", "NULL"),
+        # CP2: master-plan spec for kind='plan' tickets in proposed —
+        # {goal, assumptions[], open_questions[], steps[{title,why,verify,criteria[]}]}.
+        ("crew_tasks", "plan_spec", "TEXT", "'{}'"),
     )
     for table, col, typ, default in new_columns:
         try:
@@ -184,6 +225,12 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             if "duplicate column" in str(e).lower():
                 continue
             raise
+
+    # P2 v-Next: index on board_id — must be created AFTER the column migration
+    # above, not in _INDEXES (which runs before _apply_migrations).
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_crew_tasks_board_id ON crew_tasks(board_id)"
+    )
 
 
 # Status state machine. Values used in code, never look up by ordinal.

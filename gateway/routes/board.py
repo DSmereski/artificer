@@ -15,7 +15,6 @@ WS   /board/events         — real-time updates
 from __future__ import annotations
 
 import json
-import os
 import re
 import secrets
 import time
@@ -23,26 +22,28 @@ from pathlib import Path
 
 # SECURITY (audit M1): project_slug is rendered into the board DOM; constrain it
 # to a clean slug shape on the way in so an HTML/script payload can't be planted.
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
-
-_PROJECTS_ROOT = Path(os.environ.get("HIVE_PROJECTS_ROOT", str(Path.home() / "projects")))
+_SLUG_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 
 # Stats payload is cached briefly so repeated Stats-tab polls don't
 # re-scan every task + up to 50 transcript files each refresh.
 _STATS_TTL_S = 15.0
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, WebSocket
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from gateway.crew_board import schema
-from gateway.crew_board.store import CrewBoardStore, Project, Task
+from gateway.crew_board.store import Board, CrewBoardStore, Project, Task
 # SECURITY (audit H2): board read routes that expose task bodies, verify_results
 # (test stderr tails), source diffs, and absolute project paths must not be open
 # to the tailnet. This dep allows loopback (the dashboard) + valid device Bearer,
 # and 401s anonymous tailnet callers.
 from gateway.deps import require_device_or_loopback
+
+# Lazy imports for P7 board surfacing — only used in /board/stats.
+_BENCH_RESULTS_PATH = Path("state/bench_results.json")
+_LOOP_DECISIONS_PATH = Path(__file__).resolve().parents[2] / "bench" / "loop_decisions.json"
 
 router = APIRouter(prefix="/board")
 
@@ -172,6 +173,16 @@ def _task_to_dict(t: Task) -> dict:
         # Live current action — what the agent is doing right now.
         "last_action": getattr(t, "last_action", None),
         "agent_turns": int(getattr(t, "agent_turns", 0) or 0),
+        # #198: last-agent handoff summary ("what I did + state + next step")
+        # + who wrote it (model/agent) and when — shown in the detail drawer
+        # and as a one-line note on the card.
+        "last_summary": getattr(t, "last_summary", None),
+        "last_summary_by": getattr(t, "last_summary_by", None),
+        "last_summary_at": getattr(t, "last_summary_at", None),
+        # CP1: live agent reasoning stream for the in-ticket thoughts panel.
+        "live_thoughts": getattr(t, "live_thoughts", []) or [],
+        # CP2: master-plan spec for kind='plan' tickets (the proposed gate).
+        "plan_spec": getattr(t, "plan_spec", {}) or {},
         "smoke_ok": (t.verify_results or {}).get("smoke", {}).get(
             "exit_code", None
         ) == 0 if (t.verify_results or {}).get("smoke") else None,
@@ -221,13 +232,19 @@ _CONTENT_PROJECT = "content"
 
 
 class ContentRequest(BaseModel):
-    type: str = Field("image", pattern="^(image|video)$")
+    type: str = Field("image", pattern="^(image|video|avatar)$")
     prompt: str = Field(..., min_length=1, max_length=2000)
     count: int = Field(1, ge=1, le=4)
     width: int = Field(1024, ge=64, le=2048)
     height: int = Field(1024, ge=64, le=2048)
     negative_prompt: str = ""
     seed_media_id: str | None = None    # required for video (image→video)
+    # avatar: prompt is the spoken script; the face is an optional image media id.
+    image_media_id: str | None = None
+    voice: str = "af_heart"
+    avatar_name: str = "ai_woman"
+    preprocess: str = Field("crop", pattern="^(crop|resize|full)$")
+    still: bool = False
     project_slug: str | None = None     # defaults to the virtual 'content' project
 
 
@@ -246,7 +263,7 @@ async def create_content(
     # handler ignores the project working tree, but tasks need a project).
     if store.get_project(proj) is None and proj == _CONTENT_PROJECT:
         store.upsert_project(Project(
-            slug=_CONTENT_PROJECT, path=str(_PROJECTS_ROOT), name="Content",
+            slug=_CONTENT_PROJECT, path="C:/Projects", name="Content",
             enabled=True, push_allowed=False, test_cmd=None,
         ))
     spec = {
@@ -261,6 +278,13 @@ async def create_content(
     }
     if body.seed_media_id:
         spec["seed_media_id"] = body.seed_media_id
+    if body.type == "avatar":
+        spec["voice"] = body.voice
+        spec["avatar_name"] = body.avatar_name
+        spec["preprocess"] = body.preprocess
+        spec["still"] = body.still
+        if body.image_media_id:
+            spec["image_media_id"] = body.image_media_id
     title = f"{body.type}: {body.prompt[:60]}"
     task = store.create_task(
         title=title, project_slug=proj, created_by="owner",
@@ -293,13 +317,59 @@ async def board_session_token(request: Request) -> JSONResponse:
     return JSONResponse({"token": _BOARD_TOKEN})
 
 
+def _board_to_dict(b: Board) -> dict:
+    return {
+        "board_id": b.board_id,
+        "name": b.name,
+        "description": b.description,
+        "created_at": b.created_at,
+    }
+
+
+@router.get("/list")
+async def list_boards(request: Request) -> JSONResponse:
+    """P2 v-Next: List all registered boards. Open read endpoint.
+    Always includes at least the 'default' board."""
+    store = _store(request)
+    boards = store.list_boards()
+    return JSONResponse([_board_to_dict(b) for b in boards])
+
+
+@router.post("/boards")
+async def create_board(
+    request: Request,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """P2 v-Next: Create a new board. Requires board auth.
+    Body: {board_id: str, name: str, description: str}"""
+    store = _store(request)
+    board_id = str(payload.get("board_id", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    description = str(payload.get("description", "")).strip()
+    if not board_id or not name:
+        raise HTTPException(400, "board_id and name required")
+    try:
+        board = store.create_board(board_id, name, description)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return JSONResponse(_board_to_dict(board))
+
+
 @router.get("/state")
 async def get_state(
     request: Request,
+    board: str | None = Query(default=None),
     _auth: object = Depends(require_device_or_loopback),
 ) -> JSONResponse:
+    """JSON snapshot for client refresh.
+
+    P2 v-Next: when ``?board=<board_id>`` is provided, only tasks belonging
+    to that board are returned. When omitted (back-compat), ALL tasks are
+    returned exactly as before.
+    """
     store = _store(request)
-    tasks = store.list_tasks()
+    tasks = store.list_tasks(board_id=board)
     projects = store.list_projects()
     approvals = store.list_pending_approvals()
     return JSONResponse({
@@ -307,22 +377,235 @@ async def get_state(
         "projects": [_project_to_dict(p) for p in projects],
         "pending_approvals": approvals,
         "paused": store.is_paused(),
+        # Per-lane (board column) model override. in_progress = the build model.
+        "lane_models": {"in_progress": store.get_meta("lane_model:in_progress") or ""},
     })
+
+
+# Board statuses that can carry a per-lane model override (in_progress is the
+# only one that actually runs a model today — the build; the rest are accepted
+# for forward-compat).
+_LANE_STATUSES = {"proposed", "backlog", "ready", "in_progress", "qa", "review", "done"}
+
+
+@router.get("/models")
+async def list_ollama_models(
+    request: Request,
+    _auth: object = Depends(require_device_or_loopback),
+) -> JSONResponse:
+    """Ollama's installed model names, for the per-lane model picker."""
+    import os
+    import httpx
+    host = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+    if not host.startswith("http"):
+        host = "http://" + host
+    names: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.get(f"{host}/api/tags")
+            if r.status_code == 200:
+                names = sorted({
+                    str(m.get("name", "")) for m in r.json().get("models", [])
+                    if m.get("name")
+                })
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({"models": names})
+
+
+@router.post("/lane-model")
+async def set_lane_model(
+    request: Request,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """Set the model the hive uses for a board lane. in_progress = the build
+    model the agent loop runs with. Empty model clears the override (default)."""
+    store = _store(request)
+    status = str(payload.get("status", "")).strip()
+    model = str(payload.get("model", "")).strip()
+    if status not in _LANE_STATUSES:
+        raise HTTPException(400, f"unknown lane {status!r}")
+    store.set_meta(f"lane_model:{status}", model)
+    return JSONResponse({"status": status, "model": model})
+
+
+@router.post("/tasks/{slug}/steer")
+async def steer_task(
+    slug: str,
+    request: Request,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """CP1: queue an owner steer nudge for a running task. The hive loop injects
+    it on its next turn (one-shot), so you can redirect the AI mid-build."""
+    store = _store(request)
+    msg = str(payload.get("message", "")).strip()
+    if not msg:
+        raise HTTPException(400, "empty steer message")
+    store.set_steer(slug, msg)
+    return JSONResponse({"ok": True, "slug": slug})
+
+
+def _plan_body(spec: dict) -> str:
+    """Render a master-plan spec as readable text for the ticket body."""
+    lines = [f"GOAL: {spec.get('goal', '')}", ""]
+    if spec.get("assumptions"):
+        lines.append("Assumptions:")
+        lines += [f"- {a}" for a in spec["assumptions"]]
+        lines.append("")
+    if spec.get("open_questions"):
+        lines.append("Open questions:")
+        lines += [f"- {q}" for q in spec["open_questions"]]
+        lines.append("")
+    lines.append("Plan (checkpoints):")
+    for i, s in enumerate(spec.get("steps", []), 1):
+        lines.append(f"{i}. {s.get('title', '')}")
+        if s.get("verify"):
+            lines.append(f"   verify: {s['verify']}")
+    return "\n".join(lines)
+
+
+@router.post("/plans/propose")
+async def propose_plan(
+    request: Request,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """CP2: draft a Karpathy master plan for a goal and park it in proposed for
+    approval (instead of dumping tickets straight into the queue)."""
+    store = _store(request)
+    slug = str(payload.get("project_slug", "")).strip()
+    goal = str(payload.get("goal", "")).strip()
+    if not slug or not goal:
+        raise HTTPException(400, "project_slug + goal required")
+    from gateway.crew_board.master_plan import draft_plan
+    spec = await draft_plan(store, slug, goal)
+    if not spec.get("steps"):
+        raise HTTPException(502, "plan drafting produced no steps")
+    t = store.create_task(
+        title=f"[plan] {spec['goal'][:90]}",
+        project_slug=slug, body=_plan_body(spec),
+        created_by="planner", kind="plan", tags=["plan"],
+    )
+    store.set_plan_spec(t.slug, spec)
+    return JSONResponse({"slug": t.slug, "steps": len(spec["steps"]), "spec": spec})
+
+
+@router.post("/plans/{slug}/approve")
+async def approve_plan(
+    slug: str,
+    request: Request,
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """CP2: approve a master plan — break it out into one child ticket per step
+    (acceptance criteria = the step's check-offs), then archive the plan."""
+    store = _store(request)
+    t = store.get_task(slug)
+    if t is None or getattr(t, "kind", "") != "plan":
+        raise HTTPException(404, f"no plan {slug!r}")
+    spec = getattr(t, "plan_spec", {}) or {}
+    created: list[str] = []
+    for s in spec.get("steps", []):
+        crit = [{"text": c, "checked": False} for c in (s.get("criteria") or [])][:5]
+        body = s.get("why", "")
+        if s.get("verify"):
+            body = (body + f"\n\nVerify: {s['verify']}").strip()
+        ch = store.create_task(
+            title=s["title"], project_slug=t.project_slug, body=body,
+            created_by="owner", acceptance_criteria=crit,
+            tags=[f"from-plan:{slug}"],
+        )
+        created.append(ch.slug)
+    store.move_task(slug, schema.STATUS_ARCHIVED, actor="owner",
+                    detail=f"plan approved -> {len(created)} tickets")
+    return JSONResponse({"approved": slug, "created": created})
+
+
+@router.post("/plans/{slug}/reject")
+async def reject_plan(
+    slug: str,
+    request: Request,
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """CP2: reject a master plan — archive it, no tickets created."""
+    store = _store(request)
+    store.move_task(slug, schema.STATUS_ARCHIVED, actor="owner",
+                    detail="plan rejected")
+    return JSONResponse({"rejected": slug})
+
+
+@router.post("/plans/{slug}/request-changes")
+async def request_changes_plan(
+    slug: str,
+    request: Request,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """CP2: re-draft a master plan from the owner's feedback; stays in proposed."""
+    store = _store(request)
+    t = store.get_task(slug)
+    if t is None or getattr(t, "kind", "") != "plan":
+        raise HTTPException(404, f"no plan {slug!r}")
+    feedback = str(payload.get("feedback", "")).strip()
+    if not feedback:
+        raise HTTPException(400, "feedback required")
+    spec = getattr(t, "plan_spec", {}) or {}
+    from gateway.crew_board.master_plan import draft_plan
+    new_spec = await draft_plan(
+        store, t.project_slug, spec.get("goal", t.title), feedback=feedback)
+    if not new_spec.get("steps"):
+        raise HTTPException(502, "re-draft produced no steps")
+    store.set_plan_spec(slug, new_spec)
+    return JSONResponse({"slug": slug, "steps": len(new_spec["steps"]), "spec": new_spec})
+
+
+@router.post("/tasks/{slug}/suggest-skills")
+async def suggest_skills_route(
+    slug: str,
+    request: Request,
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """#210: analyze a finished task and propose skill improvements (a new skill
+    or an update to an existing one) as tickets in the Proposed lane."""
+    store = _store(request)
+    t = store.get_task(slug)
+    if t is None:
+        raise HTTPException(404, f"no task {slug!r}")
+    from gateway.crew_board.skills_suggest import suggest_skills
+    sugg = await suggest_skills(store, t)
+    created: list[str] = []
+    for s in sugg:
+        ch = store.create_task(
+            title=f"[skill·{s['kind']}] {s['skill']}",
+            project_slug=t.project_slug, body=s["why"],
+            created_by="planner", tags=["skill", "from-review", s["kind"]],
+        )
+        created.append(ch.slug)
+    return JSONResponse({"slug": slug, "suggestions": sugg, "created": created})
 
 
 @router.get("/stats")
 async def get_stats(
     request: Request,
+    board: str | None = Query(default=None),
     _auth: object = Depends(require_device_or_loopback),
 ) -> JSONResponse:
     """Aggregate board metrics for the Stats tab. Tokens are reported
-    SEPARATELY for hive vs claude — never summed into one number."""
-    cached = getattr(request.app.state, "crew_stats_cache", None)
-    now = time.monotonic()
-    if cached is not None and (now - cached[0]) < _STATS_TTL_S:
-        return JSONResponse(cached[1])
+    SEPARATELY for hive vs claude — never summed into one number.
+
+    P2 v-Next: when ``?board=<board_id>`` is provided, stats are computed
+    only over that board's tasks. When omitted (back-compat), all tasks.
+    """
+    # Only use the stats cache when NOT scoping to a specific board, to avoid
+    # serving wrong-board data from a cached unscoped result.
+    if board is None:
+        cached = getattr(request.app.state, "crew_stats_cache", None)
+        now = time.monotonic()
+        if cached is not None and (now - cached[0]) < _STATS_TTL_S:
+            return JSONResponse(cached[1])
     store = _store(request)
-    tasks = store.list_tasks()
+    tasks = store.list_tasks(board_id=board)
     by_status: dict[str, int] = {}
     by_assignee: dict[str, int] = {}
     hive_tokens = 0
@@ -396,8 +679,13 @@ async def get_stats(
         "top_projects": [
             {"slug": k, **v} for k, v in top
         ],
+        # P7: bench/loop/goal surfacing.
+        "bench_scores": _bench_model_scores(),
+        "loop_decisions": _loop_decisions(),
+        "goal_cycles": _goal_cycle_stats(store),
     }
-    request.app.state.crew_stats_cache = (now, payload)
+    if board is None:
+        request.app.state.crew_stats_cache = (time.monotonic(), payload)
     return JSONResponse(payload)
 
 
@@ -528,6 +816,104 @@ async def get_lessons(
     return JSONResponse(out[:limit])
 
 
+def _bench_model_scores() -> list[dict]:
+    """Load per-role model scores from state/bench_results.json.
+    Returns [{role, model, quality, latency_ms, cost_per_1k, composite}, ...]."""
+    try:
+        from gateway.orchestrator.bench_results import load_results, BenchScore
+        results = load_results(_BENCH_RESULTS_PATH)
+        out: list[dict] = []
+        # Inline composite calc (mirrors Router weights but avoids importing
+        # the full catalog — stats is read-only, doesn't need routing logic).
+        Q_W, L_W, C_W = 0.5, 0.3, 0.2
+        L_ANCHOR, C_ANCHOR = 500.0, 0.001
+        for role, per_role in results.scores.items():
+            for model_id, s in per_role.items():
+                lat_norm = min(L_ANCHOR / max(s.latency_p50_ms, 1.0), 1.0)
+                cost_norm = 1.0 if s.cost_per_1k_tokens <= 0 else min(C_ANCHOR / s.cost_per_1k_tokens, 1.0)
+                composite = Q_W * s.quality_score + L_W * lat_norm + C_W * cost_norm
+                out.append({
+                    "role": role,
+                    "model": model_id,
+                    "quality": round(s.quality_score, 3),
+                    "latency_ms": round(s.latency_p50_ms, 1),
+                    "cost_per_1k": round(s.cost_per_1k_tokens, 5),
+                    "composite": round(composite, 3),
+                })
+        return out
+    except Exception:
+        return []
+
+
+def _loop_decisions() -> list[dict]:
+    """Load loop_decisions.json (Thread B adopt/reject per role/model).
+    Returns [{role, model, adopt, delta, single_q, loop_q}, ...]."""
+    try:
+        if not _LOOP_DECISIONS_PATH.is_file():
+            return []
+        raw = json.loads(_LOOP_DECISIONS_PATH.read_text(encoding="utf-8"))
+        out: list[dict] = []
+        for role, models in raw.items():
+            if not isinstance(models, dict):
+                continue
+            for model_id, d in models.items():
+                if not isinstance(d, dict):
+                    continue
+                out.append({
+                    "role": role,
+                    "model": model_id,
+                    "adopt": bool(d.get("adopt")),
+                    "delta": round(float(d.get("delta", 0)), 3),
+                    "single_q": round(float(d.get("single_mean", 0)), 3),
+                    "loop_q": round(float(d.get("loop_mean", 0)), 3),
+                })
+        return out
+    except Exception:
+        return []
+
+
+def _goal_cycle_stats(store: CrewBoardStore) -> dict:
+    """Summarize goal-loop state from crew_meta goal:* records.
+    Returns {active, complete, needs_you, total, max_cycle, goals: [...]}."""
+    try:
+        from gateway.crew_board.goal_loop import GoalRecord
+        rows = store.list_meta_like("goal:%")
+        active = complete = needs_you = 0
+        max_cycle = 0
+        goals: list[dict] = []
+        for _key, value in rows:
+            try:
+                gr = GoalRecord.from_json(value)
+            except Exception:
+                continue
+            if gr.status == "active":
+                active += 1
+            elif gr.status == "complete":
+                complete += 1
+            elif gr.status == "needs_you":
+                needs_you += 1
+            max_cycle = max(max_cycle, gr.cycle)
+            goals.append({
+                "goal_id": gr.goal_id,
+                "text": gr.text[:80],
+                "project": gr.project_slug,
+                "status": gr.status,
+                "cycle": gr.cycle,
+                "checklist_met": sum(1 for c in gr.checklist if c.get("met")),
+                "checklist_total": len(gr.checklist),
+            })
+        return {
+            "active": active,
+            "complete": complete,
+            "needs_you": needs_you,
+            "total": len(goals),
+            "max_cycle": max_cycle,
+            "goals": goals[:20],  # cap for payload size
+        }
+    except Exception:
+        return {"active": 0, "complete": 0, "needs_you": 0, "total": 0, "goals": []}
+
+
 def _parse_fail_rate(request: Request) -> dict:
     """Parse-fail rate from the DB counters the hive loop accumulates
     (store.record_turn / bump_parse_fail) — a single SUM, replacing the
@@ -545,6 +931,17 @@ _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
         "project_name": {"type": "string"},
+        # P6: goal-level acceptance checklist. Each item is a concrete,
+        # measurable statement of what "done" means for the WHOLE GOAL —
+        # distinct from per-ticket acceptance_criteria. The verify runner
+        # checks these items against the codebase after all subtasks finish.
+        # Example: "file src/auth.py exists and exports AuthService",
+        #          "GET /api/v1/auth returns 200 for valid credentials".
+        "checklist": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "2-5 goal-level items: the goal is met when ALL of these are true.",
+        },
         "tickets": {
             "type": "array",
             "items": {
@@ -597,6 +994,16 @@ Rules for each ticket
 
 6. ORDER  — scaffolding and data models first, then business logic, then
    API/routes, then UI, then integration/E2E last.
+
+7. CHECKLIST (required, 2-5 items)  — a top-level "checklist" array that
+   expresses what "done" means for the WHOLE GOAL (not per-ticket). Each
+   item is a single, concrete, machine-testable statement:
+     • "file src/auth.py exists and exports class AuthService"
+     • "GET /api/v1/auth returns 200 for valid credentials"
+     • "pytest gateway/tests/test_auth.py passes with exit 0"
+   These are checked by a verify runner AFTER all tickets finish. If they
+   are not all met, new subtasks are auto-created (up to 3 cycles). Write
+   2-5 items that collectively prove the goal is shipped.
 
 Respond with JSON only — no prose, no markdown fences."""
 
@@ -723,6 +1130,134 @@ def _scaffold_stack_skeleton(gf: dict | None, path: "Path", slug: str) -> None:
     # gradle / godot / None: no reliable headless scaffold — the hive handles it.
 
 
+def _infer_test_cmd(project_path: str) -> str:
+    """Best-effort test command from a project's marker files, for an existing
+    project that has no stored test_cmd. Mirrors `_stack_hint`'s detection."""
+    from pathlib import Path as _P
+    p = _P(project_path)
+    if (p / "pubspec.yaml").is_file():
+        return "flutter test"
+    if (p / "Cargo.toml").is_file():
+        return "cargo test"
+    if (p / "go.mod").is_file():
+        return "go test ./..."
+    if (p / "pyproject.toml").is_file() or (p / "setup.py").is_file():
+        return "pytest"
+    if (p / "package.json").is_file():
+        return "npm test"
+    return ""  # unknown — verifier falls back to its file-glob / smoke gates
+
+
+_AUTO_MATCH_SYSTEM = (
+    "You route a one-line software goal to the project it belongs to. You are "
+    "given a catalog of existing projects — each with a slug, a name, and a few "
+    "recent task titles that reveal what the project actually IS (judge by the "
+    "TASK TITLES, not the name: a slug like 'example-app' whose tasks mention "
+    "castling/check is a chess app). Pick the existing project the goal "
+    "CONTINUES (same app, codebase, or domain), or 'NEW' only if the goal "
+    "genuinely fits none of them. Respond with JSON only."
+)
+
+
+def _auto_project_catalog(store, projects) -> str:
+    """Render the project catalog with recent task titles for topic signal.
+
+    A bare 'slug: name' line is too weak for the classifier (e.g. 'example-app'
+    does not read as chess). Recent task titles tell the model what each project
+    is about, so the goal can be routed to the right existing project."""
+    titles_by_proj: dict[str, list[str]] = {}
+    try:
+        for t in store.list_tasks():
+            if t.title:
+                titles_by_proj.setdefault(t.project_slug, []).append(t.title)
+    except Exception:  # noqa: BLE001
+        titles_by_proj = {}
+    lines = []
+    for p in projects:
+        recent = titles_by_proj.get(p.slug, [])[:6]
+        topic = (" — recent tasks: " + "; ".join(recent)) if recent else ""
+        lines.append(f"- {p.slug} ({p.name}){topic}")
+    return "\n".join(lines)
+
+
+async def _auto_resolve_project(store, goal: str) -> str:
+    """AUTO mode: classify *goal* against the enabled projects.
+
+    Returns an existing project's slug when the goal continues it, or "" to
+    signal a brand-new (greenfield) project. Returns "" on any parse/transport
+    failure — a stray new project is recoverable; a wrong match is not.
+    """
+    import logging
+    from gateway.helpers.base import OllamaInvoker, extract_json
+    log = logging.getLogger("gateway.board")
+
+    projects = store.list_projects(enabled_only=True)
+    if not projects:
+        return ""   # nothing to match → greenfield
+    slugs = [p.slug for p in projects]
+    catalog = _auto_project_catalog(store, projects)
+    schema = {
+        "type": "object",
+        "properties": {
+            "match": {"type": "string", "enum": [*slugs, "NEW"]},
+            "reason": {"type": "string"},
+        },
+        "required": ["match"],
+    }
+    try:
+        text, _, _ = await OllamaInvoker().chat(
+            model="hive-qwen", system=_AUTO_MATCH_SYSTEM,
+            user=(f"Existing projects:\n{catalog}\n\nGoal: {goal}\n\n"
+                  'Reply JSON: {"match": "<slug>"|"NEW", "reason": "..."}'),
+            params={"temperature": 0.1, "num_ctx": 8192, "num_predict": 256},
+            fmt=schema,
+        )
+        d = extract_json(text)
+        match = str((d or {}).get("match", "NEW")).strip()
+        if match in set(slugs):
+            log.info("decompose auto: goal routed to existing project %r", match)
+            return match
+        log.info("decompose auto: goal classified as a NEW project")
+        return ""
+    except Exception as e:  # noqa: BLE001
+        log.warning("decompose auto: classify failed (%s) → new project", e)
+        return ""
+
+
+def _capture_preflight_baseline(store, project_slug: str) -> None:
+    """Run the project's suite ONCE at chain start and record the set of
+    already-failing tests in crew_meta (`preflight:failing:<slug>`). The
+    verifier's baseline-diff then passes a ticket as long as it adds NO NEW
+    failures — so a pre-existing broken or flaky test cannot freeze a whole
+    chain whose own work is correct. Best-effort; never raises."""
+    import json as _json
+    import logging as _logging
+    _log = _logging.getLogger("gateway.board")
+    key = f"preflight:failing:{project_slug}"
+    try:
+        from gateway.crew_board.verifier import _run_tests
+        proj = store.get_project(project_slug)
+        if proj is None or not getattr(proj, "test_cmd", None):
+            store.set_meta(key, "[]")
+            return
+        res = _run_tests(proj)
+        if not res.get("ran"):
+            store.set_meta(key, "[]")  # couldn't run → no baseline; verifier stays strict
+            return
+        failing = res.get("failed_ids") or []
+        store.set_meta(key, _json.dumps(failing))
+        store.set_meta(f"preflight:ok:{project_slug}",
+                       "1" if res.get("exit_code") == 0 else "0")
+        _log.info("preflight baseline for %s: %d pre-existing failing test(s)",
+                  project_slug, len(failing))
+    except Exception as e:  # noqa: BLE001
+        _log.warning("preflight baseline capture failed for %s: %s", project_slug, e)
+        try:
+            store.set_meta(key, "[]")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @router.post("/decompose")
 async def decompose_goal(
     request: Request,
@@ -731,7 +1266,11 @@ async def decompose_goal(
 ) -> JSONResponse:
     """NL goal → an LLM-generated, dependency-chained ticket plan, created
     on the board ready for the hive. Scaffolds a new project (local dir +
-    git + enabled + push_allowed) when no project_slug is given."""
+    git + enabled + push_allowed) when no project_slug is given.
+
+    project_slug accepts: an existing slug (target it), "" (always create a
+    new project), or "auto" (classify the goal → an existing project when it
+    clearly continues one, else create a new project)."""
     import json as _json
     import re as _re
     import subprocess
@@ -744,6 +1283,12 @@ async def decompose_goal(
     if not goal:
         raise HTTPException(400, "goal required")
     project_slug = str(payload.get("project_slug", "")).strip()
+
+    # AUTO mode: classify the goal → an existing project slug (continue it) or
+    # "" (greenfield). Done BEFORE the existing/greenfield branch below so the
+    # stack detection + scaffolding pick the right path.
+    if project_slug.lower() == "auto":
+        project_slug = await _auto_resolve_project(store, goal)
 
     # When targeting an EXISTING project, detect its real stack and force the
     # planner to spec tickets for THAT stack. Without this the planner's Python/
@@ -769,11 +1314,11 @@ async def decompose_goal(
     else:
         stack_directive = gf["directive"]
 
-    # Generate the plan (planner-qwen — fast, doesn't compete with the hive
+    # Generate the plan (hive-qwen — fast, doesn't compete with the hive
     # coder lane on qwen3.6:27b).
     async def _plan(extra: str = "") -> dict:
         text, _, _ = await OllamaInvoker().chat(
-            model="planner-qwen", system=_PLAN_SYSTEM,
+            model="hive-qwen", system=_PLAN_SYSTEM,
             user=f"{stack_directive}{extra}Goal: {goal}",
             params={"temperature": 0.3, "num_ctx": 8192, "num_predict": 4096},
             fmt=_PLAN_SCHEMA,
@@ -810,14 +1355,21 @@ async def decompose_goal(
     scaffolded = False
     # test_cmd comes from the SAME gf detector as the directive + guard (greenfield)
     # so the project's test runner matches the stack every ticket was specced for.
-    if existing_proj is not None and getattr(existing_proj, "test_cmd", ""):
-        test_cmd = existing_proj.test_cmd
+    if existing_proj is not None:
+        # Existing project: use its stored test_cmd; if it has none (test_cmd is
+        # None), infer one from its marker files — NEVER index gf here (gf is None
+        # for existing projects, so `gf["test_cmd"]` was a raw-500 TypeError that
+        # surfaced in the UI as "Unexpected token 'I', Internal S... not valid JSON").
+        test_cmd = getattr(existing_proj, "test_cmd", None) or _infer_test_cmd(existing_proj.path)
     else:
         test_cmd = gf["test_cmd"]
     if not project_slug:
         name = str(plan.get("project_name") or "new-project")
         slug = _re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or "new-project"
-        path = _PROJECTS_ROOT / _re.sub(r"[^A-Za-z0-9]+", "", name) or (_PROJECTS_ROOT / "NewProject")
+        # Dir name == slug (kebab), forward-slashed, so the project scanner
+        # re-derives the SAME slug from the directory and never mints a
+        # squashed-name duplicate (the old 'androidtetrisgame' twin bug).
+        path = Path("C:/Projects") / slug
         try:
             path.mkdir(parents=True, exist_ok=True)
             if not (path / ".git").exists():
@@ -828,6 +1380,20 @@ async def decompose_goal(
             # `test_cmd` can execute (e.g. `flutter test` needs a pubspec — without
             # this the first verify fails for a missing project, not a real bug).
             _scaffold_stack_skeleton(gf, path, slug)
+            # Fail LOUD if the scaffold did not actually produce a runnable tree
+            # (e.g. flutter/cargo/go not on PATH) — otherwise the project
+            # registers empty and EVERY ticket wedges on "project path missing"/no
+            # tests (the android-tetris-game case). gradle/godot/None scaffold from
+            # inside the hive, so they're exempt (no marker required).
+            _sk = (gf or {}).get("scaffold_kind")
+            _marker = {"flutter": "pubspec.yaml", "node": "package.json",
+                       "rust": "Cargo.toml", "go": "go.mod",
+                       "python": "tests"}.get(_sk or "")
+            if _marker and not (path / _marker).exists():
+                raise HTTPException(500, (
+                    f"greenfield scaffold ({_sk}) did not produce '{_marker}' in "
+                    f"{path} — is the toolchain installed and on PATH? Refusing to "
+                    f"create a non-runnable project that would wedge every ticket."))
             if not (path / ".git" / "refs" / "heads").exists() or True:
                 subprocess.run(["git", "add", "-A"], cwd=str(path), timeout=30)
                 subprocess.run(["git", "commit", "-q", "-m", "init"],
@@ -843,54 +1409,95 @@ async def decompose_goal(
     elif store.get_project(project_slug) is None:
         raise HTTPException(404, f"unknown project {project_slug!r}")
 
-    # Create the chained tickets.
-    # First pass: create all tasks (no depends_on yet — we need the slug
-    # list to translate 0-based LLM indexes into real task slugs).
-    slugs, titles, raw_tickets = [], [], []
-    for t in plan["tickets"][:12]:
-        title = str(t.get("title", "")).strip()[:120]
-        if not title:
-            continue
-        crit = [{"text": str(c), "checked": False}
-                for c in (t.get("criteria") or [])][:6]
-        task = store.create_task(
-            title=title, project_slug=project_slug,
-            body=str(t.get("body", "")), created_by="owner",
-            acceptance_criteria=crit,
-            files_of_interest=[str(f) for f in (t.get("files") or [])][:8],
-            tags=["nl-decompose"], review_by="claude-code",
-        )
-        slugs.append(task.slug)
-        titles.append(title)
-        raw_tickets.append(t)
-    # Second pass: wire depends_on.  Use the LLM-supplied 0-based index
-    # list when EXPLICITLY present and valid; fall back to the sequential
-    # chain (each ticket depends on the previous) when the key is absent
-    # or contains out-of-range values.  An empty list [] is only accepted
-    # as-is for ticket 0 (no prior ticket); for ticket i>0 an explicit
-    # empty list also wins (the planner decided no dependency is needed).
-    for i, (sl, t) in enumerate(zip(slugs, raw_tickets)):
-        key_present = "depends_on" in t
-        llm_deps = t.get("depends_on")
-        if (
-            key_present
-            and isinstance(llm_deps, list)
-            and all(isinstance(d, int) and 0 <= d < len(slugs) for d in llm_deps)
-        ):
-            deps = [slugs[d] for d in llm_deps]
-        else:
-            # Fallback: linear chain
-            deps = [slugs[i - 1]] if i > 0 else []
-        store._conn.execute("UPDATE crew_tasks SET depends_on=? WHERE slug=?",
-                            (_json.dumps(deps), sl))
-    store._conn.commit()
-    for sl in slugs:
-        store.assign_task(sl, "hive", actor="owner")
-        store.move_task(sl, _schema.STATUS_READY, actor="owner",
-                        detail="NL-decomposed plan")
+    # Pre-flight: capture the project's ALREADY-failing tests as a baseline so the
+    # verifier's baseline-diff lets each ticket pass as long as it adds NO NEW
+    # failures (a pre-existing broken/flaky test must not freeze the chain). Run
+    # off-thread so the full suite doesn't block the event loop.
+    import asyncio as _asyncio
+    await _asyncio.to_thread(_capture_preflight_baseline, store, project_slug)
+
+    # P6: Create the goal record from the planner's top-level checklist.
+    # The goal_id groups all subtasks so the completion trigger can detect
+    # when they are all done and auto-spawn the verify ticket.
+    from gateway.crew_board.goal_loop import create_goal, goal_tag as _goal_tag
+    checklist_items = [
+        str(item) for item in (plan.get("checklist") or [])
+        if str(item).strip()
+    ][:8]
+    if not checklist_items:
+        # Planner didn't emit a checklist (older model / fallback) — derive
+        # one from the goal text so the loop still functions.
+        checklist_items = [f"Goal achieved: {goal[:120]}"]
+    p6_goal = create_goal(
+        store,
+        text=goal,
+        project_slug=project_slug,
+        checklist_items=checklist_items,
+        cycle=0,
+    )
+    goal_id_for_tasks = p6_goal.goal_id
+
+    # Create the chained tickets. The whole tail (DB writes + FSM moves) is
+    # wrapped so ANY failure returns a JSON error envelope — never a raw 500
+    # "Internal Server Error", which the dashboard would try to JSON.parse and
+    # surface as a confusing "Unexpected token 'I'" message.
+    try:
+        # First pass: create all tasks (no depends_on yet — we need the slug
+        # list to translate 0-based LLM indexes into real task slugs).
+        slugs, titles, raw_tickets = [], [], []
+        for t in plan["tickets"][:12]:
+            title = str(t.get("title", "")).strip()[:120]
+            if not title:
+                continue
+            crit = [{"text": str(c), "checked": False}
+                    for c in (t.get("criteria") or [])][:6]
+            # P6: stamp every subtask with the goal_id (column + tag).
+            task = store.create_task(
+                title=title, project_slug=project_slug,
+                body=str(t.get("body", "")), created_by="owner",
+                acceptance_criteria=crit,
+                files_of_interest=[str(f) for f in (t.get("files") or [])][:8],
+                tags=["nl-decompose", _goal_tag(goal_id_for_tasks)],
+                review_by="claude-code",
+                goal_id=goal_id_for_tasks,
+            )
+            slugs.append(task.slug)
+            titles.append(title)
+            raw_tickets.append(t)
+        # Second pass: wire depends_on.  Use the LLM-supplied 0-based index
+        # list when EXPLICITLY present and valid; fall back to the sequential
+        # chain (each ticket depends on the previous) when the key is absent
+        # or contains out-of-range values.  An empty list [] is only accepted
+        # as-is for ticket 0 (no prior ticket); for ticket i>0 an explicit
+        # empty list also wins (the planner decided no dependency is needed).
+        for i, (sl, t) in enumerate(zip(slugs, raw_tickets)):
+            key_present = "depends_on" in t
+            llm_deps = t.get("depends_on")
+            if (
+                key_present
+                and isinstance(llm_deps, list)
+                and all(isinstance(d, int) and 0 <= d < len(slugs) for d in llm_deps)
+            ):
+                deps = [slugs[d] for d in llm_deps]
+            else:
+                # Fallback: linear chain
+                deps = [slugs[i - 1]] if i > 0 else []
+            store._conn.execute("UPDATE crew_tasks SET depends_on=? WHERE slug=?",
+                                (_json.dumps(deps), sl))
+        store._conn.commit()
+        for sl in slugs:
+            store.assign_task(sl, "hive", actor="owner")
+            store.move_task(sl, _schema.STATUS_READY, actor="owner",
+                            detail="NL-decomposed plan")
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"board create failed after planning: {e}")
     return JSONResponse({
         "project_slug": project_slug, "scaffolded": scaffolded,
         "created": len(slugs), "titles": titles,
+        "goal_id": goal_id_for_tasks,
+        "checklist": checklist_items,
     })
 
 
@@ -905,11 +1512,10 @@ async def create_task(
     project_slug = str(payload.get("project_slug", "")).strip()
     if not title or not project_slug:
         raise HTTPException(400, "title and project_slug required")
-    # SECURITY (audit M1): reject slugs that don't match a safe identifier
-    # pattern — an invalid slug containing HTML/script payloads would be
-    # stored and later rendered into the board DOM.
-    if not _SLUG_RE.match(project_slug):
-        raise HTTPException(400, "project_slug must match ^[a-z0-9][a-z0-9._-]{0,63}$")
+    if not _SLUG_RE.fullmatch(project_slug):
+        raise HTTPException(
+            400, "invalid project_slug (lowercase letters, digits, '.', '_', '-' only)"
+        )
     try:
         t = store.create_task(
             title=title,
@@ -922,6 +1528,7 @@ async def create_task(
             files_of_interest=payload.get("files_of_interest") or [],
             depends_on=payload.get("depends_on") or [],
             tags=payload.get("tags") or [],
+            board_id=str(payload.get("board_id", "default")),
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -962,6 +1569,30 @@ async def assign_task(
     try:
         t = store.assign_task(
             slug, str(payload.get("assignee", "none")),
+            actor=str(payload.get("actor", "owner")),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse(_task_to_dict(t))
+
+
+@router.post("/tasks/{slug}/depends")
+async def set_task_depends(
+    request: Request,
+    slug: str,
+    payload: dict = Body(...),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """#172: manually set a task's blockers. Body: {"depends_on": ["T-1234", ...]}.
+    The dispatcher won't claim this task until every listed task is done.
+    Rejects self-reference, unknown slugs, and direct cycles."""
+    store = _store(request)
+    deps = payload.get("depends_on", [])
+    if not isinstance(deps, list):
+        raise HTTPException(400, "depends_on must be a list of task slugs")
+    try:
+        t = store.set_depends_on(
+            slug, [str(d) for d in deps],
             actor=str(payload.get("actor", "owner")),
         )
     except ValueError as e:
@@ -1162,11 +1793,11 @@ async def create_project(
     name = str(payload.get("name", "")).strip()
     if not name:
         raise HTTPException(400, "name required")
-    # Path is either explicit or derived from the configured projects root.
+    # Path is either explicit or derived from C:/Projects/<name>.
     # SECURITY: the resolved path MUST stay under an allowed project
     # root — otherwise a client could mkdir + git init (and later run an
     # autonomous agent) anywhere the gateway process can write.
-    allowed_root = _PROJECTS_ROOT.resolve()
+    allowed_root = Path("C:/Projects").resolve()
     raw_path = payload.get("path")
     if raw_path:
         path = Path(str(raw_path))
@@ -1220,6 +1851,127 @@ async def set_push(
         slug, allowed=bool(payload.get("allowed", False)),
     )
     return JSONResponse(_project_to_dict(store.get_project(slug)))  # type: ignore[arg-type]
+
+
+@router.post("/projects/{slug}/delete")
+async def delete_project_route(
+    request: Request,
+    slug: str,
+    payload: dict = Body(default={}),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """Remove a project from the board. SAFETY: refuses if the project still
+    owns tasks unless force=true — prevents orphaning live work. Used to prune
+    duplicate / dead project rows (e.g. the squashed-name scanner twins)."""
+    store = _store(request)
+    if store.get_project(slug) is None:
+        raise HTTPException(404, f"unknown project {slug!r}")
+    n_tasks = sum(1 for t in store.list_tasks() if t.project_slug == slug)
+    if n_tasks > 0 and not bool(payload.get("force")):
+        raise HTTPException(
+            409, f"project {slug!r} has {n_tasks} task(s); pass force=true to delete anyway")
+    deleted = store.delete_project(slug)
+    notifier = getattr(request.app.state, "crew_notifier", None)
+    if notifier is not None:
+        notifier.broadcast({"event": "project_deleted", "project": slug})
+    return JSONResponse({"deleted": deleted, "slug": slug, "had_tasks": n_tasks})
+
+
+# ─── Evolve lane: one-click continuous development (EV2) ──────────────────────
+#
+# Suggest = analyze the done project → ranked "what's next" candidates (persisted
+# so Go builds the SAME top idea the owner saw). Go = take the top candidate and
+# feed it through the existing decompose pipeline (planner → goal → chained
+# tickets the hive builds). One goal per click; never pushes (decompose leaves an
+# existing project's push_allowed untouched).
+
+_EVOLVE_META = "evolve:{slug}"
+
+
+def _evolve_active_task_count(store, slug: str) -> int:
+    """How many non-terminal tasks the project still has (a project is 'done'
+    when this is 0)."""
+    from gateway.crew_board import schema as _schema
+    live = {_schema.STATUS_PROPOSED, _schema.STATUS_BACKLOG, _schema.STATUS_READY,
+            _schema.STATUS_IN_PROGRESS, _schema.STATUS_QA, _schema.STATUS_REVIEW}
+    return sum(1 for t in store.list_tasks()
+               if t.project_slug == slug and t.status in live)
+
+
+@router.post("/projects/{slug}/evolve/suggest")
+async def evolve_suggest(
+    request: Request,
+    slug: str,
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """Analyze a project → ranked next-work candidates. Persists them so a later
+    Go builds the same top idea."""
+    import json as _json
+    from gateway.crew_board.evolve import analyze_next
+    store = _store(request)
+    if store.get_project(slug) is None:
+        raise HTTPException(404, f"unknown project {slug!r}")
+    cands = await analyze_next(store, slug)
+    data = [c.to_dict() for c in cands]
+    try:
+        store.set_meta(_EVOLVE_META.format(slug=slug), _json.dumps({"candidates": data}))
+    except Exception as e:  # noqa: BLE001
+        log.warning("evolve suggest: persist failed for %s: %s", slug, e)
+    return JSONResponse({"slug": slug, "candidates": data})
+
+
+@router.post("/projects/{slug}/evolve/go")
+async def evolve_go(
+    request: Request,
+    slug: str,
+    payload: dict = Body(default={}),
+    _auth: None = Depends(_require_board_auth),
+) -> JSONResponse:
+    """Build the top 'what's next' candidate: decompose it into a goal + chained
+    tickets the hive picks up. Uses the cached Suggest result when present, else
+    analyzes fresh. ONE goal per click; never pushes."""
+    import json as _json
+    import logging as _logging
+    from gateway.crew_board.evolve import analyze_next
+    log2 = _logging.getLogger("gateway.board")
+    store = _store(request)
+    if store.get_project(slug) is None:
+        raise HTTPException(404, f"unknown project {slug!r}")
+
+    # Guardrail: only "evolve" a done project unless explicitly forced.
+    active = _evolve_active_task_count(store, slug)
+    if active > 0 and not bool(payload.get("force")):
+        raise HTTPException(
+            409, f"project {slug!r} still has {active} active task(s); finish or pass force=true")
+
+    # Prefer the candidate the owner saw in Suggest; else analyze fresh.
+    top: dict | None = None
+    raw = store.get_meta(_EVOLVE_META.format(slug=slug))
+    if raw:
+        try:
+            cands = (_json.loads(raw) or {}).get("candidates") or []
+            if cands:
+                top = cands[0]
+        except (ValueError, TypeError):
+            top = None
+    if top is None:
+        fresh = await analyze_next(store, slug)
+        if fresh:
+            top = fresh[0].to_dict()
+    if top is None:
+        raise HTTPException(422, f"no next-work candidate found for {slug!r}")
+
+    goal_text = f"{top.get('title', '').strip()}\n\n{top.get('body', '').strip()}".strip()
+    # Reuse the proven decompose pipeline in-process: planner → goal record →
+    # dependency-chained tickets, on the EXISTING project (no scaffold, no push).
+    resp = await decompose_goal(request, {"goal": goal_text, "project_slug": slug}, None)
+    try:
+        out = _json.loads(bytes(resp.body).decode("utf-8"))
+    except Exception:  # noqa: BLE001
+        out = {}
+    out["evolved_from"] = top.get("title", "")
+    log2.info("evolve go: %s → goal %r (%d tickets)", slug, top.get("title"), out.get("created", 0))
+    return JSONResponse(out, status_code=resp.status_code)
 
 
 @router.delete("/tasks/{slug}")
@@ -1300,15 +2052,18 @@ async def board_page(request: Request) -> HTMLResponse:
     and X-Board-Token meta are identical in both modes — the iframe mutates with
     its own token, so the dashboard needs no auth wiring.
     """
-    # SECURITY (audit C2): embed the real mutation token ONLY for loopback
-    # callers (the local dashboard). Tailnet/remote callers get an empty token
-    # so the board HTML they receive cannot perform mutations. They must use
-    # a device Bearer token on the mutation endpoints instead.
+    embed = request.query_params.get("embed") in ("1", "true", "yes")
+    body_class = "embed" if embed else ""
+    # SECURITY (audit C2): only embed the mutation token for LOOPBACK callers.
+    # The gateway binds the Tailscale IP, so serving _BOARD_TOKEN in the HTML to
+    # everyone let any tailnet device scrape it and perform board mutations,
+    # defeating the loopback gate on /board/session-token. Loopback (the wallpaper
+    # dashboard) still gets the token; tailnet/LAN get an empty token and the page
+    # JS falls back to /board/session-token (also loopback-only) — so remote
+    # clients must present a real device Bearer on each mutation (path (b)).
     from gateway.deps import _is_loopback
     client = request.client
     token = _BOARD_TOKEN if (client is not None and _is_loopback(client.host)) else ""
-    embed = request.query_params.get("embed") in ("1", "true", "yes")
-    body_class = "embed" if embed else ""
     html = (
         _BOARD_HTML
         .replace("{{BOARD_TOKEN}}", token)
@@ -1322,6 +2077,42 @@ _BOARD_HTML = """<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta name="board-token" content="{{BOARD_TOKEN}}"/>
+<script>
+/* Theme sync — same-origin iframe shares localStorage with the dashboard.
+   Runs synchronously before first paint to avoid flash.
+   Key: 'hive.theme', values: holo/terminal/brutalist/vector-tron/glitch-mag/hive-v2 */
+(function () {
+  var THEMES = ['holo','terminal','brutalist','vector-tron','glitch-mag','hive-v2','joker','nod','synthwave','daybreak','royal','weatherstar','retro-purple','inverted','zombie','code-fall','winter','code-red'];
+  function applyTheme(t) {
+    if (!t || THEMES.indexOf(t) < 0) t = 'hive-v2';
+    document.documentElement.dataset.theme = t;
+  }
+  var cur;
+  try { cur = localStorage.getItem('hive.theme'); } catch(e) { cur = null; }
+  applyTheme(cur || 'hive-v2');
+  /* Live recolor when the dashboard picker changes theme (storage event from
+     another tab/frame) or the parent posts a message (belt+suspenders for the
+     embedded iframe). */
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'hive.theme') applyTheme(e.newValue);
+  });
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'theme' && e.data.name) applyTheme(e.data.name);
+  });
+  /* Standalone /board (opened directly in a browser, not embedded): there's no
+     parent to feed the theme, so pull the server-held theme and poll it. Same
+     origin as the gateway, so the GET is free. Keeps a directly-opened board in
+     sync with whatever the dashboard last set. */
+  function pullServerTheme() {
+    fetch('/v1/theme', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.theme) applyTheme(j.theme); })
+      .catch(function () {});
+  }
+  pullServerTheme();
+  setInterval(pullServerTheme, 5000);
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23E0A445'%3E%3Cpath d='M7 3h4l2 3.5L11 10H7L5 6.5z'/%3E%3Cpath d='M14 3h4l2 3.5L18 10h-4l-2-3.5z' opacity='.55'/%3E%3Cpath d='M7 13h4l2 3.5L11 20H7l-2-3.5z' opacity='.55'/%3E%3Cpath d='M14 13h4l2 3.5L18 20h-4l-2-3.5z'/%3E%3C/g%3E%3C/svg%3E"/>
 <title>Crew Board</title>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -1330,7 +2121,8 @@ _BOARD_HTML = """<!doctype html>
 <style>
   /* Hive ecosystem theme — warm near-black base, copper/amber accents,
      green=live, cyan=telemetry/claude, red=error. OKLCH per DESIGN.md;
-     never pure #000/#fff. Aligned with the Flutter app + dashboard. */
+     never pure #000/#fff. Aligned with the Flutter app + dashboard.
+     Default = hive-v2 (warm-black/amber). Override via data-theme attr. */
   :root {
     --bg:       oklch(0.14 0.014 55);
     --panel:    oklch(0.17 0.016 58);
@@ -1349,22 +2141,340 @@ _BOARD_HTML = """<!doctype html>
     --on-amber: #1A0E00;                /* chocolate ink on amber fills */
     --font-ui:  'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono:'JetBrains Mono', ui-monospace, monospace;
+    /* Derived surface tokens — used in structural CSS, override in theme blocks. */
+    --scrollbar-thumb: oklch(0.30 0.02 64);
+    --body-grad-top:   oklch(0.17 0.03 60);
+    --body-grad-bot:   oklch(0.10 0.01 55);
+    --dialog-backdrop: oklch(0.10 0.01 55 / 0.60);
+    --pre-bg:          oklch(0.12 0.012 58);
+    /* canvas chart colors (hex for Canvas 2D API) */
+    --chart-grid:      #3a342c;
+    --chart-green:     #5cc870;
+    --chart-cyan:      #60c8c8;
+    --chart-label:     #8a8780;
   }
-  /* Themed scrollbars — match the warm-black/copper theme (and the embedding
-     dashboard) instead of the OS default grey, which clashes when the board is
-     framed on the wallpaper. Firefox via scrollbar-color; WebKit via ::-webkit. */
+
+  /* ── hive-v2 — warm-black command center, amber honeycomb brand (default). */
+  html[data-theme="hive-v2"] {
+    --bg:       oklch(0.14 0.014 55);
+    --panel:    oklch(0.17 0.016 58);
+    --card:     oklch(0.20 0.018 60);
+    --card-hi:  oklch(0.24 0.020 60);
+    --line:     oklch(0.30 0.02  64);
+    --txt:      oklch(0.95 0.012 72);
+    --txt-dim:  oklch(0.74 0.014 72);
+    --faint:    oklch(0.56 0.014 68);
+    --copper:   oklch(0.74 0.13  56);
+    --accent:   oklch(0.83 0.15  78);
+    --amber-glow:oklch(0.85 0.17 80);
+    --green:    oklch(0.80 0.16 150);
+    --cyan:     oklch(0.80 0.10 200);
+    --red:      oklch(0.66 0.17  25);
+    --on-amber: #1A0E00;
+    --scrollbar-thumb: oklch(0.30 0.02 64);
+    --body-grad-top:   oklch(0.17 0.03 60);
+    --body-grad-bot:   oklch(0.10 0.01 55);
+    --dialog-backdrop: oklch(0.10 0.01 55 / 0.60);
+    --pre-bg:          oklch(0.12 0.012 58);
+    --chart-grid:      #3a342c;
+    --chart-green:     #5cc870;
+    --chart-cyan:      #60c8c8;
+    --chart-label:     #8a8780;
+  }
+
+  /* ── holo — iridescent deep violet-black, cyan accent, magenta highlights. */
+  html[data-theme="holo"] {
+    --bg:       oklch(0.10 0.025 290);
+    --panel:    oklch(0.15 0.03  290);
+    --card:     oklch(0.22 0.035 290);
+    --card-hi:  oklch(0.27 0.04  290);
+    --line:     oklch(0.33 0.04  290);
+    --txt:      oklch(0.96 0.008 240);
+    --txt-dim:  oklch(0.72 0.02  240);
+    --faint:    oklch(0.55 0.02  240);
+    --copper:   oklch(0.68 0.27  340);
+    --accent:   oklch(0.82 0.18   70);
+    --amber-glow:oklch(0.86 0.20  72);
+    --green:    oklch(0.88 0.22  130);
+    --cyan:     oklch(0.82 0.16  200);
+    --red:      oklch(0.66 0.17   25);
+    --on-amber: #130800;
+    --scrollbar-thumb: oklch(0.28 0.04 290);
+    --body-grad-top:   oklch(0.16 0.04 290);
+    --body-grad-bot:   oklch(0.08 0.02 290);
+    --dialog-backdrop: oklch(0.06 0.02 290 / 0.60);
+    --pre-bg:          oklch(0.17 0.03 290);
+    --chart-grid:      #302845;
+    --chart-green:     #9adc40;
+    --chart-cyan:      #60ccc8;
+    --chart-label:     #8a87aa;
+  }
+
+  /* ── terminal — green-on-black CRT phosphor. Lime text, near-black ground. */
+  html[data-theme="terminal"] {
+    --bg:       oklch(0.08 0.04  150);
+    --panel:    oklch(0.12 0.05  145);
+    --card:     oklch(0.14 0.05  145);
+    --card-hi:  oklch(0.18 0.06  142);
+    --line:     oklch(0.25 0.07  140);
+    --txt:      oklch(0.92 0.18  130);
+    --txt-dim:  oklch(0.78 0.16  130);
+    --faint:    oklch(0.55 0.12  130);
+    --copper:   oklch(0.78 0.20   95);
+    --accent:   oklch(0.88 0.22  130);
+    --amber-glow:oklch(0.90 0.22 132);
+    --green:    oklch(0.88 0.22  130);
+    --cyan:     oklch(0.80 0.18  160);
+    --red:      oklch(0.65 0.18   25);
+    --on-amber: #030d06;
+    --scrollbar-thumb: oklch(0.22 0.06 140);
+    --body-grad-top:   oklch(0.13 0.05 148);
+    --body-grad-bot:   oklch(0.06 0.03 150);
+    --dialog-backdrop: oklch(0.04 0.03 150 / 0.65);
+    --pre-bg:          oklch(0.10 0.04 148);
+    --chart-grid:      #153020;
+    --chart-green:     #9aee60;
+    --chart-cyan:      #50c878;
+    --chart-label:     #4a9030;
+  }
+
+  /* ── brutalist — stark near-monochrome, no glow. */
+  html[data-theme="brutalist"] {
+    --bg:       oklch(0.06 0 0);
+    --panel:    oklch(0.12 0 0);
+    --card:     oklch(0.14 0 0);
+    --card-hi:  oklch(0.20 0 0);
+    --line:     oklch(0.28 0 0);
+    --txt:      oklch(0.98 0 0);
+    --txt-dim:  oklch(0.75 0 0);
+    --faint:    oklch(0.55 0 0);
+    --copper:   oklch(0.92 0.005 240);
+    --accent:   oklch(0.98 0 0);
+    --amber-glow:oklch(1 0 0);
+    --green:    oklch(0.85 0.005 240);
+    --cyan:     oklch(0.92 0.005 240);
+    --red:      oklch(0.70 0 0);
+    --on-amber: #0f0f0f;
+    --scrollbar-thumb: oklch(0.28 0 0);
+    --body-grad-top:   oklch(0.10 0 0);
+    --body-grad-bot:   oklch(0.04 0 0);
+    --dialog-backdrop: oklch(0.04 0 0 / 0.70);
+    --pre-bg:          oklch(0.10 0 0);
+    --chart-grid:      #404040;
+    --chart-green:     #d0d0d8;
+    --chart-cyan:      #e8e8f0;
+    --chart-label:     #808080;
+  }
+
+  /* ── vector-tron — neon electric blue/violet on near-black. */
+  html[data-theme="vector-tron"] {
+    --bg:       oklch(0.06 0.05  280);
+    --panel:    oklch(0.12 0.06  278);
+    --card:     oklch(0.14 0.06  278);
+    --card-hi:  oklch(0.19 0.07  276);
+    --line:     oklch(0.26 0.08  270);
+    --txt:      oklch(0.95 0.04  250);
+    --txt-dim:  oklch(0.70 0.10  250);
+    --faint:    oklch(0.50 0.08  250);
+    --copper:   oklch(0.65 0.30  320);
+    --accent:   oklch(0.85 0.20  220);
+    --amber-glow:oklch(0.88 0.22 222);
+    --green:    oklch(0.78 0.18  160);
+    --cyan:     oklch(0.85 0.20  220);
+    --red:      oklch(0.66 0.17   25);
+    --on-amber: #050612;
+    --scrollbar-thumb: oklch(0.22 0.07 278);
+    --body-grad-top:   oklch(0.12 0.07 278);
+    --body-grad-bot:   oklch(0.04 0.04 280);
+    --dialog-backdrop: oklch(0.04 0.04 280 / 0.65);
+    --pre-bg:          oklch(0.10 0.055 278);
+    --chart-grid:      #1e2450;
+    --chart-green:     #30d8a0;
+    --chart-cyan:      #3090f8;
+    --chart-label:     #5060a0;
+  }
+
+  /* ── glitch-mag — editorial warm ink, cyan/magenta glitch accents. */
+  html[data-theme="glitch-mag"] {
+    --bg:       oklch(0.08 0.015  60);
+    --panel:    oklch(0.13 0.018  60);
+    --card:     oklch(0.15 0.018  60);
+    --card-hi:  oklch(0.20 0.020  60);
+    --line:     oklch(0.27 0.02   60);
+    --txt:      oklch(0.97 0.005  60);
+    --txt-dim:  oklch(0.65 0.02  240);
+    --faint:    oklch(0.45 0.02  240);
+    --copper:   oklch(0.68 0.27  340);
+    --accent:   oklch(0.82 0.16  200);
+    --amber-glow:oklch(0.86 0.18 202);
+    --green:    oklch(0.72 0.18  150);
+    --cyan:     oklch(0.82 0.16  200);
+    --red:      oklch(0.66 0.17   25);
+    --on-amber: #050b0b;
+    --scrollbar-thumb: oklch(0.24 0.02 60);
+    --body-grad-top:   oklch(0.13 0.02 60);
+    --body-grad-bot:   oklch(0.06 0.01 60);
+    --dialog-backdrop: oklch(0.06 0.01 60 / 0.65);
+    --pre-bg:          oklch(0.12 0.016 58);
+    --chart-grid:      #342e24;
+    --chart-green:     #40c870;
+    --chart-cyan:      #40c8d0;
+    --chart-label:     #606878;
+  }
+
+  /* ── joker — deep purple ground, acid-green accent. */
+  html[data-theme="joker"] {
+    --bg:       oklch(0.12 0.05  300);
+    --panel:    oklch(0.17 0.06  300);
+    --card:     oklch(0.20 0.07  300);
+    --card-hi:  oklch(0.25 0.08  300);
+    --line:     oklch(0.32 0.08  300);
+    --txt:      oklch(0.96 0.008 300);
+    --txt-dim:  oklch(0.74 0.02  300);
+    --faint:    oklch(0.56 0.02  300);
+    --copper:   oklch(0.70 0.22  300);
+    --accent:   oklch(0.82 0.22  142);
+    --amber-glow:oklch(0.84 0.24 142);
+    --green:    oklch(0.82 0.22  142);
+    --cyan:     oklch(0.78 0.16  160);
+    --red:      oklch(0.66 0.17   25);
+    --on-amber: #060e05;
+    --scrollbar-thumb: oklch(0.28 0.07 300);
+    --body-grad-top:   oklch(0.18 0.07 300);
+    --body-grad-bot:   oklch(0.09 0.04 300);
+    --dialog-backdrop: oklch(0.09 0.04 300 / 0.65);
+    --pre-bg:          oklch(0.15 0.055 300);
+    --chart-grid:      #2a1d3a;
+    --chart-green:     #80e840;
+    --chart-cyan:      #40d890;
+    --chart-label:     #706080;
+  }
+
+  /* ── nod — near-black warm ground, crimson red accent, dim-green ok status. */
+  html[data-theme="nod"] {
+    --bg:       oklch(0.08 0.012  25);
+    --panel:    oklch(0.13 0.025  25);
+    --card:     oklch(0.16 0.028  25);
+    --card-hi:  oklch(0.21 0.032  25);
+    --line:     oklch(0.28 0.035  25);
+    --txt:      oklch(0.95 0.006  25);
+    --txt-dim:  oklch(0.72 0.018  25);
+    --faint:    oklch(0.52 0.018  25);
+    --copper:   oklch(0.58 0.23   25);
+    --accent:   oklch(0.58 0.23   25);
+    --amber-glow:oklch(0.62 0.25  25);
+    --green:    oklch(0.64 0.14  145);
+    --cyan:     oklch(0.70 0.10  190);
+    --red:      oklch(0.58 0.23   25);
+    --on-amber: #1a0404;
+    --scrollbar-thumb: oklch(0.24 0.03 25);
+    --body-grad-top:   oklch(0.13 0.028 25);
+    --body-grad-bot:   oklch(0.06 0.010 25);
+    --dialog-backdrop: oklch(0.06 0.010 25 / 0.65);
+    --pre-bg:          oklch(0.11 0.020 25);
+    --chart-grid:      #2c1818;
+    --chart-green:     #50a860;
+    --chart-cyan:      #508090;
+    --chart-label:     #705050;
+  }
+
+  /* ── synthwave — 80s retro sunset. Deep indigo, hot-magenta accent, cyan secondary. */
+  html[data-theme="synthwave"] {
+    --bg:       oklch(0.10 0.04  295);
+    --panel:    oklch(0.15 0.05  295);
+    --card:     oklch(0.18 0.055 295);
+    --card-hi:  oklch(0.24 0.07  295);
+    --line:     oklch(0.32 0.08  295);
+    --txt:      oklch(0.94 0.020 300);
+    --txt-dim:  oklch(0.72 0.04  295);
+    --faint:    oklch(0.54 0.06  295);
+    --copper:   oklch(0.68 0.30  335);
+    --accent:   oklch(0.68 0.30  335);
+    --amber-glow:oklch(0.72 0.28 335);
+    --green:    oklch(0.84 0.18  145);
+    --cyan:     oklch(0.80 0.20  205);
+    --red:      oklch(0.66 0.17   25);
+    --on-amber: #08000e;
+    --scrollbar-thumb: oklch(0.28 0.07 295);
+    --body-grad-top:   oklch(0.16 0.06 295);
+    --body-grad-bot:   oklch(0.07 0.03 295);
+    --dialog-backdrop: oklch(0.07 0.03 295 / 0.65);
+    --pre-bg:          oklch(0.14 0.05 295);
+    --chart-grid:      #1c1030;
+    --chart-green:     #70e860;
+    --chart-cyan:      #20d8f8;
+    --chart-label:     #7050a0;
+  }
+
+  /* ── daybreak — warm paper light theme. Light bg, dark ink, deep teal accent. */
+  html[data-theme="daybreak"] {
+    --bg:       oklch(0.97 0.008  80);
+    --panel:    oklch(0.92 0.010  78);
+    --card:     oklch(0.88 0.012  76);
+    --card-hi:  oklch(0.84 0.014  74);
+    --line:     oklch(0.76 0.016  72);
+    --txt:      oklch(0.18 0.030 220);
+    --txt-dim:  oklch(0.36 0.025 220);
+    --faint:    oklch(0.52 0.020 220);
+    --copper:   oklch(0.46 0.12  192);
+    --accent:   oklch(0.46 0.12  192);
+    --amber-glow:oklch(0.50 0.14 192);
+    --green:    oklch(0.38 0.10  150);
+    --cyan:     oklch(0.46 0.12  192);
+    --red:      oklch(0.50 0.20   25);
+    --on-amber: #f0ece0;
+    --scrollbar-thumb: oklch(0.74 0.016 76);
+    --body-grad-top:   oklch(0.94 0.010 80);
+    --body-grad-bot:   oklch(0.90 0.012 78);
+    --dialog-backdrop: oklch(0.70 0.010 78 / 0.55);
+    --pre-bg:          oklch(0.91 0.010 78);
+    --chart-grid:      #c8c2b4;
+    --chart-green:     #2a7030;
+    --chart-cyan:      #1a6868;
+    --chart-label:     #606878;
+  }
+
+  /* ── royal — deep navy ground, warm gold accent, ivory text. */
+  html[data-theme="royal"] {
+    --bg:       oklch(0.12 0.04  250);
+    --panel:    oklch(0.17 0.05  250);
+    --card:     oklch(0.21 0.055 250);
+    --card-hi:  oklch(0.26 0.065 250);
+    --line:     oklch(0.34 0.07  250);
+    --txt:      oklch(0.95 0.012  80);
+    --txt-dim:  oklch(0.76 0.025 250);
+    --faint:    oklch(0.58 0.035 250);
+    --copper:   oklch(0.68 0.20   82);
+    --accent:   oklch(0.80 0.18   82);
+    --amber-glow:oklch(0.84 0.20  84);
+    --green:    oklch(0.70 0.14  150);
+    --cyan:     oklch(0.72 0.14   82);
+    --red:      oklch(0.62 0.18   25);
+    --on-amber: #060810;
+    --scrollbar-thumb: oklch(0.30 0.07 250);
+    --body-grad-top:   oklch(0.18 0.06 250);
+    --body-grad-bot:   oklch(0.08 0.03 250);
+    --dialog-backdrop: oklch(0.08 0.03 250 / 0.65);
+    --pre-bg:          oklch(0.15 0.05 250);
+    --chart-grid:      #1a2040;
+    --chart-green:     #60b060;
+    --chart-cyan:      #d0a020;
+    --chart-label:     #807060;
+  }
+
+  /* Themed scrollbars — match the active theme instead of the OS default grey. */
   * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
   *::-webkit-scrollbar { width: 8px; height: 8px; }
   *::-webkit-scrollbar-track { background: transparent; }
   *::-webkit-scrollbar-thumb {
-    background: oklch(0.30 0.02 64 / 0.7); border-radius: 8px;
+    background: var(--scrollbar-thumb); border-radius: 8px;
     border: 2px solid transparent; background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover { background: var(--copper); background-clip: padding-box; }
   *::-webkit-scrollbar-corner { background: transparent; }
   body { font-family: var(--font-ui);
          background:
-           radial-gradient(120% 80% at 50% -10%, oklch(0.17 0.03 60), oklch(0.10 0.01 55)),
+           radial-gradient(120% 80% at 50% -10%, var(--body-grad-top), var(--body-grad-bot)),
            var(--bg);
          color: var(--txt); -webkit-font-smoothing: antialiased; }
   /* Section header (klabel): uppercase amber + trailing hairline rule. */
@@ -1378,7 +2488,7 @@ _BOARD_HTML = """<!doctype html>
   .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .logo-mark { font-family: 'Material Icons Outlined'; font-size: 22px;
     color: var(--accent); line-height: 1; user-select: none;
-    text-shadow: 0 0 12px oklch(0.85 0.17 80 / 0.5); }
+    text-shadow: 0 0 12px color-mix(in oklch, var(--amber-glow) 50%, transparent); }
   .liveact { margin-top: 6px; font-size: 11px; color: var(--accent);
     font-family: var(--font-mono); display: flex; align-items: center;
     gap: 6px; opacity: .92; }
@@ -1398,8 +2508,8 @@ _BOARD_HTML = """<!doctype html>
   .btn:hover { background: var(--card-hi); }
   .btn-primary { background: var(--accent); color: var(--on-amber); border: none; font-weight: 600; }
   dialog { background: var(--panel); color: var(--txt); border: 1px solid var(--line); border-radius: 12px; }
-  dialog::backdrop { background: oklch(0.10 0.01 55 / 0.6); }
-  pre { background: oklch(0.12 0.012 58) !important; color: var(--txt-dim); border-color: var(--line) !important; }
+  dialog::backdrop { background: var(--dialog-backdrop); }
+  pre { background: var(--pre-bg) !important; color: var(--txt-dim); border-color: var(--line) !important; }
   .stat-num { font-size: 28px; font-weight: 700; color: var(--accent);
     font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1; }
   .stat-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
@@ -1416,12 +2526,77 @@ _BOARD_HTML = """<!doctype html>
   body.embed main { height: 100vh; max-width: none !important;
     padding: 8px 10px !important; overflow: auto; }
   body.embed .col { min-height: 0; height: 100%; }
-</style>
+/* GEN:BOARD-THEMES START */
+  html[data-theme="weatherstar"] {
+    --bg: oklch(0.18 0.035 258.3); --panel: oklch(0.29 0.055 254); --card: oklch(0.37 0.065 251); --card-hi: oklch(0.7 0.19 50);
+    --line: oklch(0.7 0.19 50); --txt: oklch(1 0 0); --txt-dim: oklch(0.82 0.02 250); --faint: oklch(0.7 0.19 50);
+    --copper: oklch(0.9 0.17 92); --accent: oklch(0.78 0.18 55); --amber-glow: oklch(0.91 0.18 96);
+    --green: oklch(0.8 0.17 62); --cyan: oklch(0.78 0.18 55); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.7 0.19 50); --body-grad-top: oklch(0.29 0.055 254); --body-grad-bot: oklch(0.18 0.035 258.3);
+    --dialog-backdrop: oklch(0.18 0.035 258.3 / 0.6); --pre-bg: oklch(0.29 0.055 254);
+    --chart-grid: #F77200; --chart-green: #FFA12F; --chart-cyan: #FF932A; --chart-label: #BBC5D1;
+  }
+  html[data-theme="retro-purple"] {
+    --bg: oklch(0.142 0.066 295.8); --panel: oklch(0.276 0.09 296.3); --card: oklch(0.374 0.127 297.6); --card-hi: oklch(0.593 0.273 328.4);
+    --line: oklch(0.593 0.273 328.4); --txt: oklch(1 0 0); --txt-dim: oklch(0.757 0 0); --faint: oklch(0.593 0.273 328.4);
+    --copper: oklch(0.905 0.155 194.8); --accent: oklch(0.702 0.322 328.4); --amber-glow: oklch(0.919 0.129 195.2);
+    --green: oklch(0.757 0.251 327.7); --cyan: oklch(0.702 0.322 328.4); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.593 0.273 328.4); --body-grad-top: oklch(0.276 0.09 296.3); --body-grad-bot: oklch(0.142 0.066 295.8);
+    --dialog-backdrop: oklch(0.142 0.066 295.8 / 0.6); --pre-bg: oklch(0.276 0.09 296.3);
+    --chart-grid: #CC00CC; --chart-green: #FF66FF; --chart-cyan: #FF02FF; --chart-label: #B0B0B0;
+  }
+  html[data-theme="inverted"] {
+    --bg: oklch(0.939 0.027 78.2); --panel: oklch(0.85 0.059 75.3); --card: oklch(0.754 0.085 67.1); --card-hi: oklch(0.551 0.162 251.4);
+    --line: oklch(0.551 0.162 251.4); --txt: oklch(0.218 0 0); --txt-dim: oklch(0.409 0 0); --faint: oklch(0.551 0.162 251.4);
+    --copper: oklch(0.485 0.291 264.1); --accent: oklch(0.658 0.189 250.5); --amber-glow: oklch(0.533 0.26 262.6);
+    --green: oklch(0.713 0.16 245.1); --cyan: oklch(0.658 0.189 250.5); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.551 0.162 251.4); --body-grad-top: oklch(0.85 0.059 75.3); --body-grad-bot: oklch(0.939 0.027 78.2);
+    --dialog-backdrop: oklch(0.939 0.027 78.2 / 0.6); --pre-bg: oklch(0.85 0.059 75.3);
+    --chart-grid: #0073CC; --chart-green: #34AAFF; --chart-cyan: #0094FF; --chart-label: #4A4A4A;
+  }
+  html[data-theme="zombie"] {
+    --bg: oklch(0.198 0.038 144); --panel: oklch(0.278 0.045 144.3); --card: oklch(0.375 0.066 144.1); --card-hi: oklch(0.732 0.249 142.5);
+    --line: oklch(0.732 0.249 142.5); --txt: oklch(1 0 0); --txt-dim: oklch(0.757 0 0); --faint: oklch(0.732 0.249 142.5);
+    --copper: oklch(0.882 0.199 160.1); --accent: oklch(0.866 0.295 142.5); --amber-glow: oklch(0.905 0.149 167.7);
+    --green: oklch(0.887 0.234 143.3); --cyan: oklch(0.866 0.295 142.5); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.732 0.249 142.5); --body-grad-top: oklch(0.278 0.045 144.3); --body-grad-bot: oklch(0.198 0.038 144);
+    --dialog-backdrop: oklch(0.198 0.038 144 / 0.6); --pre-bg: oklch(0.278 0.045 144.3);
+    --chart-grid: #00CC00; --chart-green: #66FF66; --chart-cyan: #00FF00; --chart-label: #B0B0B0;
+  }
+  html[data-theme="code-fall"] {
+    --bg: oklch(0.161 0.013 144.9); --panel: oklch(0.201 0.031 144.3); --card: oklch(0.253 0.045 144.1); --card-hi: oklch(0.732 0.249 142.5);
+    --line: oklch(0.732 0.249 142.5); --txt: oklch(1 0 0); --txt-dim: oklch(0.757 0 0); --faint: oklch(0.732 0.249 142.5);
+    --copper: oklch(0.85 0.20 166); --accent: oklch(0.82 0.16 192); --amber-glow: oklch(0.90 0.16 110);
+    --green: oklch(0.90 0.24 135); --cyan: oklch(0.82 0.16 192); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.732 0.249 142.5); --body-grad-top: oklch(0.201 0.031 144.3); --body-grad-bot: oklch(0.161 0.013 144.9);
+    --dialog-backdrop: oklch(0.161 0.013 144.9 / 0.6); --pre-bg: oklch(0.201 0.031 144.3);
+    --chart-grid: #00CC00; --chart-green: #92FF3E; --chart-cyan: #00E4DF; --chart-label: #B0B0B0;
+  }
+  html[data-theme="winter"] {
+    --bg: oklch(0.2 0.04 258.3); --panel: oklch(0.342 0.071 251.8); --card: oklch(0.459 0.097 251.6); --card-hi: oklch(0.641 0.129 231.1);
+    --line: oklch(0.641 0.129 231.1); --txt: oklch(1 0 0); --txt-dim: oklch(0.757 0 0); --faint: oklch(0.641 0.129 231.1);
+    --copper: oklch(0.904 0.162 144.1); --accent: oklch(0.755 0.153 231.6); --amber-glow: oklch(0.929 0.131 144.4);
+    --green: oklch(0.815 0.082 225.8); --cyan: oklch(0.755 0.153 231.6); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.641 0.129 231.1); --body-grad-top: oklch(0.342 0.071 251.8); --body-grad-bot: oklch(0.2 0.04 258.3);
+    --dialog-backdrop: oklch(0.2 0.04 258.3 / 0.6); --pre-bg: oklch(0.342 0.071 251.8);
+    --chart-grid: #0299CC; --chart-green: #87CEEB; --chart-cyan: #02BFFF; --chart-label: #B0B0B0;
+  }
+  html[data-theme="code-red"] {
+    --bg: oklch(0.151 0.009 18.2); --panel: oklch(0.178 0.023 19.5); --card: oklch(0.22 0.033 20.1); --card-hi: oklch(0.531 0.218 29.2);
+    --line: oklch(0.531 0.218 29.2); --txt: oklch(1 0 0); --txt-dim: oklch(0.757 0 0); --faint: oklch(0.531 0.218 29.2);
+    --copper: oklch(0.646 0.241 32.6); --accent: oklch(0.628 0.258 29.2); --amber-glow: oklch(0.698 0.197 38);
+    --green: oklch(0.704 0.187 23.2); --cyan: oklch(0.628 0.258 29.2); --red: oklch(0.66 0.17 25); --on-amber: #0A0A0A;
+    --scrollbar-thumb: oklch(0.531 0.218 29.2); --body-grad-top: oklch(0.178 0.023 19.5); --body-grad-bot: oklch(0.151 0.009 18.2);
+    --dialog-backdrop: oklch(0.151 0.009 18.2 / 0.6); --pre-bg: oklch(0.178 0.023 19.5);
+    --chart-grid: #CC0000; --chart-green: #FF6666; --chart-cyan: #FF0000; --chart-label: #B0B0B0;
+  }
+  /* GEN:BOARD-THEMES END */
+  </style>
 </head><body class="{{BODY_CLASS}}">
 <header class="px-6 py-3 flex items-center gap-3 flex-wrap" style="background:var(--panel);border-bottom:1px solid var(--line)">
   <span class="logo-mark">hive</span>
   <h1 class="text-base font-semibold" style="color:var(--txt);letter-spacing:.02em">Crew Board</h1>
-  <span id="badge" class="chip hidden num" style="background:oklch(0.83 0.15 78 / 0.14);color:var(--accent);border:1px solid oklch(0.83 0.15 78 / 0.4)"></span>
+  <span id="badge" class="chip hidden num" style="background:color-mix(in oklch,var(--accent) 14%,transparent);color:var(--accent);border:1px solid color-mix(in oklch,var(--accent) 40%,transparent)"></span>
   <div class="flex gap-1 ml-3">
     <div id="tab-board" class="tab active" onclick="switchTab('board')">Board</div>
     <div id="tab-stats" class="tab" onclick="switchTab('stats')">Stats</div>
@@ -1436,27 +2611,49 @@ _BOARD_HTML = """<!doctype html>
   <label class="text-xs flex items-center gap-1" style="color:var(--txt-dim)"><input type="checkbox" id="notify" onchange="NOTIFY=this.checked"/>notify</label>
   <button onclick="refreshAll()" class="btn" title="refresh">↻</button>
 </header>
-<div id="pauseBanner" class="hidden px-6 py-2 text-sm font-semibold" style="background:oklch(0.83 0.15 78 / 0.10);border-bottom:1px solid var(--accent);color:var(--accent)">
+<div id="pauseBanner" class="hidden px-6 py-2 text-sm font-semibold" style="background:color-mix(in oklch,var(--accent) 10%,transparent);border-bottom:1px solid var(--accent);color:var(--accent)">
   PAUSED: dispatcher will not start new work. In-flight tasks finish; reaper still runs.
 </div>
-<div id="nowBuilding" class="px-6 py-2 hidden" style="background:oklch(0.74 0.13 56 / 0.07);border-bottom:1px solid var(--line)"></div>
-<main id="view-board" class="p-4 grid grid-cols-7 gap-3" id="columns"></main>
+<div id="nowBuilding" class="px-6 py-2 hidden" style="background:color-mix(in oklch,var(--copper) 7%,transparent);border-bottom:1px solid var(--line)"></div>
+<main id="view-board" class="p-4 grid grid-cols-5 gap-3"></main>
 <main id="view-stats" class="p-6 hidden"></main>
 
 <dialog id="dlg" class="p-0 rounded-md w-[640px] max-w-full"></dialog>
 
 <script>
-const COLUMNS = ["proposed","backlog","ready","in_progress","qa","review","done"];
-const STATE = {tasks: [], projects: [], pending_approvals: []};
+// CP3: 5-lane board. backlog folds into ready, qa folds into review — those
+// two still exist internally (backlog = a holding state, qa = the auto-verify
+// gate where claude writes tests) but display in the merged lane so nothing is
+// stranded and the pipeline is unchanged.
+const COLUMNS = ["proposed","ready","in_progress","review","done"];
+function _laneOf(status){ return status==='backlog'?'ready' : status==='qa'?'review' : status; }
+const STATE = {tasks: [], projects: [], pending_approvals: [], lane_models: {}};
+let MODELS = [];   // ollama-installed model names, fetched once for the lane picker
 let SOCK = null;
 let TAB = 'board';
 let FILTER_PROJ = '';   // '' = all projects
 let FILTER_Q = '';      // search query (lowercased)
+// Embed mode: the wallpaper dashboard frames /board?embed=1&project=<slug> to
+// scope the board to its active project. Seed FILTER_PROJ from the URL so the
+// embedded board filters to that project on load (toolbar dropdown, hidden in
+// embed, still drives FILTER_PROJ when standalone). Re-pointing the iframe src
+// reloads this page → re-reads the param → re-filters. '' / missing = all.
+try { FILTER_PROJ = new URLSearchParams(location.search).get('project') || ''; } catch (e) { /* noop */ }
 let NOTIFY = false;     // browser notifications on review_ready/escalated
 let BOARD_PAUSED = false; // mirrors board.paused from /state
 const SEEN_EVENTS = new Set();
-// Per-process session token — sent as X-Board-Token on every mutation.
-const BOARD_TOKEN = document.querySelector('meta[name="board-token"]').content;
+// Per-process session token — sent as X-Board-Token on every mutation. The
+// gateway regenerates _BOARD_TOKEN on every restart, so the page-load value goes
+// stale across a restart and mutations (assign/move/delete…) 401. Keep it live:
+// re-fetch from /board/session-token on load + on every poll, so an open page
+// self-heals within one cycle instead of silently failing until a manual reload.
+let BOARD_TOKEN = document.querySelector('meta[name="board-token"]').content;
+async function _refreshBoardToken() {
+  try {
+    const r = await fetch('/board/session-token');
+    if (r.ok) { const j = await r.json(); if (j && j.token) BOARD_TOKEN = j.token; }
+  } catch (e) { /* keep the current token */ }
+}
 function _mutHeaders(extra) {
   return Object.assign({'content-type':'application/json','x-board-token':BOARD_TOKEN}, extra||{});
 }
@@ -1590,15 +2787,21 @@ function _drawTokDay(canvas, legend, data) {
   const maxVal = Math.max(1, ...data.map(d => Math.max(d.hive, d.claude)));
   function px(i) { return PAD.l + (i / (n - 1)) * cw; }
   function py(v) { return PAD.t + ch - (v / maxVal) * ch; }
+  // Resolve CSS custom properties into Canvas-compatible hex via computed style.
+  const cs = getComputedStyle(document.documentElement);
+  const C_GRID  = (cs.getPropertyValue('--chart-grid')  || '#3a342c').trim();
+  const C_GREEN  = (cs.getPropertyValue('--chart-green') || '#5cc870').trim();
+  const C_CYAN   = (cs.getPropertyValue('--chart-cyan')  || '#60c8c8').trim();
+  const C_LABEL  = (cs.getPropertyValue('--chart-label') || '#8a8780').trim();
   // Background grid lines
-  ctx.strokeStyle = '#3a342c';
+  ctx.strokeStyle = C_GRID;
   ctx.lineWidth = 1;
   for (let g = 0; g <= 3; g++) {
     const y = PAD.t + (g / 3) * ch;
     ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l + cw, y); ctx.stroke();
   }
   // Draw a filled series
-  function drawSeries(color, fill, getter) {
+  function drawSeries(color, getter) {
     ctx.beginPath();
     ctx.moveTo(px(0), py(getter(data[0])));
     for (let i = 1; i < n; i++) ctx.lineTo(px(i), py(getter(data[i])));
@@ -1606,20 +2809,21 @@ function _drawTokDay(canvas, legend, data) {
     ctx.lineTo(px(n-1), PAD.t + ch);
     ctx.lineTo(PAD.l, PAD.t + ch);
     ctx.closePath();
-    ctx.fillStyle = fill; ctx.fill();
+    // Fill with 12% opacity of the stroke color
+    ctx.fillStyle = color + '1f'; ctx.fill();
   }
-  drawSeries('#5cc870', 'rgba(92,200,112,0.12)', d => d.hive);
-  drawSeries('#60c8c8', 'rgba(96,200,200,0.12)', d => d.claude);
+  drawSeries(C_GREEN, d => d.hive);
+  drawSeries(C_CYAN,  d => d.claude);
   // X-axis date labels (first, mid, last)
-  ctx.fillStyle = '#8a8780'; ctx.font = '9px "JetBrains Mono",ui-monospace,monospace'; ctx.textAlign = 'center';
+  ctx.fillStyle = C_LABEL; ctx.font = '9px "JetBrains Mono",ui-monospace,monospace'; ctx.textAlign = 'center';
   const labelIdx = [0, Math.floor((n-1)/2), n-1];
   for (const i of labelIdx) ctx.fillText(data[i].date.slice(5), px(i), H - 5);
   // Legend
   const last = data[data.length-1];
   const fmtK = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'k' : String(v);
   legend.innerHTML =
-    '<span class="num" style="color:#5cc870">&#9632; hive '+fmtK(last.hive)+' (latest day)</span>' +
-    '<span class="num" style="color:#60c8c8">&#9632; claude '+fmtK(last.claude)+' (latest day)</span>';
+    `<span class="num" style="color:${C_GREEN}">&#9632; hive ${fmtK(last.hive)} (latest day)</span>` +
+    `<span class="num" style="color:${C_CYAN}">&#9632; claude ${fmtK(last.claude)} (latest day)</span>`;
 }
 async function loadLessons() {
   const el = document.getElementById('lessonsPanel');
@@ -1634,17 +2838,36 @@ async function loadLessons() {
 }
 
 async function loadState() {
+  await _refreshBoardToken();   // keep the mutation token live across gateway restarts
   const r = await fetch('/board/state'); const j = await r.json();
   STATE.tasks = j.tasks; STATE.projects = j.projects; STATE.pending_approvals = j.pending_approvals;
+  STATE.lane_models = j.lane_models || {};
   _applyPaused(!!j.paused);
   render();
+}
+async function loadModels() {
+  try {
+    const r = await fetch('/board/models'); if (!r.ok) return;
+    MODELS = (await r.json()).models || [];
+    render();   // models arrive after the first render — repopulate the lane picker
+  } catch (e) { /* leave MODELS empty -> picker still shows current + Default */ }
+}
+async function setLaneModel(status, model) {
+  STATE.lane_models[status] = model;   // optimistic; render keeps the selection
+  try {
+    const r = await fetch('/board/lane-model', {
+      method:'POST', headers:_mutHeaders(),
+      body: JSON.stringify({status, model}),
+    });
+    if (!r.ok) alert('set lane model failed: ' + (await r.text()));
+  } catch (e) { alert('set lane model error: ' + e); }
 }
 function _applyPaused(paused) {
   BOARD_PAUSED = paused;
   const btn = document.getElementById('pauseBtn');
   const banner = document.getElementById('pauseBanner');
   if (paused) {
-    if (btn) { btn.textContent = '▶ Resume'; btn.style.background='oklch(0.83 0.15 78 / 0.12)'; btn.style.color='var(--accent)'; btn.style.borderColor='var(--accent)'; }
+    if (btn) { btn.textContent = '▶ Resume'; btn.style.background='color-mix(in oklch,var(--accent) 12%,transparent)'; btn.style.color='var(--accent)'; btn.style.borderColor='var(--accent)'; }
     if (banner) banner.classList.remove('hidden');
   } else {
     if (btn) { btn.textContent = '⏸ Pause'; btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; }
@@ -1697,19 +2920,33 @@ function _ago(iso) {
     return Math.round(s/3600)+'h';
   } catch(e){ return ''; }
 }
+// Per-lane model dropdown. Only the in_progress lane runs a model (the build),
+// so that's the only column that gets a picker. Empty value = pipeline default.
+function _laneModelPicker(col) {
+  if (col !== 'in_progress') return '';
+  const cur = STATE.lane_models[col] || '';
+  const opts = [...MODELS];
+  if (cur && !opts.includes(cur)) opts.unshift(cur);   // keep a since-removed model visible
+  const optHtml = ['<option value=""' + (cur ? '' : ' selected') + '>Default model</option>']
+    .concat(opts.map(m => `<option value="${escapeHtml(m)}"${m===cur?' selected':''}>${escapeHtml(m)}</option>`))
+    .join('');
+  return `<select title="build model for this lane" onchange="setLaneModel('${col}', this.value)"
+    style="background:var(--card-hi);color:var(--txt-dim);border:1px solid var(--line);border-radius:5px;font-size:10px;padding:1px 4px;max-width:140px">${optHtml}</select>`;
+}
+
 function render() {
   _syncProjFilter();
   _nowBuilding();
   const cont = document.getElementById('view-board');
   cont.innerHTML = '';
   for (const col of COLUMNS) {
-    const tasks = STATE.tasks.filter(t => t.status === col && _visible(t));
+    const tasks = STATE.tasks.filter(t => _laneOf(t.status) === col && _visible(t));
     const div = document.createElement('div');
     div.className = 'col p-2';
     div.innerHTML = `
       <div class="flex items-center justify-between mb-2 px-1" style="border-bottom:1px solid var(--line);padding-bottom:6px">
         <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)">${col.replace('_',' ')}</div>
-        <div class="text-xs num" style="color:var(--faint)">${tasks.length}</div>
+        <div class="flex items-center gap-2">${_laneModelPicker(col)}<div class="text-xs num" style="color:var(--faint)">${tasks.length}</div></div>
       </div>
       <div class="space-y-2">
         ${tasks.map(t => taskCard(t)).join('')}
@@ -1726,46 +2963,160 @@ function render() {
     badge.classList.add('hidden');
   }
 }
+
+// CP1: live AI-thoughts panel + steer box, shown on in_progress cards. The
+// thoughts stream in live over the board WebSocket (task_progress.thought);
+// the steer box POSTs an owner nudge the hive loop injects on its next turn.
+function _thoughtsHtml(t) {
+  if (t.status !== 'in_progress') return '';
+  const th = t.live_thoughts || [];
+  const rows = th.slice(-6).map(x => {
+    const why = escapeHtml(x.th || '');
+    const act = escapeHtml(x.a || '');
+    const body = why
+      ? (why + (act ? ` <span style="color:var(--faint);opacity:.7">· ${act}</span>` : ''))
+      : act;
+    return `<div class="ai-th" style="margin-bottom:3px"><span style="color:var(--faint)">t${x.t}</span> ${body}</div>`;
+  }).join('') || '<div class="ai-th" style="opacity:.55">waiting for the AI…</div>';
+  return `<div onclick="event.stopPropagation()" style="margin-top:6px;border:1px solid var(--line);border-radius:6px;background:var(--card-hi);overflow:hidden">
+    <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:3px 7px;border-bottom:1px solid var(--line)">🧠 AI thinking</div>
+    <div id="ai-thoughts-${t.slug}" style="max-height:120px;overflow-y:auto;padding:4px 7px;font-size:11px;line-height:1.35;color:var(--txt-dim);font-family:var(--font-mono,monospace)">${rows}</div>
+    <div style="display:flex;gap:4px;padding:4px 6px;border-top:1px solid var(--line)">
+      <input id="steer-${t.slug}" placeholder="steer the AI…" onkeydown="if(event.key==='Enter'){event.stopPropagation();sendSteer('${t.slug}')}" onclick="event.stopPropagation()" style="flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:4px;font-size:11px;padding:2px 6px" />
+      <button onclick="event.stopPropagation();sendSteer('${t.slug}')" title="send guidance to the AI" style="background:var(--accent);color:var(--on-amber);border:none;border-radius:4px;padding:2px 9px;cursor:pointer;font-weight:600">↳</button>
+    </div>
+  </div>`;
+}
+async function sendSteer(slug) {
+  const inp = document.getElementById('steer-' + slug);
+  const msg = ((inp && inp.value) || '').trim();
+  if (!msg) return;
+  if (inp) inp.value = '';
+  try {
+    const r = await fetch(`/board/tasks/${slug}/steer`, {method:'POST', headers:_mutHeaders(), body: JSON.stringify({message: msg})});
+    const tb = document.getElementById('ai-thoughts-' + slug);
+    if (tb && r.ok) { const d=document.createElement('div'); d.className='ai-th'; d.style.color='var(--accent)'; d.textContent='↳ you: '+msg; tb.appendChild(d); tb.scrollTop=tb.scrollHeight; }
+  } catch(e) {}
+}
+// CP2: master-plan card (kind='plan', shown in Proposed) — goal + Karpathy
+// checkpoints with check-offs + approve(breakout)/reject/request-changes.
+function _planCardHtml(t) {
+  const p = t.plan_spec || {};
+  const steps = (p.steps || []).map((s,i) => `
+    <div style="padding:4px 0;border-top:1px solid var(--line)">
+      <div style="font-weight:600;color:var(--txt);font-size:12px">${i+1}. ${escapeHtml(s.title||'')}</div>
+      ${s.verify?`<div style="font-size:10px;color:var(--faint)">verify: ${escapeHtml(s.verify)}</div>`:''}
+      ${(s.criteria||[]).map(c=>`<div style="font-size:11px;color:var(--txt-dim)">☐ ${escapeHtml(c)}</div>`).join('')}
+    </div>`).join('');
+  const q = (p.open_questions||[]).length
+    ? `<div style="margin:4px 0;font-size:11px;color:var(--amber)">Open Qs: ${(p.open_questions).map(escapeHtml).join(' · ')}</div>` : '';
+  return `<div class="card p-2" style="border:1px solid var(--accent)">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700">📋 MASTER PLAN</span>
+      <span class="num" style="margin-left:auto;color:var(--txt-dim);font-size:10px;font-weight:600">${t.slug}</span>
+    </div>
+    <div style="font-size:12px;color:var(--txt);margin-bottom:2px">${escapeHtml(p.goal||t.title)}</div>
+    ${q}
+    <div>${steps || '<div style="color:var(--faint);font-size:11px">no steps drafted</div>'}</div>
+    <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+      <button onclick="approvePlan('${t.slug}')" style="background:color-mix(in oklch,var(--green) 16%,transparent);color:var(--green);border:1px solid color-mix(in oklch,var(--green) 45%,transparent);border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px;font-weight:600">✓ Approve → breakout</button>
+      <button onclick="rejectPlan('${t.slug}')" style="background:color-mix(in oklch,var(--red) 14%,transparent);color:var(--red);border:1px solid color-mix(in oklch,var(--red) 40%,transparent);border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px">✗ Reject</button>
+      <button onclick="document.getElementById('pf-${t.slug}').style.display='flex'" style="background:var(--card-hi);color:var(--txt-dim);border:1px solid var(--line);border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px">✎ Request changes</button>
+    </div>
+    <div id="pf-${t.slug}" style="display:none;gap:4px;margin-top:5px">
+      <input id="pfi-${t.slug}" placeholder="what to change…" onkeydown="if(event.key==='Enter')requestPlanChanges('${t.slug}')" style="flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:4px;font-size:11px;padding:3px 6px" />
+      <button onclick="requestPlanChanges('${t.slug}')" title="re-draft from your feedback" style="background:var(--accent);color:var(--on-amber);border:none;border-radius:4px;padding:3px 9px;cursor:pointer;font-weight:600">↻</button>
+    </div>
+  </div>`;
+}
+async function approvePlan(slug) {
+  if (!confirm('Approve this plan and break it into tickets?')) return;
+  const r = await fetch(`/board/plans/${slug}/approve`, {method:'POST', headers:_mutHeaders()});
+  if (r.ok) { const d=await r.json(); await loadState(); alert(`Created ${(d.created||[]).length} tickets from the plan.`); }
+  else alert('approve failed: ' + (await r.text()));
+}
+async function rejectPlan(slug) {
+  if (!confirm('Reject + archive this plan?')) return;
+  const r = await fetch(`/board/plans/${slug}/reject`, {method:'POST', headers:_mutHeaders()});
+  if (r.ok) loadState(); else alert('reject failed: ' + (await r.text()));
+}
+async function requestPlanChanges(slug) {
+  const inp = document.getElementById('pfi-' + slug);
+  const fb = ((inp && inp.value) || '').trim();
+  if (!fb) return;
+  if (inp) inp.value = 'redrafting…';
+  const r = await fetch(`/board/plans/${slug}/request-changes`, {method:'POST', headers:_mutHeaders(), body: JSON.stringify({feedback: fb})});
+  if (r.ok) loadState(); else alert('re-draft failed: ' + (await r.text()));
+}
+// #210: propose skill improvements (new / update existing) from a reviewed task.
+async function suggestSkills(slug, btn) {
+  if (btn) { btn.textContent='analyzing…'; btn.disabled=true; }
+  try {
+    const r = await fetch(`/board/tasks/${slug}/suggest-skills`, {method:'POST', headers:_mutHeaders()});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail||'failed');
+    const n = (d.created||[]).length;
+    if (btn) btn.textContent = n ? `✓ ${n} skill idea(s) → Proposed` : '— no skill ideas';
+    if (n) loadState();
+  } catch(e) { if (btn){ btn.textContent='💡 suggest skills'; btn.disabled=false; } alert('skills suggest failed: '+(e.message||e)); }
+}
 function taskCard(t) {
+  if (t.kind === 'plan') return _planCardHtml(t);
   const prio = {
-    high:'background:oklch(0.66 0.17 25 / 0.16);color:var(--red)',
+    high:'background:color-mix(in oklch,var(--red) 16%,transparent);color:var(--red)',
     medium:'background:var(--card-hi);color:var(--txt-dim)',
     low:'background:var(--card-hi);color:var(--faint)'
   }[t.priority] || '';
-  const assignee = t.assignee !== 'none' ? `<span class="chip" style="background:oklch(0.74 0.13 56 / 0.16);color:var(--copper)">${t.assignee}</span>` : '';
+  const assignee = t.assignee !== 'none' ? `<span class="chip" style="background:color-mix(in oklch,var(--copper) 16%,transparent);color:var(--copper)">${t.assignee}</span>` : '';
   const proj = `<span class="text-xs num" style="color:var(--txt-dim)">${escapeHtml(t.project_slug)}</span>`;
   const checked = (t.acceptance_criteria || []).filter(c=>c.checked).length;
   const total = (t.acceptance_criteria || []).length;
   const progress = total ? `<span class="text-xs num" style="color:var(--txt-dim)">${checked}/${total}</span>` : '';
-  const htok = t.hive_tokens ? `<span class="chip num tok-hive" style="background:oklch(0.80 0.16 150 / 0.12)" title="hive tokens">H ${fmtTokens(t.hive_tokens)}</span>` : '';
-  const ctok = t.claude_tokens ? `<span class="chip num tok-claude" style="background:oklch(0.80 0.10 200 / 0.12)" title="claude tokens">C ${fmtTokens(t.claude_tokens)}</span>` : '';
+  const htok = t.hive_tokens ? `<span class="chip num tok-hive" style="background:color-mix(in oklch,var(--green) 12%,transparent)" title="hive tokens">H ${fmtTokens(t.hive_tokens)}</span>` : '';
+  const ctok = t.claude_tokens ? `<span class="chip num tok-claude" style="background:color-mix(in oklch,var(--cyan) 12%,transparent)" title="claude tokens">C ${fmtTokens(t.claude_tokens)}</span>` : '';
   // Live "now doing" line — only while in_progress, so you can watch
   // the hive work turn by turn.
   const live = (t.status === 'in_progress' && t.last_action)
     ? `<div class="liveact" id="live-${t.slug}"><span class="livedot"></span>${escapeHtml(t.last_action)}</div>`
     : '';
+  // #198: last-agent handoff note — shown on finished/idle cards (live takes
+  // priority while in_progress) so a glance tells you what the last AI did.
+  const note = (t.status !== 'in_progress' && t.last_summary)
+    ? `<div class="liveact" style="opacity:.7" title="${escapeHtml(t.last_summary)}">📝 ${escapeHtml(t.last_summary.slice(0,90))}${t.last_summary.length>90?'…':''}</div>`
+    : '';
   const rate = (t.status === 'in_progress')
     ? `<span class="chip num" style="background:var(--card-hi);color:var(--txt-dim)" title="turns, elapsed">${t.agent_turns||0}t · ${t.updated_at?_ago(t.updated_at):''}</span>`
     : '';
-  return `<div class="card p-2 cursor-pointer" onclick='openDetail("${t.slug}")'>
+  // #172: blocked badge — count depends_on tasks not yet done/archived.
+  const blockers = (t.depends_on || []).filter(d => {
+    const dep = STATE.tasks.find(x => x.slug === d);
+    return dep && dep.status !== 'done' && dep.status !== 'archived';
+  });
+  const blocked = blockers.length
+    ? `<span class="chip" style="background:color-mix(in oklch,var(--red) 16%,transparent);color:var(--red)" title="blocked by ${blockers.join(', ')} — won't start until they're done">🔒 ${blockers.length}</span>`
+    : '';
+  return `<div class="card p-2 cursor-pointer${blockers.length?' card-blocked':''}" onclick='openDetail("${t.slug}")'>
     <div class="flex items-start justify-between gap-2 mb-1">
       <div class="text-sm font-medium" style="color:var(--txt)">${escapeHtml(t.title)}</div>
       <div class="flex items-center gap-1">
-        <span class="chip num" style="background:var(--card-hi);color:var(--faint)">${t.slug}</span>
+        <span class="num" style="color:var(--txt);font-weight:600;font-size:11px;letter-spacing:.02em">${t.slug}</span>
         <button onclick="event.stopPropagation();deleteTask('${t.slug}')" title="Delete permanently" style="color:var(--faint);background:none;border:none;cursor:pointer;padding:0 2px;font-size:13px;line-height:1" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--faint)'">🗑</button>
       </div>
     </div>
     <div class="flex items-center gap-1.5 flex-wrap">
       ${proj}
       <span class="chip" style="${prio}">${t.priority}</span>
+      ${t.status==='qa'?`<span class="chip" style="background:color-mix(in oklch,var(--cyan) 14%,transparent);color:var(--cyan)" title="in the QA / auto-verify gate">⚙ QA</span>`:''}
       ${assignee}
       ${progress}
       ${htok}${ctok}
-      ${t.smoke_cmd?`<span class="chip" style="${t.smoke_ok===true?'background:oklch(0.80 0.16 150 / 0.12);color:var(--green)':t.smoke_ok===false?'background:oklch(0.66 0.17 25 / 0.16);color:var(--red)':'background:var(--card-hi);color:var(--txt-dim)'}" title="smoke gate">⚙${t.smoke_ok===true?'✓':t.smoke_ok===false?'✗':''}</span>`:''}
-      ${t.review_by?`<span class="chip" style="background:oklch(0.83 0.15 78 / 0.12);color:var(--accent)" title="reviewer">👁</span>`:''}
+      ${t.smoke_cmd?`<span class="chip" style="${t.smoke_ok===true?'background:color-mix(in oklch,var(--green) 12%,transparent);color:var(--green)':t.smoke_ok===false?'background:color-mix(in oklch,var(--red) 16%,transparent);color:var(--red)':'background:var(--card-hi);color:var(--txt-dim)'}" title="smoke gate">⚙${t.smoke_ok===true?'✓':t.smoke_ok===false?'✗':''}</span>`:''}
+      ${t.review_by?`<span class="chip" style="background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent)" title="reviewer">👁</span>`:''}
+      ${blocked}
       ${rate}
     </div>
-    ${live}
+    ${(t.status==='review'||t.status==='qa')?`<div style="margin-top:4px"><button onclick="event.stopPropagation();suggestSkills('${t.slug}',this)" style="background:var(--card-hi);border:1px solid var(--line);border-radius:5px;color:var(--txt-dim);cursor:pointer;font-size:10px;padding:2px 7px" title="propose skill improvements from this work → Proposed">💡 suggest skills</button></div>`:''}
+    ${live}${note}${_thoughtsHtml(t)}
   </div>`;
 }
 function escapeHtml(s) {
@@ -1782,22 +3133,23 @@ function openDetail(slug) {
       <div class="flex items-start justify-between gap-2">
         <h2 class="text-lg font-semibold" style="color:var(--txt)">${escapeHtml(t.title)} <span class="text-sm" style="color:var(--txt-dim)">${t.slug}</span></h2>
         <div class="flex items-center gap-2">
-          ${(t.status!=='done'&&t.status!=='archived')?`<button onclick="unstuckTask('${t.slug}')" title="Bring Claude in to diagnose and push this ticket along" class="text-xs rounded px-2 py-0.5" style="border:1px solid oklch(0.80 0.10 200 / 0.45);background:oklch(0.80 0.10 200 / 0.12);color:var(--cyan)">🩹 Unstuck</button>`:''}
-          <button onclick="document.getElementById('dlg').close();deleteTask('${t.slug}')" title="Delete permanently" class="text-xs rounded px-2 py-0.5" style="border:1px solid oklch(0.66 0.17 25 / 0.4);background:oklch(0.66 0.17 25 / 0.12);color:var(--red)">🗑 Delete</button>
+          ${(t.status!=='done'&&t.status!=='archived')?`<button onclick="unstuckTask('${t.slug}')" title="Bring Claude in to diagnose and push this ticket along" class="text-xs rounded px-2 py-0.5" style="border:1px solid color-mix(in oklch,var(--cyan) 45%,transparent);background:color-mix(in oklch,var(--cyan) 12%,transparent);color:var(--cyan)">🩹 Unstuck</button>`:''}
+          <button onclick="document.getElementById('dlg').close();deleteTask('${t.slug}')" title="Delete permanently" class="text-xs rounded px-2 py-0.5" style="border:1px solid color-mix(in oklch,var(--red) 40%,transparent);background:color-mix(in oklch,var(--red) 12%,transparent);color:var(--red)">🗑 Delete</button>
           <button onclick="document.getElementById('dlg').close()" style="color:var(--txt-dim)">✕</button>
         </div>
       </div>
       <div class="text-sm mb-2" style="color:var(--txt-dim)">${escapeHtml(t.project_slug)} · status ${t.status} · assignee ${t.assignee}${t.attempt_count?` · attempt ${t.attempt_count}`:''}</div>
       ${live}
+      ${t.last_summary?`<div class="mb-2 p-2 rounded" style="background:var(--card-hi);border:1px solid var(--line)"><div class="text-xs mb-1" style="color:var(--faint)">📝 LAST AGENT NOTE${t.last_summary_by?` · ${escapeHtml(t.last_summary_by)}`:''}${t.last_summary_at?` · ${escapeHtml(t.last_summary_at)} UTC`:''}</div><div class="text-sm whitespace-pre-wrap" style="color:var(--txt)">${escapeHtml(t.last_summary)}</div></div>`:''}
       <div class="flex flex-wrap gap-1 mb-2">
-        ${t.review_by?`<span class="chip" style="background:oklch(0.83 0.15 78 / 0.12);color:var(--accent)">review: ${escapeHtml(t.review_by)}</span>`:''}
-        ${t.polish_iters?`<span class="chip num" style="background:oklch(0.83 0.15 78 / 0.12);color:var(--accent)">polish ×${t.polish_iters}</span>`:''}
-        ${t.smoke_cmd?`<span class="chip" style="${t.smoke_ok===true?'background:oklch(0.80 0.16 150 / 0.12);color:var(--green)':t.smoke_ok===false?'background:oklch(0.66 0.17 25 / 0.16);color:var(--red)':'background:var(--card-hi);color:var(--txt-dim)'}">smoke ${t.smoke_ok===true?'✓':t.smoke_ok===false?'✗':'·'}</span>`:''}
+        ${t.review_by?`<span class="chip" style="background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent)">review: ${escapeHtml(t.review_by)}</span>`:''}
+        ${t.polish_iters?`<span class="chip num" style="background:color-mix(in oklch,var(--accent) 12%,transparent);color:var(--accent)">polish ×${t.polish_iters}</span>`:''}
+        ${t.smoke_cmd?`<span class="chip" style="${t.smoke_ok===true?'background:color-mix(in oklch,var(--green) 12%,transparent);color:var(--green)':t.smoke_ok===false?'background:color-mix(in oklch,var(--red) 16%,transparent);color:var(--red)':'background:var(--card-hi);color:var(--txt-dim)'}">smoke ${t.smoke_ok===true?'✓':t.smoke_ok===false?'✗':'·'}</span>`:''}
         ${(t.depends_on||[]).length?`<span class="chip num" style="background:var(--card-hi);color:var(--txt-dim)">deps: ${t.depends_on.length}</span>`:''}
-        ${t.hive_tokens?`<span class="chip num tok-hive" style="background:oklch(0.80 0.16 150 / 0.12)">hive ${fmtTokens(t.hive_tokens)} tok</span>`:''}
-        ${t.claude_tokens?`<span class="chip num tok-claude" style="background:oklch(0.80 0.10 200 / 0.12)">claude ${fmtTokens(t.claude_tokens)} tok</span>`:''}
+        ${t.hive_tokens?`<span class="chip num tok-hive" style="background:color-mix(in oklch,var(--green) 12%,transparent)">hive ${fmtTokens(t.hive_tokens)} tok</span>`:''}
+        ${t.claude_tokens?`<span class="chip num tok-claude" style="background:color-mix(in oklch,var(--cyan) 12%,transparent)">claude ${fmtTokens(t.claude_tokens)} tok</span>`:''}
       </div>
-      <pre class="text-sm whitespace-pre-wrap p-2 rounded max-h-40 overflow-auto" style="background:oklch(0.12 0.012 58);color:var(--txt);border:1px solid var(--line)">${escapeHtml(t.body || '(no body)')}</pre>
+      <pre class="text-sm whitespace-pre-wrap p-2 rounded max-h-40 overflow-auto" style="background:var(--pre-bg);color:var(--txt);border:1px solid var(--line)">${escapeHtml(t.body || '(no body)')}</pre>
       <h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Acceptance criteria</h3>
       <ul class="space-y-1 text-sm" style="color:var(--txt)">
         ${(t.acceptance_criteria || []).map((c,i) => `
@@ -1805,14 +3157,14 @@ function openDetail(slug) {
         `).join('')}
       </ul>
       ${(t.files_of_interest || []).length ? `<h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Files</h3><ul class="text-xs" style="color:var(--txt-dim)">${(t.files_of_interest).map(f=>`<li><code>${escapeHtml(f)}</code></li>`).join('')}</ul>` : ''}
-      ${Object.keys(t.verify_results||{}).length ? `<h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Verify</h3><pre class="text-xs p-2 rounded max-h-32 overflow-auto" style="background:oklch(0.12 0.012 58);color:var(--txt);border:1px solid var(--line)">${escapeHtml(JSON.stringify(t.verify_results, null, 2))}</pre>` : ''}
+      ${Object.keys(t.verify_results||{}).length ? `<h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Verify</h3><pre class="text-xs p-2 rounded max-h-32 overflow-auto" style="background:var(--pre-bg);color:var(--txt);border:1px solid var(--line)">${escapeHtml(JSON.stringify(t.verify_results, null, 2))}</pre>` : ''}
       <h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Transcript <span class="text-xs" style="color:var(--txt-dim)">(agent turns)</span></h3>
-      <div id="transcript" class="text-xs p-2 rounded max-h-48 overflow-auto num" style="background:oklch(0.12 0.012 58);border:1px solid var(--line);color:var(--txt-dim)">loading…</div>
+      <div id="transcript" class="text-xs p-2 rounded max-h-48 overflow-auto num" style="background:var(--pre-bg);border:1px solid var(--line);color:var(--txt-dim)">loading…</div>
       <h3 class="font-medium mt-3 mb-1" style="color:var(--txt)">Diff <span class="text-xs" style="color:var(--txt-dim)">(this task's commit)</span></h3>
-      <pre id="diff" class="text-xs p-2 rounded max-h-56 overflow-auto" style="background:oklch(0.12 0.012 58);border:1px solid var(--line);color:var(--txt-dim);white-space:pre-wrap">loading…</pre>
+      <pre id="diff" class="text-xs p-2 rounded max-h-56 overflow-auto" style="background:var(--pre-bg);border:1px solid var(--line);color:var(--txt-dim);white-space:pre-wrap">loading…</pre>
       ${t.status==='review'?`<div class="mt-3 flex gap-2">
-        <button onclick="moveTask('${t.slug}','done')" class="rounded px-3 py-1" style="background:oklch(0.80 0.16 150 / 0.14);color:var(--green);border:1px solid oklch(0.80 0.16 150 / 0.4)">✓ Approve, done</button>
-        <button onclick="moveTask('${t.slug}','in_progress')" class="rounded px-3 py-1" style="background:oklch(0.66 0.17 25 / 0.14);color:var(--red);border:1px solid oklch(0.66 0.17 25 / 0.4)">✗ Reject, rework</button>
+        <button onclick="moveTask('${t.slug}','done')" class="rounded px-3 py-1" style="background:color-mix(in oklch,var(--green) 14%,transparent);color:var(--green);border:1px solid color-mix(in oklch,var(--green) 40%,transparent)">✓ Approve, done</button>
+        <button onclick="moveTask('${t.slug}','in_progress')" class="rounded px-3 py-1" style="background:color-mix(in oklch,var(--red) 14%,transparent);color:var(--red);border:1px solid color-mix(in oklch,var(--red) 40%,transparent)">✗ Reject, rework</button>
       </div>`:''}
       <div class="mt-4 flex flex-wrap gap-1">
         ${COLUMNS.map(c => `<button onclick="moveTask('${t.slug}','${c}')" class="text-xs rounded px-2 py-0.5" style="border:1px solid var(--line);${c===t.status?'background:var(--accent);color:var(--on-amber)':'background:var(--card);color:var(--txt)'}">${c.replace('_',' ')}</button>`).join('')}
@@ -1947,7 +3299,7 @@ function openProjects() {
       <ul class="space-y-1 text-sm">
         ${STATE.projects.map(p => `
           <li class="rounded p-2 flex items-center justify-between" style="border:1px solid var(--line);background:var(--card)">
-            <div><div class="font-medium" style="color:var(--txt)">${escapeHtml(p.name)}${p.enabled?' <span class="chip" style="background:oklch(0.80 0.16 150 / 0.14);color:var(--green)">on</span>':''}</div><div class="text-xs" style="color:var(--txt-dim)">${escapeHtml(p.path)}</div></div>
+            <div><div class="font-medium" style="color:var(--txt)">${escapeHtml(p.name)}${p.enabled?' <span class="chip" style="background:color-mix(in oklch,var(--green) 14%,transparent);color:var(--green)">on</span>':''}</div><div class="text-xs" style="color:var(--txt-dim)">${escapeHtml(p.path)}</div></div>
             <div class="flex gap-1">
               <button class="text-xs rounded px-2 py-0.5" style="border:1px solid var(--line);background:var(--card-hi);color:var(--txt)" onclick="toggleProject('${p.slug}',${!p.enabled})">${p.enabled?'disable':'enable'}</button>
             </div>
@@ -1978,6 +3330,19 @@ function connectEvents() {
         const h = document.getElementById('nblive-' + m.task);
         if (c) c.innerHTML = html;
         if (h) h.innerHTML = html;
+        // CP1: stream the AI's reasoning into the in-ticket thoughts panel.
+        if (m.thought) {
+          const tb = document.getElementById('ai-thoughts-' + m.task);
+          if (tb) {
+            const d = document.createElement('div'); d.className = 'ai-th'; d.style.marginBottom='3px';
+            const esc = s => (s||'').replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+            d.innerHTML = '<span style="color:var(--faint)">t' + (m.turn||'') + '</span> ' +
+              esc(m.thought) + (m.action ? ' <span style="color:var(--faint);opacity:.7">· ' + esc(m.action) + '</span>' : '');
+            tb.appendChild(d);
+            while (tb.children.length > 10) tb.removeChild(tb.firstChild);
+            tb.scrollTop = tb.scrollHeight;
+          }
+        }
         if (c || h) return;
       }
       // Owner-action events → optional browser notification.
@@ -2017,7 +3382,8 @@ function openGoal() {
       <div class="text-xs" style="color:var(--txt-dim)">An LLM breaks it into a chained ticket plan you can review before it builds.</div>
       <textarea id="g_goal" class="w-full rounded px-2 py-1 h-24" style="background:var(--card);color:var(--txt);border:1px solid var(--line)" placeholder="e.g. Build a Tetris game for Android"></textarea>
       <select id="g_project" class="w-full rounded px-2 py-1" style="background:var(--card);color:var(--txt);border:1px solid var(--line)">
-        <option value="">(new project — auto-named)</option>
+        <option value="auto">✨ Auto — pick the right project or create one</option>
+        <option value="">+ New project (auto-named)</option>
         ${STATE.projects.filter(p=>p.enabled).map(p => `<option value="${p.slug}">${p.slug}</option>`).join('')}
       </select>
       <div id="g_plan" class="text-xs" style="color:var(--txt-dim)"></div>
@@ -2036,15 +3402,15 @@ async function decomposeGoal() {
   if (!goal) return;
   btn.disabled = true; plan.textContent = 'Planning…';
   try {
-    const r = await fetch('/board/decompose', {method:'POST',headers:_mutHeaders(),
+    const r = await fetch('/board/plans/propose', {method:'POST',headers:_mutHeaders(),
       body: JSON.stringify({goal, project_slug: project})});
     const d = await r.json();
     if (!r.ok) { plan.textContent = 'Error: ' + (d.detail||JSON.stringify(d)); btn.disabled=false; return; }
-    plan.innerHTML = `<div style="color:var(--accent)">Created ${d.created} tickets on '${d.project_slug}'${d.scaffolded?' (new project)':''}:</div>` +
-      (d.titles||[]).map((t,i)=>`<div>${i+1}. ${escapeHtml(t)}</div>`).join('');
+    plan.innerHTML = `<div style="color:var(--accent)">Master plan drafted (${d.steps} checkpoints). Review it in the <b>Proposed</b> lane — Approve there to break it into tickets.</div>`;
     btn.textContent = 'Done'; await loadState();
   } catch(e){ plan.textContent = 'Failed: '+e; btn.disabled=false; }
 }
+loadModels();
 loadState();
 connectEvents();
 </script>

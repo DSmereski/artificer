@@ -100,21 +100,29 @@ def _tool(name: str, desc: str, props: dict, required: list[str]) -> dict:
 
 
 _S = {"type": "string"}
+# Every tool carries a `note`: one short sentence of reasoning (WHY) that is
+# streamed live into the ticket so the human can follow the agent's thinking
+# even with /no_think on. Optional for execution, but the prompt asks for it.
+_SN = {"type": "string",
+       "description": "One short sentence: WHY you are doing this (your "
+                      "reasoning). Shown live to the human — always include it."}
 _OLLAMA_TOOLS = [
-    _tool("list_dir", "List a directory's entries.", {"path": _S}, ["path"]),
-    _tool("read_file", "Read a file's contents.", {"path": _S}, ["path"]),
+    _tool("list_dir", "List a directory's entries.",
+          {"path": _S, "note": _SN}, ["path"]),
+    _tool("read_file", "Read a file's contents.",
+          {"path": _S, "note": _SN}, ["path"]),
     _tool("write_file", "Create or overwrite a file with full content.",
-          {"path": _S, "content": _S}, ["path", "content"]),
+          {"path": _S, "content": _S, "note": _SN}, ["path", "content"]),
     _tool("replace_in_file",
           "Replace an exact substring in a file (search must match once).",
-          {"path": _S, "search": _S, "replace": _S},
+          {"path": _S, "search": _S, "replace": _S, "note": _SN},
           ["path", "search", "replace"]),
     _tool("find_symbol", "Find a class/def by name across the project.",
-          {"name": _S}, ["name"]),
+          {"name": _S, "note": _SN}, ["name"]),
     _tool("run_cmd", "Run a whitelisted shell command (python/pytest/git/…).",
-          {"cmd": _S}, ["cmd"]),
+          {"cmd": _S, "note": _SN}, ["cmd"]),
     _tool("done", "Finish the task with a summary.",
-          {"summary": _S}, ["summary"]),
+          {"summary": _S, "note": _SN}, ["summary"]),
 ]
 
 
@@ -133,10 +141,14 @@ Tools (one per turn) — ALWAYS use the key `args`, never `result`:
   {"tool": "write_file", "args": {"path": "src/foo.py", "content": "..."}}
   {"tool": "replace_in_file", "args": {"path": "src/foo.py", "search": "exact old text", "replace": "new text"}}
   {"tool": "find_symbol", "args": {"name": "MyClass"}}
-  {"tool": "run_cmd", "args": {"cmd": "python -m pytest -q"}}
-  {"tool": "done", "args": {"summary": "what you built"}}
+  {"tool": "run_cmd", "args": {"cmd": "python -m pytest -q", "note": "running the tests to confirm the fix"}}
+  {"tool": "done", "args": {"summary": "what you built", "note": "all criteria met, tests green"}}
 
 CRITICAL rules:
+  - In EVERY tool call, add a `note` in args: ONE short sentence on WHY you're
+    doing this (your reasoning / what you concluded). It is streamed live to the
+    human watching the board — keep it brief and specific, e.g.
+    {"tool": "write_file", "args": {"path": "engine.py", "content": "...", "note": "adding the missing import so the failing test passes"}}.
   - For EDITS to an existing file, PREFER `replace_in_file` — paste the
     EXACT text to replace (whitespace included) in `search`. It's far
     cheaper than re-sending the whole file and avoids drift. Read the
@@ -412,16 +424,16 @@ def _validate_cmd_args(project_root: Path, cmd: str) -> tuple[bool, str]:
         if not parts:
             continue
         head = Path(parts[0]).stem.lower()
-        args_list = parts[1:]
+        args = parts[1:]
         if head in ("python", "py"):
-            if not (len(args_list) >= 2 and args_list[0] == "-m"
-                    and args_list[1] in ("pytest", "py_compile")):
+            if not (len(args) >= 2 and args[0] == "-m"
+                    and args[1] in ("pytest", "py_compile")):
                 return False, (
                     "python is restricted to `python -m pytest` or "
                     "`python -m py_compile`. Write a test file and run pytest "
                     "rather than `-c` or executing a script directly."
                 )
-        for a in args_list:
+        for a in args:
             if a.startswith("-"):
                 continue
             if _safe_path(project_root, a) is None:
@@ -466,44 +478,22 @@ def _run_cmd(project_root: Path, args: dict, *, timeout_s: float = 120.0) -> dic
     arg_ok, arg_why = _validate_cmd_args(project_root, cmd)
     if not arg_ok:
         return {"ok": False, "error": arg_why}
-    # SECURITY (audit M-1): run as resolved ARGV with shell=False — the model's
-    # string is never handed to a shell, so metacharacter / `$(...)` injection is
-    # impossible regardless of the whitelist. `&&`/`;` chains run sequentially,
-    # stopping on the first failure (the && semantics the model expects). Heads
-    # are resolved via shutil.which so Windows .bat/.cmd shims (flutter, npm) work.
-    import shutil as _shutil
-    segments = [s.strip() for s in _re.split(r"&&|;", cmd) if s.strip()]
-    out_parts: list[str] = []
-    err_parts: list[str] = []
-    rc = 0
     try:
-        for seg in segments:
-            # posix=True so quotes are stripped like a shell would (e.g.
-            # python -c "print(1)" → ['python','-c','print(1)']). Build commands
-            # use forward-slash paths, so the posix backslash-escaping is moot.
-            argv = shlex.split(seg, posix=True)
-            if not argv:
-                continue
-            exe = _shutil.which(argv[0]) or argv[0]
-            p = subprocess.run(
-                [exe, *argv[1:]], shell=False, cwd=str(project_root),
-                capture_output=True, text=True, timeout=timeout_s,
-            )
-            out_parts.append(p.stdout or "")
-            err_parts.append(p.stderr or "")
-            rc = p.returncode
-            if rc != 0:
-                break
+        proc = subprocess.run(
+            cmd, shell=True, cwd=str(project_root),
+            capture_output=True, text=True,
+            timeout=timeout_s,
+        )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"timeout after {timeout_s}s",
                 "exit_code": None}
     except (OSError, ValueError) as e:
         return {"ok": False, "error": f"spawn failed: {e}"}
     result = {
-        "ok": rc == 0,
-        "exit_code": rc,
-        "stdout_tail": "".join(out_parts)[-2000:],
-        "stderr_tail": "".join(err_parts)[-1000:],
+        "ok": proc.returncode == 0,
+        "exit_code": proc.returncode,
+        "stdout_tail": (proc.stdout or "")[-2000:],
+        "stderr_tail": (proc.stderr or "")[-1000:],
     }
     if "pytest" in cmd:
         full_out = result["stdout_tail"] + "\n" + result["stderr_tail"]
@@ -758,6 +748,77 @@ def _relevant_skills(vault_path: Path | None, task: Task,
     return "\n".join(lines)
 
 
+def _build_done_summary(root: Path, transcript: list[dict], base: str) -> str:
+    """Turn a bare done/auto-done line into a concrete 'what was accomplished'
+    summary: the agent's text + files changed in the working tree + the last
+    pytest result. This is what the ticket shows when David opens it, so it must
+    read like a real changelog, not 'auto-done after 2 green pytest runs'."""
+    base = (base or "done").strip()
+    parts: list[str] = [base]
+    # Files changed in the working tree (tracked edits + untracked new files).
+    try:
+        changed: list[str] = []
+        for argv in (
+            ["git", "-C", str(root), "diff", "--name-only"],
+            ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"],
+        ):
+            r = subprocess.run(argv, capture_output=True, text=True, timeout=15)
+            if r.returncode == 0:
+                changed += [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+        changed = sorted(set(changed))
+        if changed:
+            shown = ", ".join(changed[:12])
+            extra = f" (+{len(changed) - 12} more)" if len(changed) > 12 else ""
+            parts.append(f"Files changed ({len(changed)}): {shown}{extra}")
+    except Exception:
+        pass
+    # Latest commit hash so the ticket links to the exact change.
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0:
+            sha = r.stdout.strip()[:8]
+            # Also grab one-line subject for context.
+            r2 = subprocess.run(
+                ["git", "-C", str(root), "log", "-1", "--format=%s"],
+                capture_output=True, text=True, timeout=5,
+            )
+            subj = r2.stdout.strip()[:80] if r2.returncode == 0 else ""
+            parts.append(f"Commit: {sha}" + (f" ({subj})" if subj else ""))
+    except Exception:
+        pass
+    # Last pytest result mined from the transcript's run_cmd output tails.
+    try:
+        for entry in reversed(transcript):
+            res = entry.get("result") or {}
+            blob = f"{res.get('stdout_tail', '')}\n{res.get('stderr_tail', '')}"
+            m = re.search(r"(\d+) passed(?:, (\d+) failed)?", blob)
+            if m:
+                line = f"Tests: {m.group(1)} passed"
+                if m.group(2):
+                    line += f", {m.group(2)} failed"
+                parts.append(line)
+                break
+    except Exception:
+        pass
+    return "\n".join(parts)
+
+
+def _thought_from(text: str) -> str:
+    """CP1: a short, human-readable 'thought' from a turn's raw model output —
+    prefer the <think> reasoning, strip the JSON tool-call, collapse whitespace,
+    cap for the in-ticket live stream."""
+    import re
+    m = re.search(r"<think>(.*?)</think>", text or "", re.S)
+    body = m.group(1) if m else (text or "")
+    body = re.sub(r"\{.*\}", "", body, flags=re.S)   # drop the tool-call JSON
+    body = re.sub(r"</?think>", "", body)
+    body = re.sub(r"\s+", " ", body).strip()
+    return body[:300]
+
+
 async def run_hive_agent_loop(
     store: CrewBoardStore,
     task: Task,
@@ -964,6 +1025,16 @@ async def run_hive_agent_loop(
             f"--- task brief ---\n{history[0]}\n\n"
             f"--- recent tool results ---"
         )
+        # CP1: owner steer — inject a pending nudge so the model heeds it this
+        # turn, then it's cleared (one-shot).
+        try:
+            _steer = store.pop_steer(task.slug)
+        except Exception:  # noqa: BLE001
+            _steer = None
+        if _steer:
+            history.append(_format_observation(
+                "(owner guidance — follow this)",
+                {"ok": True, "guidance": _steer}))
         user_msg = preamble + "\n\n" + "\n\n".join(history[-16:])
         log.info("hive-loop %s turn %d (history bytes=%d)",
                  task.slug, turn, len(user_msg))
@@ -1038,6 +1109,7 @@ async def run_hive_agent_loop(
         transcript.append({"turn": turn, "call": {"tool": tool, "args": args}})
         if tool == "done":
             done_msg = str(args.get("summary", "")).strip() or "done"
+            done_msg = _build_done_summary(root, transcript, done_msg)
             transcript[-1]["result"] = {"ok": True, "summary": done_msg}
             _flush_transcript()
             return HiveLoopResult(
@@ -1103,9 +1175,10 @@ async def run_hive_agent_loop(
                     _flush_transcript()
                     return HiveLoopResult(
                         ok=True, turns=turn,
-                        summary=(
+                        summary=_build_done_summary(
+                            root, transcript,
                             f"auto-done after {consecutive_green_pytest} "
-                            "consecutive green pytest runs"
+                            "consecutive green pytest runs",
                         ),
                         transcript=transcript,
                     )
@@ -1161,15 +1234,19 @@ async def run_hive_agent_loop(
         _target = str(args.get("path", "") or args.get("cmd", "")
                       or args.get("name", "")).strip()
         action_str = f"turn {turn} · {tool}{(' ' + _target) if _target else ''}"
+        # Prefer the model's own per-call `note` (its reasoning); fall back to
+        # any <think> prose in the raw output.
+        _thought = str(args.get("note", "")).strip() or _thought_from(text)
         try:
             store.set_last_action(task.slug, action_str)
+            store.append_thought(task.slug, turn, _thought, action_str)
         except Exception:  # noqa: BLE001
             pass
         if notifier is not None:
             try:
                 notifier.broadcast({
                     "event": "task_progress", "task": task.slug,
-                    "action": action_str, "turn": turn,
+                    "action": action_str, "turn": turn, "thought": _thought,
                 })
             except Exception:  # noqa: BLE001
                 pass
