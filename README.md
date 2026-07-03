@@ -133,6 +133,12 @@ The installer is idempotent — re-run it any time. Full walkthrough in
 Architecture notes for the board live in
 [docs/crew-board-design.md](docs/crew-board-design.md).
 
+**Want to build the whole thing from scratch?** [docs/BLUEPRINT.md](docs/BLUEPRINT.md)
+is the construction plan — the architecture map, a phased build order (each phase
+with a checkpoint you can verify), and the non-obvious design decisions that make
+it work. The installer *runs* the shipped code; the blueprint explains how to
+*recreate* it.
+
 ## Models
 
 Local-first via Ollama, swappable per task. The installer auto-detects your
