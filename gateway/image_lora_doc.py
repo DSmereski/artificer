@@ -64,7 +64,7 @@ _CATEGORY_USAGE = {
     "enhancement": "User wants quality polish — apply with low strength alongside a primary LoRA.",
     "style":       "User asks for a specific aesthetic or art style (cyberpunk, oil painting, etc.).",
     "fantasy":     "User asks for fantasy / sci-fi / mythical scenes.",
-    "nsfw":        "***REMOVED***. ONLY use when user explicitly asks; filtered by default.",
+    "restricted":  "Restricted-category LoRAs — filtered out by default; only when the user explicitly asks.",
     "":            "General-purpose. Match by trigger words.",
 }
 

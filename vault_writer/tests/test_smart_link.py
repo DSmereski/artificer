@@ -26,8 +26,8 @@ def vault(tmp_path: Path) -> Path:
            "---\ntitle: imagegen loras\ntags:\n- lora\n---\n# imagegen loras\n")
     _write(v / "knowledge" / "lora-index.md",
            "---\ntitle: lora index\ntags:\n- lora\n---\n# lora index\n")
-    _write(v / "loras" / "nsfw.md",
-           "---\ntitle: nsfw lora\ntags:\n- lora\n---\n# nsfw\n")
+    _write(v / "loras" / "style-a.md",
+           "---\ntitle: style-a lora\ntags:\n- lora\n---\n# style-a\n")
     _write(v / "loras" / "INDEX.md", "# Loras index\n")          # reused hub
     _write(v / "wiki" / "index.md", "# Wiki index\n")            # reused hub
     _write(v / "tools" / "comfyui.md",
