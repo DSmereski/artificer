@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,11 +34,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Image-gen backend checkout; see HIVE_IMAGE_BACKEND_PATH in docs/CONFIG.md.
+_IMAGE_BACKEND_ROOT = Path(os.environ.get(
+    "HIVE_IMAGE_BACKEND_PATH", str(Path.home() / "projects" / "imageToVideo"),
+))
+
 
 def _load_catalog():
     from gateway.image_catalog import ImageCatalog, load_catalog  # noqa: WPS433
-    image_app_root = Path(r"C:\Projects\imageToVideo")
-    cat: ImageCatalog = load_catalog(image_app_root)
+    cat: ImageCatalog = load_catalog(_IMAGE_BACKEND_ROOT)
     return cat
 
 
@@ -124,7 +129,7 @@ async def main_async(args: argparse.Namespace) -> int:
     print(f"  {'#':>3}  {'pipeline':<8} {'alias':<35} {'on-disk':<14} {'picker':<7}")
     print(f"  {'---':>3}  {'-'*8} {'-'*35} {'-'*14} {'-'*7}")
 
-    registry_path = Path(r"C:\Projects\imageToVideo\models\loras\lora_registry.json")
+    registry_path = _IMAGE_BACKEND_ROOT / "models" / "loras" / "lora_registry.json"
     registry_idx = _load_registry_index(registry_path)
     if not registry_idx:
         print(f"warning: couldn't load registry from {registry_path}")

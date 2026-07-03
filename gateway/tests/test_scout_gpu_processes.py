@@ -23,7 +23,7 @@ from services.scout_daemon.gpu_monitor import (
     ("ollama.exe", "ollama"),
     ("python.exe", "python"),
     ("/usr/bin/python3", "python3"),
-    ("C:\\games\\StarCitizen.exe", "StarCitizen"),
+    ("C:\\Program Files\\ExampleGame\\ExampleGame.exe", "ExampleGame"),
     ("weird-no-ext", "weird-no-ext"),
 ])
 def test_friendly_process_name(raw: str, expected: str) -> None:
@@ -69,7 +69,7 @@ def test_snapshot_attaches_processes(monkeypatch) -> None:
     ]
     fake_procs = {
         0: [
-            GPUProcess(pid=2, gpu_index=0, process_name="C:\\x\\ollama.exe", used_memory_mb=17000),
+            GPUProcess(pid=2, gpu_index=0, process_name="C:\\Program Files\\Ollama\\ollama.exe", used_memory_mb=17000),
             GPUProcess(pid=1, gpu_index=0, process_name="python.exe", used_memory_mb=900),
         ],
         # GPU 1 has no processes → idle
@@ -130,7 +130,7 @@ def test_snapshot_detects_game_from_processes(monkeypatch) -> None:
     ]
     fake_procs = {
         2: [
-            GPUProcess(pid=99, gpu_index=2, process_name="C:\\g\\StarCitizen.exe", used_memory_mb=8000),
+            GPUProcess(pid=99, gpu_index=2, process_name="C:\\Program Files\\StarCitizen\\StarCitizen.exe", used_memory_mb=8000),
         ],
     }
 

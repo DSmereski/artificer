@@ -15,6 +15,7 @@ WS   /board/events         — real-time updates
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import time
@@ -23,6 +24,14 @@ from pathlib import Path
 # SECURITY (audit M1): project_slug is rendered into the board DOM; constrain it
 # to a clean slug shape on the way in so an HTML/script payload can't be planted.
 _SLUG_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
+
+# SECURITY: greenfield project creation (and the virtual 'content' project) are
+# confined to this root. Configurable via HIVE_PROJECTS_ROOT (docs/CONFIG.md);
+# defaults to ~/projects. This MUST stay a real filesystem boundary — the
+# /projects/create guard below re-validates every path against it.
+_PROJECTS_ROOT = Path(os.environ.get(
+    "HIVE_PROJECTS_ROOT", str(Path.home() / "projects"),
+))
 
 # Stats payload is cached briefly so repeated Stats-tab polls don't
 # re-scan every task + up to 50 transcript files each refresh.
@@ -264,7 +273,7 @@ async def create_content(
     # handler ignores the project working tree, but tasks need a project).
     if store.get_project(proj) is None and proj == _CONTENT_PROJECT:
         store.upsert_project(Project(
-            slug=_CONTENT_PROJECT, path="C:/Projects", name="Content",
+            slug=_CONTENT_PROJECT, path=str(_PROJECTS_ROOT), name="Content",
             enabled=True, push_allowed=False, test_cmd=None,
         ))
     spec = {
@@ -1370,7 +1379,7 @@ async def decompose_goal(
         # Dir name == slug (kebab), forward-slashed, so the project scanner
         # re-derives the SAME slug from the directory and never mints a
         # squashed-name duplicate (the old 'androidtetrisgame' twin bug).
-        path = Path("C:/Projects") / slug
+        path = _PROJECTS_ROOT / slug
         try:
             path.mkdir(parents=True, exist_ok=True)
             if not (path / ".git").exists():
@@ -1794,11 +1803,11 @@ async def create_project(
     name = str(payload.get("name", "")).strip()
     if not name:
         raise HTTPException(400, "name required")
-    # Path is either explicit or derived from C:/Projects/<name>.
+    # Path is either explicit or derived from _PROJECTS_ROOT/<name>.
     # SECURITY: the resolved path MUST stay under an allowed project
     # root — otherwise a client could mkdir + git init (and later run an
     # autonomous agent) anywhere the gateway process can write.
-    allowed_root = Path("C:/Projects").resolve()
+    allowed_root = _PROJECTS_ROOT.resolve()
     raw_path = payload.get("path")
     if raw_path:
         path = Path(str(raw_path))

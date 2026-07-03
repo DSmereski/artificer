@@ -49,7 +49,7 @@ Output a JSON array of up to 5 entries. Each object has:
 Category meanings:
   knowledge - external info (web docs, APIs, articles)
   system    - machine/environment facts (GPUs, paths, services, installed tools)
-  project   - facts about a named project (Ai-Team, Freedom Guards, imageToVideo, Peon-Ping, claude-launcher, homelab-ai-assistant, etc.)
+  project   - facts about a named project (e.g. this Hive stack, or another app/tool the operator maintains)
   tool      - how a skill, MCP tool, CLI command, or library works
   ops       - operator's collaboration preferences or workflow rules (audience: claude-code)
   journal   - a noteworthy self-observation

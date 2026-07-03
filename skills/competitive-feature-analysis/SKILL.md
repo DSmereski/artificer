@@ -19,7 +19,7 @@ Self-improvement: refine the rubric / research recipe here as you learn what
 yields good plans, then `python ./hive\scripts\sync_skills.py`.
 
 ## Inputs
-- `app`: path to the project (e.g. `~/projects\BlackjackXP`) or its name.
+- `app`: path to the project (e.g. `~/projects/example-app`) or its name.
 - optional `category`: seed the rival search ("card games",
   "music downloader"). Infer from the app if omitted.
 

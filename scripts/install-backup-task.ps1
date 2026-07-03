@@ -9,13 +9,13 @@
 #
 # USAGE
 #   # Install (run as Admin):
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Projects\Ai-Team\scripts\install-backup-task.ps1"
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\install-backup-task.ps1"
 #
 #   # Uninstall:
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "...\install-backup-task.ps1" -Uninstall
 #
 #   # Manual one-off run (no elevation needed):
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Projects\Ai-Team\scripts\backup-state.ps1"
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\backup-state.ps1"
 
 [CmdletBinding()]
 param(

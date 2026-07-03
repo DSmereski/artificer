@@ -9,6 +9,7 @@ back to the requesting user's channel.
 import asyncio
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -22,7 +23,9 @@ from PIL import Image
 
 from shared.delete_button import DeleteButtonView
 
-GENERATE_SCRIPT = Path(r"C:\Projects\imageToVideo\discord_generate.py")
+# Image-gen backend checkout (exposes discord_generate.py); see HIVE_IMAGE_BACKEND_PATH.
+_IMAGE_BACKEND_ROOT = Path(os.environ.get("HIVE_IMAGE_BACKEND_PATH", str(Path.home() / "projects" / "imageToVideo")))
+GENERATE_SCRIPT = _IMAGE_BACKEND_ROOT / "discord_generate.py"
 
 _BAR_LENGTH = 20
 _BAR_FILL = "\u2588"   # full block
@@ -75,8 +78,8 @@ def _build_status_queued(
         f"`[{bar}]` Waiting...\n"
         f"Prompt: *{prompt}*"
     )
-MEDIA_DIR = Path.home() / "Projects" / "Ai-Team" / "media"
-LOCK_FILE = Path(r"C:\Projects\imageToVideo\output\.gen_lock")
+MEDIA_DIR = Path(os.environ.get("HIVE_PROJECT_ROOT", str(Path.home() / "projects" / "Ai-Team"))) / "media"
+LOCK_FILE = _IMAGE_BACKEND_ROOT / "output" / ".gen_lock"
 
 
 @dataclass

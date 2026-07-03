@@ -15,7 +15,7 @@
 #
 # USAGE
 #   # Manual run:
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Projects\Ai-Team\scripts\backup-state.ps1"
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\backup-state.ps1"
 #
 #   # With custom root:
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "...\backup-state.ps1" -BackupRoot D:\Backups\ai-team

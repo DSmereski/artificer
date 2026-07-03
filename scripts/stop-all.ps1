@@ -1,6 +1,6 @@
 # Ai-Team Stopper — kills Terry, scout-daemon, gateway, vault-writer.
 # Usage (from any shell):
-#   powershell.exe -NoProfile -File "C:\Projects\Ai-Team\scripts\stop-all.ps1"
+#   powershell.exe -NoProfile -File ".\scripts\stop-all.ps1"
 
 $ErrorActionPreference = 'Continue'
 

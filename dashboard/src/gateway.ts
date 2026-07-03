@@ -1,7 +1,7 @@
 /**
  * gateway.ts — typed HTTP client for the Hive gateway.
  *
- * Ported from C:\Projects\***REMOVED***\src\gateway.ts and extended for:
+ * Ported from an internal G2-glasses gateway client and extended for:
  *  - Bearer auth for /v1/* endpoints
  *  - All Phase A endpoints: /board/stats + /board/state
  *  - Offline / error resilience (fetchWithTimeout, AbortController)

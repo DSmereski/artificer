@@ -146,7 +146,7 @@ def test_preload_cc_includes_project_note_when_cwd_matches(tmp_path: Path) -> No
     )
     client = VaultClient(vault_path=tmp_path, daemon_host="127.0.0.1", daemon_port=0)
     # cwd path's actual location doesn't matter; only the basename is used.
-    fake_cwd = Path(r"C:\Users\X\Projects\Ai-Team")
+    fake_cwd = Path("fake") / "Ai-Team"
     ctx = client.preload_for_claude_code(cwd=fake_cwd)
     assert "Ai-Team project notes." in ctx
 

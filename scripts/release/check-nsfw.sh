@@ -11,9 +11,13 @@ fail=0
 
 # Uncensored/abliterated model ids — must not be a shipped default.
 report "uncensored/abliterated models" 'abliterated|-uncensored|huihui_ai'  "$TARGET" || fail=1
-# Explicit terms — genuine NSFW content only. A bare `nsfw` boolean/field is a
-# legit SAFETY filter (the image catalog filters NSFW OUT), so it is NOT flagged.
-report "explicit terms"  '\bporn\b|\bnude\b|\blewd\b|onlyfans|civitai\.red|sex-' "$TARGET" || fail=1
+# Explicit terms — genuine NSFW content only. A bare `nsfw` boolean/field (or
+# an identifier that merely ENDS in it, e.g. `include_nsfw`/`l.nsfw`) is a
+# legit SAFETY filter (the image catalog filters NSFW OUT), so it is NOT
+# flagged — `\b_nsfw\b` only matches a STANDALONE `_nsfw` token (a dedicated
+# content label/path segment), which `\b` can't find inside a longer
+# identifier since `_` is itself a word character.
+report "explicit terms"  '\bporn\b|\bnude\b|\blewd\b|onlyfans|civitai\.red|sex-|\b_nsfw\b|adult content|intimate content' "$TARGET" || fail=1
 
 # Generated-content dirs must ship EMPTY (no media artifacts).
 for d in state/content state/media image_research/out content/generated; do

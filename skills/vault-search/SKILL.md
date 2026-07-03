@@ -5,7 +5,7 @@ description: Search the Ai-Team knowledge vault for information about the operat
 
 # vault-search
 
-The Ai-Team vault at `C:\Users\the operator\Ai-Team-Vault` holds shared
+The Ai-Team vault at `%USERPROFILE%\Ai-Team-Vault` holds shared
 knowledge across the operator, the Discord bots (Terry, Scout), and
 Claude Code (you). It's indexed into SQLite+sqlite-vec by the `vault-writer`
 daemon, which embeds every markdown file via Ollama's `nomic-embed-text`.

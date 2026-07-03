@@ -161,7 +161,7 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         # Optional shell command run by the verifier AFTER pytest. The
         # cmd runs in the project dir; non-zero exit fails the tier.
         # Used to catch "tests pass but the live binary is broken"
-        # bugs like the all-black-fog ***REMOVED*** screen.
+        # bugs like an all-black-fog render screen on a generated game demo.
         ("crew_tasks", "smoke_cmd", "TEXT", "NULL"),
         # Token usage, tracked SEPARATELY per worker — never summed.
         # hive_tokens = Ollama eval tokens (qwen3.6 etc.);

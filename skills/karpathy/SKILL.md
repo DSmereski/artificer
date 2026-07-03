@@ -129,4 +129,4 @@ Verbatim, ready-to-paste prompts for each layer: [reference/prompts.md](referenc
 Run water through this hose. Each time you use it and hit friction (a layer that
 didn't fit, a better prompt, a new guardrail pattern), update this file +
 `reference/prompts.md`, then sync:
-`python C:/Projects/Ai-Team/scripts/sync_skills.py`
+`python scripts/sync_skills.py` (run from the repo root)

@@ -9,7 +9,7 @@ from gateway.crew_board.store import CrewBoardStore, Project
 
 def _store(tmp_path: Path) -> CrewBoardStore:
     s = CrewBoardStore(tmp_path / "content.db")
-    s.upsert_project(Project(slug="content", path="C:/Projects", name="Content",
+    s.upsert_project(Project(slug="content", path="C:/dev/projects", name="Content",
                              enabled=True, push_allowed=False, test_cmd=None))
     return s
 

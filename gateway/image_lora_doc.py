@@ -27,7 +27,7 @@ type: canon
 author: claude-code
 audience: [hive, claude-code]
 tags: [image-gen, loras, catalog]
-source: C:\\Projects\\imageToVideo\\models\\loras\\lora_registry.json
+source: $HIVE_IMAGE_BACKEND_PATH/models/loras/lora_registry.json
 ---
 """
 
@@ -93,7 +93,7 @@ def _format_row(lora: dict) -> str:
     triggers = lora["trigger_words"]
     strength = lora["default_strength"]
     category = lora["category"] or "—"
-    nsfw_flag = " 🔞" if lora["nsfw"] else ""
+    nsfw_flag = " 🔒" if lora["nsfw"] else ""
     triggers_cell = triggers if triggers else "—"
     return f"| {alias}{nsfw_flag} | {category} | {strength:g} | {triggers_cell} |"
 
@@ -115,7 +115,7 @@ def render_catalog(loras: Iterable[dict]) -> str:
     lines.append("")
     lines.append(
         f"All LoRAs Hive can use, grouped by pipeline. "
-        f"**{len(normalized)} total**, {nsfw_count} NSFW (🔞 — request explicitly only)."
+        f"**{len(normalized)} total**, {nsfw_count} restricted (🔒 — request explicitly only)."
     )
     lines.append("")
     lines.append(
@@ -165,7 +165,7 @@ def render_catalog(loras: Iterable[dict]) -> str:
         "the default strength and adjust on a redo."
     )
     lines.append(
-        "- NSFW LoRAs (🔞) are filtered out of the visible catalog by default. "
+        "- Restricted LoRAs (🔒) are filtered out of the visible catalog by default. "
         "Only surface them when the user explicitly asks."
     )
     lines.append(

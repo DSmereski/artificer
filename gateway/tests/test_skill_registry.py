@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from textwrap import dedent
 
@@ -153,8 +154,14 @@ def test_write_skill_rejects_duplicate(skills_dir):
 
 def test_real_vault_skills_load():
     """Smoke test against the actual vault — should at least find the
-    research-and-cite skill (the only multi-step seed skill)."""
-    reg = SkillRegistry(Path(r"C:\Users\Sample User\Ai-Team-Vault\skills"))
+    research-and-cite skill (the only multi-step seed skill). Points at
+    HIVE_VAULT_PATH (same convention as the rest of the codebase); skipped
+    when no real vault is configured (e.g. CI)."""
+    vault_root = Path(os.environ.get("HIVE_VAULT_PATH", "./vault"))
+    skills_dir = vault_root / "skills"
+    if not skills_dir.is_dir():
+        pytest.skip(f"no real vault at {skills_dir}")
+    reg = SkillRegistry(skills_dir)
     reg.load()
     names = {s.name for s in reg.list()}
     assert "research-and-cite" in names

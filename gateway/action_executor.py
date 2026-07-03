@@ -1266,9 +1266,9 @@ class ActionExecutor:
           - `steps`         — training steps (default: 500, max: 2000)
           - `learning_rate` — float (default: 0.0001)
 
-        The training pipeline is gated: if the imageToVideo LoRA trainer
-        is not available (C:\\Projects\\imageToVideo not present), returns
-        a graceful `ok=False` receipt rather than crashing.
+        The training pipeline is gated: if the configured image backend
+        (see HIVE_IMAGE_BACKEND_PATH) is not available, returns a
+        graceful `ok=False` receipt rather than crashing.
         """
         dataset_path = str(payload.get("dataset_path", "")).strip()
         output_name = str(payload.get("output_name", "")).strip()

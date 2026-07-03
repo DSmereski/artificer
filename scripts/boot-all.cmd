@@ -16,7 +16,13 @@ REM ================================================================
 
 setlocal EnableDelayedExpansion
 
-set "PROJECT=C:\Projects\Ai-Team"
+REM Repo root: use HIVE_PROJECT_ROOT if set, else auto-detect from this
+REM script's own location (scripts\boot-all.cmd -> parent dir).
+if defined HIVE_PROJECT_ROOT (
+    set "PROJECT=%HIVE_PROJECT_ROOT%"
+) else (
+    set "PROJECT=%~dp0.."
+)
 set "PYTHON=C:\Program Files\Python314\python.exe"
 set "LOGDIR=C:\tmp\ai-team"
 

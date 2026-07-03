@@ -15,7 +15,7 @@ this file, then run `python ./hive\scripts\sync_skills.py` so the
 vault copy stays in sync.
 
 ## Paths (this machine)
-- SDK: `C:\Users\<you>\AppData\Local\Android\Sdk`
+- SDK: `%LOCALAPPDATA%\Android\Sdk`
 - adb: `…\Sdk\platform-tools\adb.exe`
 - emulator: `…\Sdk\emulator\emulator.exe`
 - avdmanager/sdkmanager: `…\Sdk\cmdline-tools\latest\bin\`

@@ -1,42 +1,49 @@
+# Versions below are pinned exact (==) rather than floor-pinned (>=) so a
+# fresh install can't silently pick up an untested future release. Pinned to
+# the versions verified working at release time; bump deliberately + re-test.
+
 # Discord (py-cord fork — provides sinks, start_recording)
-py-cord[voice]>=2.6.0
+py-cord[voice]==2.6.1
 
 # HuggingFace — STT (Whisper) + TTS (SpeechT5)
-transformers>=4.40.0
-torch>=2.2.0
-torchaudio>=2.2.0
-accelerate>=0.27.0
-datasets>=2.18.0
-soundfile>=0.12.1
-librosa>=0.10.1
+transformers==5.1.0
+# torch/torchaudio: pin the base version only — the CUDA build suffix
+# (e.g. +cu128) is platform-specific; install the matching wheel for your
+# CUDA version per https://pytorch.org/get-started/locally/
+torch==2.10.0
+torchaudio==2.10.0
+accelerate==1.12.0
+datasets==2.21.0
+soundfile==0.13.1
+librosa==0.11.0
 
 # Ollama (local LLM — Qwen3:32b)
-ollama>=0.3.0
+ollama==0.6.1
 
 # Voice Activity Detection
-webrtcvad>=2.0.10
+webrtcvad==2.0.10
 
 # Env management
-python-dotenv>=1.0.0
+python-dotenv==1.2.1
 
 # Image processing (for Discord uploads)
-Pillow>=10.0.0
+Pillow==11.3.0
 
 # vault-writer (Phase 1 of Obsidian vault integration)
-watchdog>=4.0
-httpx>=0.28.1
-pyyaml>=6.0
-sqlite-vec>=0.1.6
+watchdog==4.0.2
+httpx==0.28.1
+pyyaml==6.0.2
+sqlite-vec==0.1.6
 
 # ai-team-gateway (unified Windows/Android client backend)
-fastapi>=0.115
-uvicorn[standard]>=0.30
-websockets>=13.0
-python-multipart>=0.0.9
+fastapi==0.129.0
+uvicorn[standard]==0.40.0
+websockets==16.0
+python-multipart==0.0.22
 
 # tests
-pytest>=8.0
-pytest-asyncio>=0.24
-httpx-ws>=0.6
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx-ws==0.9.0
 python-docx
 python-pptx

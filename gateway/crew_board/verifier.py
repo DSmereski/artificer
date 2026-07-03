@@ -309,9 +309,9 @@ def verify(
     # Smoke gate (A1+A7): a task may carry a `smoke_cmd` — a shell
     # command run AFTER pytest in the project dir. Non-zero exit fails
     # the tier. This catches "tests pass but the live binary is broken"
-    # bugs like the all-black-fog ***REMOVED*** screen, where every
-    # unit test mocked the state and the cross-module integration was
-    # never exercised.
+    # bugs like an all-black-fog render screen on a generated game demo,
+    # where every unit test mocked the state and the cross-module
+    # integration was never exercised.
     smoke = _run_smoke(task, project) if run_tests else {"ran": False}
     # #177 gates: a task can't be "done" on green tests alone.
     #   - false-done gate: clean tree AND no commit referencing the task = no

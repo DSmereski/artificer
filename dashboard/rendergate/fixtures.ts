@@ -4,9 +4,10 @@
  * (a building task, a blocked/review task, GPU load, git/docker/suno feeds)
  * with NO live gateway. Every value is fixed: the gate must be reproducible.
  *
- * Tier intent: two 5060 Ti cards under moderate AI load + a 4080 with NO game
- * → non-gaming tier (so kpi + crew-board-full are always relevant), and an
- * in_progress task → BUILDING activity (the hero shows a live lane).
+ * Tier intent: two mid-range cards under moderate AI load + a higher-end card
+ * with NO game → non-gaming tier (so kpi + crew-board-full are always
+ * relevant), and an in_progress task → BUILDING activity (the hero shows a
+ * live lane).
  */
 
 export const boardStats = {
@@ -20,8 +21,8 @@ export const boardStats = {
   lessons: 7,
   parse_fail: { rate: 0.02, fails: 1, turns: 50 },
   top_projects: [
-    { slug: '***REMOVED***', done: 8, active: 1 },
-    { slug: 'blackjackxp', done: 4, active: 1 },
+    { slug: 'example-rts', done: 8, active: 1 },
+    { slug: 'example-cardgame', done: 4, active: 1 },
   ],
 };
 
@@ -29,38 +30,38 @@ export const boardState = {
   paused: false,
   pending_approvals: [],
   projects: [
-    { slug: '***REMOVED***', status: 'active' },
-    { slug: 'blackjackxp', status: 'active' },
-    { slug: 'ai-team', status: 'active' },
+    { slug: 'example-rts', status: 'active' },
+    { slug: 'example-cardgame', status: 'active' },
+    { slug: 'example-hub', status: 'active' },
   ],
   tasks: [
     {
       slug: 'T-0401', title: 'Wire knowledge-file unlink endpoint', status: 'in_progress',
-      project_slug: 'ai-team', assignee: 'qwen3.6:27b', last_action: 'write_file gateway/routes/knowledge.py',
+      project_slug: 'example-hub', assignee: 'qwen3.6:27b', last_action: 'write_file gateway/routes/knowledge.py',
       agent_turns: 11, hive_tokens: 38_400, claude_tokens: 0, updated_at: '2026-06-16T18:42:00Z', kind: 'code',
     },
     {
       slug: 'T-0402', title: 'Add ladder tier-6 balance pass', status: 'in_progress',
-      project_slug: '***REMOVED***', assignee: 'qwen3.6:27b', last_action: 'run_cmd pytest -q',
+      project_slug: 'example-rts', assignee: 'qwen3.6:27b', last_action: 'run_cmd pytest -q',
       agent_turns: 6, hive_tokens: 21_900, claude_tokens: 0, updated_at: '2026-06-16T18:44:00Z', kind: 'code',
     },
     {
-      slug: 'T-0399', title: 'Review: video-poker payout table', status: 'review',
-      project_slug: 'blackjackxp', assignee: 'claude', last_action: 'await human review',
+      slug: 'T-0399', title: 'Review: scoring table', status: 'review',
+      project_slug: 'example-cardgame', assignee: 'claude', last_action: 'await human review',
       agent_turns: 18, hive_tokens: 51_000, claude_tokens: 12_400, updated_at: '2026-06-16T17:10:00Z', kind: 'code',
     },
     {
-      slug: 'T-0398', title: 'QA: bullshit AI bluff thresholds', status: 'qa',
-      project_slug: 'blackjackxp', assignee: 'qwen3.6:27b', last_action: 'smoke pass 8/8',
+      slug: 'T-0398', title: 'QA: AI bluff thresholds', status: 'qa',
+      project_slug: 'example-cardgame', assignee: 'qwen3.6:27b', last_action: 'smoke pass 8/8',
       agent_turns: 9, hive_tokens: 17_300, claude_tokens: 0, updated_at: '2026-06-16T16:55:00Z', kind: 'code',
     },
     {
-      slug: 'T-0395', title: 'Ready: galaxy economy crew buffs', status: 'ready',
-      project_slug: '***REMOVED***', assignee: '', last_action: '', agent_turns: 0, kind: 'code',
+      slug: 'T-0395', title: 'Ready: economy crew buffs', status: 'ready',
+      project_slug: 'example-strategy', assignee: '', last_action: '', agent_turns: 0, kind: 'code',
     },
     {
       slug: 'T-0390', title: 'Done: themed scrollbars on the crew board', status: 'done',
-      project_slug: 'ai-team', assignee: 'qwen3.6:27b', last_action: 'merged', agent_turns: 4,
+      project_slug: 'example-hub', assignee: 'qwen3.6:27b', last_action: 'merged', agent_turns: 4,
       hive_tokens: 9_100, updated_at: '2026-06-15T22:00:00Z', kind: 'code',
     },
   ],
@@ -81,12 +82,12 @@ export const scoutStatus = {
   disk: [{ mount: 'C:', used_gb: 812, total_gb: 1862, pct: 44 }],
   bots: { gateway: true, scout: true, terry: true, vault: true, ollama: true },
   gpus: [
-    { index: 0, name: 'NVIDIA GeForce RTX 4080', utilization_pct: 3, temp_c: 41,
-      vram_used_mb: 900, vram_total_mb: 16_376, power_w: 38, fan_pct: 30, game: null },
-    { index: 1, name: 'NVIDIA GeForce RTX 5060 Ti', utilization_pct: 62, temp_c: 64,
-      vram_used_mb: 12_800, vram_total_mb: 16_376, power_w: 132, fan_pct: 55, game: null },
-    { index: 2, name: 'NVIDIA GeForce RTX 5060 Ti', utilization_pct: 48, temp_c: 60,
-      vram_used_mb: 10_100, vram_total_mb: 16_376, power_w: 118, fan_pct: 50, game: null },
+    { index: 0, name: 'NVIDIA GeForce RTX 4070', utilization_pct: 3, temp_c: 41,
+      vram_used_mb: 900, vram_total_mb: 12_000, power_w: 38, fan_pct: 30, game: null },
+    { index: 1, name: 'NVIDIA GeForce RTX 4060 Ti', utilization_pct: 62, temp_c: 64,
+      vram_used_mb: 12_800, vram_total_mb: 16_000, power_w: 132, fan_pct: 55, game: null },
+    { index: 2, name: 'NVIDIA GeForce RTX 4060 Ti', utilization_pct: 48, temp_c: 60,
+      vram_used_mb: 10_100, vram_total_mb: 16_000, power_w: 118, fan_pct: 50, game: null },
   ],
 };
 
@@ -104,16 +105,16 @@ export const dockerStatus = {
   available: true,
   containers: [
     { name: 'example-project-db', image: 'postgres:16', state: 'running', status: 'Up 3 days', restarts: 0 },
-    { name: 'platform-db', image: 'postgres:16', state: 'running', status: 'Up 3 days', restarts: 1 },
+    { name: 'example-app-db', image: 'postgres:16', state: 'running', status: 'Up 3 days', restarts: 1 },
     { name: 'redis', image: 'redis:7', state: 'running', status: 'Up 3 days', restarts: 0 },
   ],
 };
 
 export const gitActivity = {
   commits: [
-    { project: 'ai-team', sha: '2565d1f', subject: 'T-0359: E2E knowledge integration tests', ts: 1_750_000_000, ahead: 0, behind: 0 },
-    { project: 'hive-dashboard', sha: '7cf3318', subject: 'feat: swap terminal/actions-log slots', ts: 1_749_990_000, ahead: 0, behind: 0 },
-    { project: 'blackjackxp', sha: 'f8615be', subject: 'feat: add Bullshit card game', ts: 1_749_980_000, ahead: 0, behind: 0 },
+    { project: 'example-hub', sha: 'a1b2c3d', subject: 'T-0359: add integration tests', ts: 1_750_000_000, ahead: 0, behind: 0 },
+    { project: 'example-dashboard', sha: 'e4f5a6b', subject: 'feat: swap terminal/actions-log slots', ts: 1_749_990_000, ahead: 0, behind: 0 },
+    { project: 'example-cardgame', sha: 'c7d8e9f', subject: 'feat: add new game mode', ts: 1_749_980_000, ahead: 0, behind: 0 },
   ],
 };
 
@@ -121,7 +122,7 @@ export const escalations = { open: [], count: 0 };
 
 export const upcomingJobs = [
   { id: 'j1', title: 'Nightly vault reindex', when: '2026-06-17T03:00:00Z', kind: 'cron' },
-  { id: 'j2', title: 'TSG session log', when: '2026-06-18T01:00:00Z', kind: 'session' },
+  { id: 'j2', title: 'Weekly session log', when: '2026-06-18T01:00:00Z', kind: 'session' },
 ];
 
 export const sunoTracks = Array.from({ length: 24 }, (_, i) => ({

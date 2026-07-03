@@ -278,8 +278,8 @@ Each step is its own commit so we can roll back cleanly.
 
 ## Agentic-loop upgrades (2026-06, P1–P8)
 
-After the board shipped real software (***REMOVED***: 34 tasks, 222
-tests), deep research into mature OSS agentic-dev tools (Aider,
+After the board shipped real software (a generated RTS-clone demo project:
+34 tasks, 222 tests), deep research into mature OSS agentic-dev tools (Aider,
 OpenHands/CodeAct, SWE-agent ACI, AutoCodeRover, Cline, Goose) plus a
 parallel side project drove eight reliability/strategy upgrades to
 `hive_agent_loop.py` and the dispatcher. Default model unchanged

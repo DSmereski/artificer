@@ -1,6 +1,6 @@
-"""Auto-detect git repos under C:/Projects/ and upsert into the
-crew_projects table. Owner toggles `enabled` to allow agents to
-work the project.
+"""Auto-detect git repos under the projects root (see HIVE_PROJECTS_ROOT)
+and upsert into the crew_projects table. Owner toggles `enabled` to
+allow agents to work the project.
 
 Run once on gateway startup and every N minutes via the lifespan
 background loop. Idempotent — re-detecting a known project just
@@ -10,6 +10,7 @@ refreshes path / name / test_cmd.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,6 +19,12 @@ from pathlib import Path
 from gateway.crew_board.store import CrewBoardStore, Project
 
 log = logging.getLogger("gateway.crew_board.scanner")
+
+# Default scan root when the caller doesn't pass one explicitly. Configurable
+# via HIVE_PROJECTS_ROOT (see docs/CONFIG.md); falls back to ~/projects.
+_DEFAULT_PROJECTS_ROOT = Path(os.environ.get(
+    "HIVE_PROJECTS_ROOT", str(Path.home() / "projects"),
+))
 
 # Stem -> test command heuristic. Order matters: first match wins.
 _TEST_CMD_BY_FILE = (
@@ -88,13 +95,14 @@ def _last_modified(entry: Path) -> str | None:
 
 def _norm_path(p: str) -> str:
     """Normalise a path for identity comparison: forward slashes, lower-case,
-    no trailing slash. So 'C:\\Projects\\Foo' and 'c:/projects/foo/' match."""
+    no trailing slash, so equivalent Windows/POSIX-style renderings of the
+    same path compare equal regardless of case or slash direction."""
     return p.replace("\\", "/").rstrip("/").lower()
 
 
 def scan(
     store: CrewBoardStore,
-    root: Path = Path(r"C:/Projects"),
+    root: Path = _DEFAULT_PROJECTS_ROOT,
 ) -> ScanResult:
     """Walk `root`, register every directory that is a git repo."""
     added = 0

@@ -36,7 +36,7 @@ def test_schema_apply_is_idempotent(tmp_path):
 
 def test_upsert_and_list_projects(store):
     p = store.upsert_project(Project(
-        slug="example-app", path="C:/Projects/example-app",
+        slug="example-app", path="C:/dev/projects/example-app",
         name="example-app",
     ))
     assert p.slug == "example-app"

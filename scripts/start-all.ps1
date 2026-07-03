@@ -1,7 +1,7 @@
 # Ai-Team Bot Launcher — vault-writer + gateway + Terry + scout-daemon.
 # Idempotent: skips any process already running.
 # Usage (from any shell):
-#   powershell.exe -NoProfile -File "C:\Projects\Ai-Team\scripts\start-all.ps1"
+#   powershell.exe -NoProfile -File ".\scripts\start-all.ps1"
 
 $ErrorActionPreference = 'Continue'
 

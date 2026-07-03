@@ -12,7 +12,7 @@ Gateway CORS: needs WebView2 to resolve (see below).
 ## Quick start (dev)
 
 ```powershell
-cd C:\Projects\hive-dashboard
+cd path\to\hive-dashboard
 npm install
 npm run dev
 # open http://localhost:5175 in browser to preview
@@ -23,9 +23,9 @@ npm run dev
 ```powershell
 npm run build
 # Copy dist\ into Lively library:
-xcopy /E /I /Y dist "C:\Users\<you>\AppData\Local\Lively Wallpaper\Library\wallpapers\hivecmd.v01"
+xcopy /E /I /Y dist "$env:LOCALAPPDATA\Lively Wallpaper\Library\wallpapers\hivecmd.v01"
 # Set as wallpaper (Lively must be running):
-& "C:\Program Files\Lively Wallpaper\Lively.exe" setwp --file "C:\Users\<you>\AppData\Local\Lively Wallpaper\Library\wallpapers\hivecmd.v01\index.html"
+& "C:\Program Files\Lively Wallpaper\Lively.exe" setwp --file "$env:LOCALAPPDATA\Lively Wallpaper\Library\wallpapers\hivecmd.v01\index.html"
 ```
 
 ## Critical: Switch Lively to WebView2 (required for live data)
@@ -89,7 +89,7 @@ Gateway at `http://127.0.0.1:8766` — same host as wallpaper, loopback.
 ```
 src/
   main.ts          # Entry: clock, poll loop, board rendering
-  gateway.ts       # Typed HTTP client (ported from ***REMOVED*** pattern)
+  gateway.ts       # Typed HTTP client (ported from an internal G2-glasses client pattern)
   pause.ts         # livelyWallpaperPlaybackChanged hook + document.hidden
   props.ts         # livelyPropertyListener hook (token, pollInterval, motion)
   probe_input.ts   # Phase A click counter
