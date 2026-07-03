@@ -69,6 +69,23 @@ while you watch the board move from a dashboard on your wall.
   does push-to-talk to the hive.
 - **🛠️ Guided installer** — detects your GPU/VRAM, installs Ollama + a model,
   scaffolds the vault, writes config from templates, picks a theme. Idempotent.
+- **🩹 Self-healing** — a health watchdog + a one-command recovery + a dashboard
+  "restart" button that validates the service actually *serves* (an HTTP-200
+  health check, not just a bound port), then reloads the wall display — so a
+  wedged or half-bound boot self-corrects instead of silently looking up.
+- **🔎 Model exploration + benchmarking** — the model catalog is cross-checked
+  against what's actually installed; a research pass proposes candidate models
+  matched to your hardware (it never auto-pulls), and a bench harness scores a
+  candidate against the incumbent *per role* before you adopt it. Every model
+  pull sits behind an explicit approval.
+- **🎯 Plan-first tickets** — a proposed ticket can draft a structured plan
+  (goal + checkpoints + acceptance criteria) that you review and approve before
+  it reaches the build queue; live agent "thinking" streams on the in-progress,
+  QA, and review cards so you can watch — and steer — the work turn by turn.
+- **🔍 Hybrid retrieval** — per-chunk vector + BM25 search fused (reciprocal-rank)
+  with a relative relevance floor, a content-hash guard that skips re-embedding
+  unchanged notes, and a swappable embedding model — so retrieval stays fast and
+  the index never silently drifts from the query side.
 
 ## What's in here
 
