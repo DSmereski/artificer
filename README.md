@@ -139,6 +139,15 @@ with a checkpoint you can verify), and the non-obvious design decisions that mak
 it work. The installer *runs* the shipped code; the blueprint explains how to
 *recreate* it.
 
+**Don't trust the code? Build your own from the specs.** You do not have to run a
+line of this repository. [docs/spec/](docs/spec/) is a set of
+**reimplementation-grade specifications** — data models, database schemas, API
+contracts, algorithms, and the exact constants behind every component — detailed
+enough to rebuild an equivalent system from the markdown alone, in whatever stack
+you choose. The specs are the contract; this code is just one implementation of
+it. If you'd rather not trust someone else's binaries, read the specs, build your
+own, and check it against the same checkpoints.
+
 ## Models
 
 Local-first via Ollama, swappable per task. The installer auto-detects your
