@@ -19,7 +19,7 @@ vault copy stays in sync.
 - adb: `…\Sdk\platform-tools\adb.exe`
 - emulator: `…\Sdk\emulator\emulator.exe`
 - avdmanager/sdkmanager: `…\Sdk\cmdline-tools\latest\bin\`
-- Add to PATH in Git Bash: `export PATH="$PATH:/c/Users/<you>/AppData/Local/Android/Sdk/platform-tools:/c/Users/<you>/AppData/Local/Android/Sdk/emulator"`
+- Add to PATH in Git Bash: `export PATH="$PATH:$HOME/AppData/Local/Android/Sdk/platform-tools:$HOME/AppData/Local/Android/Sdk/emulator"`
 
 ## Lifecycle
 

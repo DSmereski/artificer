@@ -5,14 +5,18 @@ set -u
 TOKEN="${1:?token required}"
 shift
 SCNS=("$@")
-LOG="C:/tmp/ai-team/chain_scn.log"
+# Repo root = parent of this script's dir; log dir is configurable.
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+LOGDIR="${HIVE_LOG_DIR:-/tmp/hive}"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/chain_scn.log"
 echo "[$(date -Iseconds)] chain start: ${SCNS[*]}" | tee -a "$LOG"
 
-cd "/c/Projects/Ai-Team"
+cd "$REPO"
 for s in "${SCNS[@]}"; do
     echo "[$(date -Iseconds)] launching $s" | tee -a "$LOG"
     python -u scripts/run_scenarios.py --scenario "$s" --token "$TOKEN" \
-        --per-turn-timeout 300 > "C:/tmp/ai-team/scn${s}.log" 2>&1 &
+        --per-turn-timeout 300 > "$LOGDIR/scn${s}.log" 2>&1 &
     PID=$!
     echo "[$(date -Iseconds)] $s pid=$PID — waiting" | tee -a "$LOG"
     wait $PID

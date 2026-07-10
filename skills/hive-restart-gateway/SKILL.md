@@ -18,22 +18,22 @@ tasklist /FI "IMAGENAME eq python.exe" /V 2>&1 | grep -i gateway
 taskkill /F /PID <PID>
 
 # 3. Restart in background, redirect stderr+stdout to log
-cd "/c/Projects/Ai-Team" && \
-  nohup python -m gateway > /c/tmp/ai-team/gateway.log 2> /c/tmp/ai-team/gateway.log.err &
+cd path/to/hive && \
+  nohup python -m gateway > /tmp/hive/gateway.log 2> /tmp/hive/gateway.log.err &
 ```
 
 Or, use the full PowerShell launcher (starts gateway + Terry + Scout; idempotent — skips already-running processes):
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "./hive\scripts\start-all.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts/start-all.ps1"
 ```
 
 ## How to verify it came up
 
-Wait ~3 seconds, then check the tail of `C:\tmp\ai-team\gateway.log.err`:
+Wait ~3 seconds, then check the tail of `$HIVE_LOG_DIR/gateway.log.err`:
 
 ```bash
-tail -15 /c/tmp/ai-team/gateway.log.err
+tail -15 /tmp/hive/gateway.log.err
 ```
 
 Expect:
@@ -50,7 +50,7 @@ If you don't see the last two lines, the gateway didn't bind properly.
 
 - **`Address already in use`** → old process didn't die. `netstat -ano | findstr :8766` to find the lingerer, `taskkill /F /PID <PID>`.
 - **Crashes on import** → usually a Python syntax error in the code you just changed. Check the first lines of `gateway.log.err`.
-- **Lifespan hangs** → vault_writer daemon didn't come up. Check if it's running: `tasklist | grep vault_writer` and look at `C:\tmp\ai-team\vault_writer.log`.
+- **Lifespan hangs** → vault_writer daemon didn't come up. Check if it's running: `tasklist | grep vault_writer` and look at `$HIVE_LOG_DIR/vault_writer.log`.
 
 ## Don't restart unnecessarily
 

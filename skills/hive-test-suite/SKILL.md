@@ -11,7 +11,7 @@ Run the full Python test suite for the Ai-Team / Hive gateway and report pass/fa
 ## How to run
 
 ```bash
-cd "/c/Projects/Ai-Team" && python -m pytest gateway/tests/ shared/tests/ -q
+cd path/to/hive && python -m pytest gateway/tests/ shared/tests/ -q
 ```
 
 Use `run_in_background: true` and a 600000ms (10 min) timeout. The full suite needs ~150s; pytest-asyncio is noisy with deprecation warnings (53k+ at last count) — that's normal, ignore them.

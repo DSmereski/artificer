@@ -42,11 +42,18 @@ fail=0
 _DRIVE_PATH_RE='(^|[^A-Za-z0-9])[A-Za-z]:\\{1,2}[A-Za-z0-9_-]{2,}\\{1,2}'
 _DRIVE_ALLOW_RE='[A-Za-z]:\\{1,2}(Windows|Program ?Files( ?\(x86\))?|ProgramData|Temp|tmp|TEMP|Backups)\\{1,2}'
 _POSIX_HOME_RE='/home/[a-z][a-z0-9_-]+/|/Users/[A-Za-z]'
+# Git-Bash / WSL drive-MOUNT form of the same risky roots: `/c/Users/<name>`,
+# `/c/Projects/...`, `/mnt/c/Users/...`. This is byte-for-byte the same leak
+# as the Windows-backslash form above but with forward slashes, so the
+# backslash detector misses it — catch it explicitly. Scoped to the two
+# high-signal roots (Users = a real username; Projects = a personal dev
+# root) so ordinary POSIX paths like /usr, /tmp, /etc don't false-positive.
+_POSIX_MOUNT_RE='/(mnt/)?[a-z]/(Users|Projects)/'
 
 scan_absolute_paths() {
   local target="${1:-.}" hits
   if _have_rg; then
-    local args=(--no-messages -n -i -e "$_DRIVE_PATH_RE" -e "$_POSIX_HOME_RE")
+    local args=(--no-messages -n -i -e "$_DRIVE_PATH_RE" -e "$_POSIX_HOME_RE" -e "$_POSIX_MOUNT_RE")
     for ex in $RELEASE_EXCLUDES; do args+=(--glob "!${ex}/**" --glob "!${ex}"); done
     for g in ${RELEASE_EXCLUDE_GLOBS:-}; do args+=(--glob "!${g}"); done
     for f in ${RELEASE_EXCLUDE_FILES:-}; do args+=(--glob "!**/${f}"); done
@@ -56,7 +63,7 @@ scan_absolute_paths() {
     for ex in $RELEASE_EXCLUDES; do ex_args+=(--exclude-dir="$(basename "$ex")"); done
     for g in ${RELEASE_EXCLUDE_GLOBS:-}; do ex_args+=(--exclude="$g"); done
     for f in ${RELEASE_EXCLUDE_FILES:-}; do ex_args+=(--exclude="$f"); done
-    hits="$(grep -rniE "${ex_args[@]}" -e "$_DRIVE_PATH_RE" -e "$_POSIX_HOME_RE" "$target" 2>/dev/null || true)"
+    hits="$(grep -rniE "${ex_args[@]}" -e "$_DRIVE_PATH_RE" -e "$_POSIX_HOME_RE" -e "$_POSIX_MOUNT_RE" "$target" 2>/dev/null || true)"
   fi
   printf '%s\n' "$hits" | grep -viE "$_DRIVE_ALLOW_RE" | grep -v '^[[:space:]]*$'
 }

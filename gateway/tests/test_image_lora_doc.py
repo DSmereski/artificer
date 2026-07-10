@@ -29,7 +29,7 @@ _SAMPLE_REGISTRY = [
 def test_render_includes_count():
     md = render_catalog(_SAMPLE_REGISTRY)
     assert "**4 total**" in md
-    assert "1 NSFW" in md
+    assert "1 restricted" in md
 
 
 def test_render_groups_by_pipeline():
@@ -41,8 +41,8 @@ def test_render_groups_by_pipeline():
 
 def test_render_marks_nsfw():
     md = render_catalog(_SAMPLE_REGISTRY)
-    # NSFW row should carry the 🔞 marker
-    assert "Naughty Thing 🔞" in md
+    # Restricted row should carry the 🔒 marker
+    assert "Naughty Thing 🔒" in md
 
 
 def test_render_skips_entries_without_alias():
