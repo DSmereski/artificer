@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1/crew/manager")
@@ -32,10 +32,11 @@ class ManagerPromptRequest(BaseModel):
 # ─── Status endpoint ──────────────────────────────────────────────────────
 
 @router.get("/status", tags=["crew-manager"])
-async def get_manager_status() -> dict[str, Any]:
+async def get_manager_status(request: Request) -> dict[str, Any]:
     """Return daemon status for dashboard toggle button."""
-    from gateway.app import app  # Lazy import to avoid circular deps
-    daemon = getattr(app.state, "manager_daemon", None)
+    # `gateway.app` is a factory (create_app) with no module-level `app`
+    # singleton, so reach the running app via the request instead.
+    daemon = getattr(request.app.state, "manager_daemon", None)
     if daemon is None:
         return {"enabled": False, "model_ready": False, "error": "daemon not initialized"}
     return daemon.status
@@ -44,10 +45,9 @@ async def get_manager_status() -> dict[str, Any]:
 # ─── Toggle endpoint ──────────────────────────────────────────────────────
 
 @router.post("/toggle", tags=["crew-manager"])
-async def toggle_manager(body: ManagerToggleRequest) -> dict[str, Any]:
+async def toggle_manager(body: ManagerToggleRequest, request: Request) -> dict[str, Any]:
     """Enable or disable the manager daemon."""
-    from gateway.app import app
-    daemon = getattr(app.state, "manager_daemon", None)
+    daemon = getattr(request.app.state, "manager_daemon", None)
     if daemon is None:
         raise HTTPException(status_code=409, detail="daemon not initialized")
 
@@ -64,10 +64,9 @@ async def toggle_manager(body: ManagerToggleRequest) -> dict[str, Any]:
 # ─── Manual prompt endpoint ───────────────────────────────────────────────
 
 @router.post("/prompt", tags=["crew-manager"])
-async def submit_prompt(body: ManagerPromptRequest) -> dict[str, Any]:
+async def submit_prompt(body: ManagerPromptRequest, request: Request) -> dict[str, Any]:
     """Submit a manual goal for the manager to decompose."""
-    from gateway.app import app
-    daemon = getattr(app.state, "manager_daemon", None)
+    daemon = getattr(request.app.state, "manager_daemon", None)
     if daemon is None:
         raise HTTPException(status_code=409, detail="daemon not initialized")
 
@@ -90,10 +89,9 @@ async def submit_prompt(body: ManagerPromptRequest) -> dict[str, Any]:
 # ─── Activity endpoint ────────────────────────────────────────────────────
 
 @router.get("/activity", tags=["crew-manager"])
-async def get_activity() -> dict[str, Any]:
+async def get_activity(request: Request) -> dict[str, Any]:
     """Recent decisions made by the manager daemon."""
-    from gateway.app import app
-    daemon = getattr(app.state, "manager_daemon", None)
+    daemon = getattr(request.app.state, "manager_daemon", None)
     if daemon is None:
         return {"decisions": []}
     return {"decisions": daemon.activity}

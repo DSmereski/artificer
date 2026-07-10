@@ -349,12 +349,17 @@ class _ChatDispatcher:
             # Race the hive turn against a disconnect-watch task. If the
             # WS drops mid-turn we cancel the whole turn so vault writes /
             # image renders / ntfy pushes don't fire after the user is gone.
+            # _recv_loop owns this socket's receive() — pass the shutdown
+            # event (set on WebSocketDisconnect) so the turn runner watches
+            # it instead of double-receiving; two concurrent receive() on
+            # one WS is a RuntimeError and can steal queued user frames.
             return await _run_hive_turn_cancel_on_disconnect(
                 self._ws, self._app_state,
                 coord=coord,
                 user_id=user_id, text=text,
                 device_id=self._device.id, device_audience=dev_aud,
                 thread_id=self._thread_id,
+                disconnect_event=self._shutdown,
             )
         # Hive coordinator missing — every production boot wires it
         # (gateway/app.py builds it before adapters), so this branch

@@ -266,6 +266,7 @@ async def _run_hive_turn_cancel_on_disconnect(
     device_id: str,
     device_audience: list[str] | None,
     thread_id: str = "default",
+    disconnect_event: asyncio.Event | None = None,
 ) -> str | None:
     """Run `_hive_turn` but cancel it if the WS drops mid-turn.
 
@@ -277,10 +278,17 @@ async def _run_hive_turn_cancel_on_disconnect(
     Side-effects (vault writes, image renders, ntfy pushes) are NOT
     things we want firing after the user has already left. Starlette
     doesn't auto-cancel the awaited task on disconnect, so we race
-    the turn against `websocket.receive_text()` — if that returns
-    (or raises WebSocketDisconnect) before the turn completes, we
-    cancel the turn task and re-raise WebSocketDisconnect to trigger
-    the standard cleanup path.
+    the turn against a disconnect signal.
+
+    ONE RECEIVER PER SOCKET: when the caller already owns the socket's
+    receive loop (chat_dispatcher's _recv_loop), it MUST pass
+    `disconnect_event` — an event it sets on WebSocketDisconnect. This
+    helper then watches that event instead of calling
+    `websocket.receive()` itself. Two coroutines awaiting receive() on
+    the same WebSocket race: asyncio raises RuntimeError and, worse,
+    this watcher could steal (and drop) user frames the dispatcher's
+    queue was owed. The legacy receive-probe below survives only for
+    callers with no receive loop of their own.
     """
     turn_task = asyncio.create_task(
         _hive_turn(
@@ -314,7 +322,9 @@ async def _run_hive_turn_cancel_on_disconnect(
             return
 
     watch_task = asyncio.create_task(
-        _watch_disconnect(), name=f"ws_watch:{device_id}",
+        disconnect_event.wait() if disconnect_event is not None
+        else _watch_disconnect(),
+        name=f"ws_watch:{device_id}",
     )
     try:
         done, pending = await asyncio.wait(

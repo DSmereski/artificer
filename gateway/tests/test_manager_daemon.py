@@ -413,12 +413,6 @@ async def test_decompose_action_includes_order():
     """Decompose creates tasks with _order field."""
     from gateway.crew_board.manager_daemon import CrewBoardManager
 
-    invoker = AsyncMock()
-    invoker.chat = AsyncMock(return_value=(
-        '{"action": "decompose", "tasks": [{"title": "A"}, {"title": "B"}]}',
-        300, 100,
-    ))
-
     m = CrewBoardManager(
         store=MagicMock(),
         event_bus=MagicMock(),
@@ -427,8 +421,15 @@ async def test_decompose_action_includes_order():
     m._ollama_model = "gemma3:12b"
     m._model_ready = True
 
-    # Enable and call decompose
+    # Enable and call decompose. Control the decompose result at the LLM
+    # boundary — the manager takes no invoker, so patch _invoke_ollama (the
+    # old `invoker.chat` mock was never wired, so decompose hit the real
+    # HTTP path and returned the wrong count).
     await m.enable()
+    m._invoke_ollama = AsyncMock(return_value=(
+        '{"action": "decompose", "tasks": [{"title": "A"}, {"title": "B"}]}',
+        300, 100,
+    ))
     result = await m.decompose_goal("Test goal", "test-project")
 
     assert len(result) == 2
@@ -451,13 +452,6 @@ async def test_auto_close_with_passed_vet():
 
     store = MagicMock()
     store.get_task = MagicMock(return_value=task)
-    store.comment_task = MagicMock()
-
-    invoker = AsyncMock()
-    invoker.chat = AsyncMock(return_value=(
-        '{"action": "vet", "passed": true}',
-        200, 50,
-    ))
 
     m = CrewBoardManager(
         store=store,
@@ -467,10 +461,19 @@ async def test_auto_close_with_passed_vet():
     m._ollama_model = "gemma3:12b"
     m._model_ready = True
     await m.enable()
+    # Control the vet verdict at the LLM boundary: _make_decision awaits
+    # _invoke_ollama(user_input) and parses its text. (The manager takes no
+    # invoker in its constructor, so patch the method the daemon actually
+    # calls — the old `invoker.chat` mock was never wired to anything.)
+    m._invoke_ollama = AsyncMock(return_value=(
+        '{"action": "vet", "passed": true}', 200, 50,
+    ))
 
     result = await m.auto_close("T-999")
     assert result is not None
-    store.comment_task.assert_called()
+    # auto_close records a lesson on a passed vet (per its docstring),
+    # it does not comment on the ticket.
+    store.record_lesson.assert_called()
 
 
 @pytest.mark.asyncio
@@ -478,24 +481,36 @@ async def test_auto_close_no_pass_fails():
     """Auto-close returns None when vet doesn't pass."""
     from gateway.crew_board.manager_daemon import CrewBoardManager
 
-    invoker = AsyncMock()
-    invoker.chat = AsyncMock(return_value=(
-        '{"action": "vet", "passed": false}',
-        200, 50,
-    ))
+    # vet_output json-serializes the task (slug/acceptance_criteria/
+    # verify_results/attempt_count) before deciding — give it a task with
+    # real serializable fields, not a bare MagicMock.
+    task = MagicMock()
+    task.slug = "T-999"
+    task.attempt_count = 1
+    task.project_slug = "test"
+    task.acceptance_criteria = [{"text": "All tests pass"}]
+    task.verify_results = {"pass": False}
+
+    store = MagicMock()
+    store.get_task = MagicMock(return_value=task)
 
     m = CrewBoardManager(
-        store=MagicMock(),
+        store=store,
         event_bus=MagicMock(),
         model_catalog=MagicMock(is_available=lambda x: True),
     )
     m._ollama_model = "gemma3:12b"
     m._model_ready = True
     await m.enable()
+    # Control the vet verdict at the LLM boundary (see the passed-vet test).
+    m._invoke_ollama = AsyncMock(return_value=(
+        '{"action": "vet", "passed": false}', 200, 50,
+    ))
 
     result = await m.auto_close("T-999")
-    assert result is not None  # Returns the vet decision, but...
-    assert not result.kwargs.get("passed")
+    # Per this test's own docstring + auto_close's guard: a non-passing
+    # vet returns None (nothing is auto-closed).
+    assert result is None
 
 
 @pytest.mark.asyncio

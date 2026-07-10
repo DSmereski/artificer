@@ -172,7 +172,7 @@ def test_lora_train_graceful_when_imagetovideo_missing():
     """When imageToVideo project is not installed, return ok=False gracefully."""
     ex = ActionExecutor()
     with patch(
-        "gateway.image_shim._IMAGETOVIDEO",
+        "gateway.image_shim._IMAGE_BACKEND",
         Path("/nonexistent/imageToVideo"),
     ):
         receipts = _run(ex.execute_all([
@@ -201,7 +201,7 @@ async def test_lora_train_enqueues_job_when_trainer_present(tmp_path: Path):
     )
 
     ex = ActionExecutor()
-    with patch("gateway.image_shim._IMAGETOVIDEO", tmp_path / "imageToVideo"):
+    with patch("gateway.image_shim._IMAGE_BACKEND", tmp_path / "imageToVideo"):
         receipts = await ex.execute_all([
             {"verb": "lora_train", "payload": {
                 "dataset_path": str(tmp_path / "data"),
@@ -232,7 +232,7 @@ async def test_lora_train_steps_clamped_to_max(tmp_path: Path):
     )
 
     ex = ActionExecutor()
-    with patch("gateway.image_shim._IMAGETOVIDEO", tmp_path / "imageToVideo"):
+    with patch("gateway.image_shim._IMAGE_BACKEND", tmp_path / "imageToVideo"):
         receipts = await ex.execute_all([
             {"verb": "lora_train", "payload": {
                 "dataset_path": str(tmp_path / "data"),
@@ -257,7 +257,7 @@ async def test_lora_train_no_function_in_module_returns_error(tmp_path: Path):
     )
 
     ex = ActionExecutor()
-    with patch("gateway.image_shim._IMAGETOVIDEO", tmp_path / "imageToVideo"):
+    with patch("gateway.image_shim._IMAGE_BACKEND", tmp_path / "imageToVideo"):
         receipts = await ex.execute_all([
             {"verb": "lora_train", "payload": {
                 "dataset_path": str(tmp_path / "data"),

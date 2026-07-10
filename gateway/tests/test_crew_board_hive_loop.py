@@ -367,3 +367,26 @@ def test_run_cmd_blocks_sandbox_escape(tmp_path: Path) -> None:
     assert ok
     ok, _ = _validate_cmd_args(tmp_path, "git status")
     assert ok
+
+
+def test_run_cmd_pytest_failure_no_nameerror(tmp_path: Path) -> None:
+    """Regression: the argv-exec refactor left `proc.returncode` in the
+    pytest-hints branch after `proc` was replaced by `rc`, so EVERY command
+    containing "pytest" raised NameError (the crash that forced the
+    shell=True revert). A failing pytest run must produce a normal result
+    dict with hints machinery intact — never a NameError."""
+    from gateway.crew_board.hive_agent_loop import _run_cmd
+    # Empty project dir: pytest exits nonzero (no tests collected), which
+    # drives the red branch that held the stale `proc` reference.
+    result = _run_cmd(tmp_path, {"cmd": "python -m pytest -q"})
+    assert result["ok"] is False
+    assert result["exit_code"] not in (None, 0)
+
+
+def test_run_cmd_argv_exec_no_shell_injection(tmp_path: Path) -> None:
+    """argv-exec: metacharacters reach the child as literal text, never a
+    shell. `$(...)`/backticks in an echo arg must be echoed verbatim (or
+    refused by the whitelist) — not executed."""
+    from gateway.crew_board.hive_agent_loop import _cmd_allowed
+    ok, _ = _cmd_allowed("echo $(rm -rf /)")
+    assert not ok  # whitelist refuses metachars outright

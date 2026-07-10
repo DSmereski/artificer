@@ -137,9 +137,9 @@ def test_duplicate_model_id_rejected(tmp_path: Path) -> None:
         load_catalog(_write_yaml(tmp_path, body))
 
 
-def test_render_for_terry_prompt(tmp_path: Path) -> None:
+def test_render_for_hive_prompt(tmp_path: Path) -> None:
     cat = load_catalog(_write_yaml(tmp_path, _VALID_YAML))
-    out = cat.render_for_terry_prompt()
+    out = cat.render_for_hive_prompt()
     assert "planner" in out
     assert "qwen2.5:7b" in out
     assert len(out) <= 2000
@@ -148,7 +148,7 @@ def test_render_for_terry_prompt(tmp_path: Path) -> None:
 def test_render_marks_unavailable(tmp_path: Path) -> None:
     cat = load_catalog(_write_yaml(tmp_path, _VALID_YAML))
     cat._available["qwen-7b"] = False
-    out = cat.render_for_terry_prompt()
+    out = cat.render_for_hive_prompt()
     assert "UNAVAILABLE" in out
 
 

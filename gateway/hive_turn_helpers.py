@@ -176,7 +176,7 @@ def build_turn_context(
     if reg is not None:
         try:
             reg.reload_if_changed()
-            skills_digest = reg.digest_for_planner(audience="terry")
+            skills_digest = reg.digest_for_planner(audience="hive")
             suggested_skills = [s.name for s in reg.find_by_trigger(text)]
         except Exception as e:  # noqa: BLE001
             log.warning("skills digest failed: %s", e, exc_info=True)
@@ -184,7 +184,7 @@ def build_turn_context(
 
     # Conversation memory digest. Thread-keyed when supported.
     history_digest = ""
-    memory_store = app_state.memory_store_terry
+    memory_store = app_state.memory_store_hive
     if memory_store is not None:
         try:
             if hasattr(memory_store, "get_for_thread"):
@@ -200,7 +200,7 @@ def build_turn_context(
         user_msg=text,
         user_id=user_id,
         device_id=device_id,
-        bot="terry",
+        bot="hive",
         history_digest=history_digest,
         image_build=image_build,
         skills_digest=skills_digest,
@@ -231,7 +231,7 @@ def record_turn_telemetry(
         tel.record(TurnRecord(
             ts=time.time(),
             turn_id="ws-" + device_id[:6],
-            bot="terry",
+            bot="hive",
             user_msg_preview=text[:240],
             helpers_used=list(turn.helpers_used),
             total_tokens=turn.total_tokens,
@@ -305,7 +305,7 @@ async def record_turn_log(
             )
         entry = TurnLogEntry(
             turn_id=turn.turn_id or "?",
-            device_id=device_id, user_id=user_id, bot="terry",
+            device_id=device_id, user_id=user_id, bot="hive",
             user_msg=text[:2000],
             planner_summary=(
                 plan.output.get("summary", "")[:240]
@@ -379,7 +379,7 @@ def schedule_summarizer_refresh(
     """Kick off the async memory-summary refresh when this turn
     crossed the threshold. Tracked via deps.track_background_task so
     lifespan shutdown drains it."""
-    memory_store = app_state.memory_store_terry
+    memory_store = app_state.memory_store_hive
     if memory_store is None:
         return
     try:
@@ -399,8 +399,8 @@ def schedule_summarizer_refresh(
         # current pair if the LLM isn't reachable so tests stay green.
         recent_msgs: list[dict[str, str]] = []
         adapters = app_state.adapters or {}
-        terry = adapters.get("terry")
-        llm = getattr(terry, "_llm", None) if terry else None
+        hive_adapter = adapters.get("hive")
+        llm = getattr(hive_adapter, "_llm", None) if hive_adapter else None
         if llm is not None and hasattr(llm, "recent_messages"):
             try:
                 recent_msgs = list(llm.recent_messages(user_id, limit=20))
@@ -444,8 +444,8 @@ def persist_hive_turn_history(
         return
     try:
         adapters = app_state.adapters or {}
-        terry = adapters.get("terry")
-        llm = getattr(terry, "_llm", None) if terry else None
+        hive_adapter = adapters.get("hive")
+        llm = getattr(hive_adapter, "_llm", None) if hive_adapter else None
         if llm is not None and hasattr(llm, "record_turn"):
             llm.record_turn(user_id, text, turn.reply)
             app_state.last_turn_completed_at = time.time()
@@ -479,7 +479,7 @@ def maybe_auto_title_thread(
     Best-effort: every error path is a logged warning, never raised —
     the user-visible reply is the contract.
     """
-    memory_store = app_state.memory_store_terry
+    memory_store = app_state.memory_store_hive
     vc = app_state.vault_client
     if memory_store is None or vc is None:
         return
@@ -506,8 +506,8 @@ def maybe_auto_title_thread(
 
     recent: list[dict[str, str]] = []
     adapters = app_state.adapters or {}
-    terry = adapters.get("terry")
-    llm = getattr(terry, "_llm", None) if terry else None
+    hive_adapter = adapters.get("hive")
+    llm = getattr(hive_adapter, "_llm", None) if hive_adapter else None
     if llm is not None and hasattr(llm, "recent_messages"):
         try:
             recent = list(llm.recent_messages(user_id, limit=10))
@@ -585,7 +585,7 @@ def index_hive_turn_to_chat_log(
     *,
     user_id: int,
     text: str,
-    bot: str = "terry",
+    bot: str = "hive",
     thread_id: str = "default",
 ) -> None:
     """Index the (user, assistant) pair into the vault's chat_log
